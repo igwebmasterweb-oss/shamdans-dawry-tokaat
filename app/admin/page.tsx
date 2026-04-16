@@ -61,36 +61,37 @@ export default function Admin() {
     setLoading(false);
   };
 
-  // فتح الكل (مُصحح)
+  // فتح الكل
   const openAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد فتح التوقعات لكل الماتشات؟')) return;
     const { error } = await supabase
       .from('fixtures')
       .update({ is_open: true })
-      .gt('fixture_id', 0);   // ← الشرط المهم عشان Supabase يقبل
+      .gt('id', 0);
 
     if (error) alert('خطأ: ' + error.message);
     else { alert('✅ تم فتح التوقعات لكل الماتشات'); loadMatches(); loadStats(); }
   };
 
-  // إغلاق الكل (مُصحح)
+  // إغلاق الكل
   const closeAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
     const { error } = await supabase
       .from('fixtures')
       .update({ is_open: false })
-      .gt('fixture_id', 0);   // ← الشرط المهم
+      .gt('id', 0);
 
     if (error) alert('خطأ: ' + error.message);
     else { alert('✅ تم إغلاق التوقعات لكل الماتشات'); loadMatches(); loadStats(); }
   };
 
+  // فتح/إغلاق ماتش واحد
   const toggleMatchStatus = async (match: any) => {
     const newStatus = !match.is_open;
     const { error } = await supabase
       .from('fixtures')
       .update({ is_open: newStatus })
-      .eq('fixture_id', match.fixture.id);
+      .eq('id', match.fixture.id);     // ← التصليح هنا (استخدمنا id)
 
     if (error) alert('خطأ: ' + error.message);
     else { alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت'); loadMatches(); }
@@ -203,7 +204,7 @@ export default function Admin() {
         </div>
       </main>
 
-      {/* Modal تعديل النتيجة */}
+      {/* Modal */}
       {editingMatch && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeEditModal}>
           <div style={{ position: 'relative' }} className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 shadow-2xl border border-green-500/40" onClick={(e) => e.stopPropagation()}>
