@@ -12,7 +12,7 @@ export async function GET() {
     const response = await fetch(
       'https://v3.football.api-sports.io/fixtures?league=1&season=2026',
       {
-        method: 'GET',                    // ← مهم جدًا
+        method: 'GET',                    // ← هذا السطر مهم جدًا
         headers: {
           'x-apisports-key': apiKey,
         },
