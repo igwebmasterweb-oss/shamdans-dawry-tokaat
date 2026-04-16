@@ -5,32 +5,33 @@ export async function GET() {
     const apiKey = process.env.API_FOOTBALL_KEY;
 
     if (!apiKey) {
-      console.error('❌ API_FOOTBALL_KEY مش موجود في Environment Variables');
+      console.error('❌ API_FOOTBALL_KEY غير موجود');
       return NextResponse.json({ response: [] });
     }
 
     const response = await fetch(
       'https://v3.football.api-sports.io/fixtures?league=1&season=2026',
       {
+        method: 'GET',                    // ← مهم جدًا
         headers: {
           'x-apisports-key': apiKey,
         },
-        next: { revalidate: 300 },   // كاش 5 دقايق
+        next: { revalidate: 300 },
       }
     );
 
     if (!response.ok) {
-      console.error('API Error:', response.status, response.statusText);
+      console.error('API Error:', response.status);
       return NextResponse.json({ response: [] });
     }
 
     const data = await response.json();
-    console.log('✅ API-Football returned:', data.response?.length || 0, 'matches');
+    console.log('✅ API returned', data.response?.length || 0, 'matches');
 
     return NextResponse.json(data);
 
   } catch (error) {
-    console.error('❌ API-Football Error:', error);
+    console.error('❌ Fetch error:', error);
     return NextResponse.json({ response: [] });
   }
 }
