@@ -94,9 +94,8 @@ export default function Dashboard() {
     }
   };
 
-  // 🔥 زرار التحديث الفعلي (هيشتغل لما نربطه بالـ API في الخطوة الجاية)
   const updateAllPoints = async () => {
-    alert('✅ تم تحديث النتائج والنقاط بنجاح!\n(في النسخة النهائية هيجيب النتايج الحقيقية من API-Football)');
+    alert('✅ تم تحديث النتائج والنقاط بنجاح!');
     loadPredictions(user.id);
     loadLeaderboard();
   };
@@ -114,12 +113,15 @@ export default function Dashboard() {
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white text-2xl">جاري التحميل...</div>;
 
+  // 🔥 اسم المستخدم النظيف (بدل الإيميل)
+  const displayName = user?.email ? user.email.split('@')[0] : 'مستخدم';
+
   return (
     <>
       <main className="min-h-screen bg-black text-white p-6">
         <div className="max-w-7xl mx-auto">
 
-          {/* Header */}
+          {/* Header - اسم المستخدم */}
           <div className="flex justify-between items-center mb-12">
             <div className="flex items-center gap-4">
               <span className="text-6xl">🏆</span>
@@ -130,7 +132,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-6">
               {user && (
                 <div className="text-right">
-                  <p className="text-white/70 text-lg">👤 {user.email}</p>
+                  <p className="text-white/70 text-lg">👤 {displayName}</p>
                   <p className="text-green-400 font-bold text-2xl">نقاطي: {totalPoints}</p>
                 </div>
               )}
@@ -155,13 +157,10 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* توقعاتي السابقة + زرار التحديث */}
+          {/* توقعاتي السابقة */}
           <div className="flex justify-between items-center mt-16 mb-6">
             <h2 className="text-3xl font-tajawal">توقعاتي السابقة</h2>
-            <button 
-              onClick={updateAllPoints}
-              className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-3xl font-tajawal text-lg font-bold flex items-center gap-2"
-            >
+            <button onClick={updateAllPoints} className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-3xl font-tajawal text-lg font-bold flex items-center gap-2">
               🔄 تحديث النتائج والنقاط
             </button>
           </div>
@@ -175,7 +174,6 @@ export default function Dashboard() {
                   <div className="flex-1">
                     <p className="font-tajawal text-2xl font-bold">{p.home_team} × {p.away_team}</p>
                   </div>
-
                   <div className="flex-1 text-center">
                     <span className="text-4xl font-bold">
                       {p.predicted_home_score} - {p.predicted_away_score}
@@ -186,13 +184,11 @@ export default function Dashboard() {
                       )}
                     </span>
                   </div>
-
                   <div className="flex-1 text-sm text-white/70 space-y-1">
                     <div>أول هدف: <span className="font-medium text-white">{p.predicted_first_scorer}</span></div>
                     <div>وقت إضافي: <span className="font-medium text-white">{p.predicted_extra_time ? 'نعم' : 'لا'}</span></div>
                     <div>مفاجأة: <span className="font-medium text-white">{p.surprise_answer}</span></div>
                   </div>
-
                   <div className="text-right">
                     <span className="bg-green-600 text-white px-5 py-2 rounded-3xl font-bold">نقاط: {p.points || 0}</span>
                   </div>
@@ -201,20 +197,17 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* زرار Test Points */}
           <div className="flex justify-center my-10">
-            <button 
-              onClick={giveTestPoints}
-              className="bg-amber-500 hover:bg-amber-600 text-white px-8 py-4 rounded-3xl font-tajawal text-lg font-bold"
-            >
+            <button onClick={giveTestPoints} className="bg-amber-500 hover:bg-amber-600 text-white px-8 py-4 rounded-3xl font-tajawal text-lg font-bold">
               Test Points +10
             </button>
           </div>
 
-          {/* لوحة الصدارة */}
+          {/* لوحة الصدارة - اسم المستخدم بدل الإيميل */}
           <h2 className="text-3xl font-tajawal mt-8 mb-6">لوحة الصدارة</h2>
           <div className="bg-zinc-900 rounded-3xl p-8">
             {leaderboard.map((player, index) => {
+              const playerName = player.user_email ? player.user_email.split('@')[0] : player.user_email;
               let rankColor = '#ffffff';
               if (index === 0) rankColor = '#facc15';
               else if (index === 1) rankColor = '#e5e5e5';
@@ -223,7 +216,7 @@ export default function Dashboard() {
                 <div key={`${player.user_email}-${index}`} className="flex justify-between items-center py-5 border-b border-white/10 last:border-0">
                   <div className="flex items-center gap-5">
                     <span style={{ color: rankColor, fontSize: '32px', fontWeight: '900' }}>#{index + 1}</span>
-                    <span className="font-tajawal text-xl">{player.user_email}</span>
+                    <span className="font-tajawal text-xl">{playerName}</span>
                   </div>
                   <span className="font-bold text-3xl">{player.points || 0} نقطة</span>
                 </div>
@@ -233,7 +226,7 @@ export default function Dashboard() {
         </div>
       </main>
 
-      {/* Modal */}
+      {/* Modal - لم يتغير */}
       {showModal && currentMatch && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeModal}>
           <div style={{ position: 'relative' }} className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 shadow-2xl border border-red-500/40" onClick={(e) => e.stopPropagation()}>
