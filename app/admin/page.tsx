@@ -85,9 +85,14 @@ export default function Admin() {
     }
   };
 
+  // فتح/إغلاق ماتش واحد
   const toggleMatchStatus = async (match: any) => {
     const newStatus = !match.is_open;
-    const { error } = await supabase.from('fixtures').update({ is_open: newStatus }).eq('id', match.fixture.id);
+    const { error } = await supabase
+      .from('fixtures')
+      .update({ is_open: newStatus })
+      .eq('id', match.fixture.id);   // ← التصليح المهم
+
     if (error) alert('خطأ: ' + error.message);
     else {
       alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت');
@@ -143,7 +148,6 @@ export default function Admin() {
     <>
       <main className="min-h-screen bg-black text-white p-6">
         <div className="max-w-7xl mx-auto">
-
           <div className="flex justify-between items-center mb-8">
             <div className="flex items-center gap-4">
               <span className="text-6xl">🔧</span>
@@ -156,7 +160,7 @@ export default function Admin() {
             </div>
           </div>
 
-          {/* إحصائيات مطورة */}
+          {/* إحصائيات */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
             <div className="bg-zinc-900 p-6 rounded-3xl text-center">
               <p className="text-white/60 text-sm">إجمالي الماتشات</p>
@@ -188,27 +192,35 @@ export default function Admin() {
           <h2 className="text-3xl font-tajawal mb-8">إدارة الماتشات</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {matches.map((match) => (
-              <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative">
-                {/* بادج الحالة الجديدة */}
-                <div className={`absolute top-6 left-6 px-4 py-1 rounded-2xl text-sm font-bold ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
-                  {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
-                </div>
+            {matches.map((match) => {
+              const hasResult = match.goals?.home !== null && match.goals?.away !== null; // أو actual_home_score إذا كان موجود
+              return (
+                <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative">
+                  {/* بادج الحالة */}
+                  <div className={`absolute top-6 left-6 px-4 py-1 rounded-2xl text-sm font-bold ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+                    {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
+                  </div>
 
-                <div className="flex justify-between items-center mb-6">
-                  <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
-                  <div className="px-8 text-xl font-light">VS</div>
-                  <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
-                </div>
+                  {/* بادج النتيجة الجديدة */}
+                  <div className={`absolute top-6 right-6 px-4 py-1 rounded-2xl text-sm font-bold ${hasResult ? 'bg-green-500 text-white' : 'bg-zinc-500 text-white'}`}>
+                    {hasResult ? '📊 نتيجة مسجلة' : '⏳ بدون نتيجة'}
+                  </div>
 
-                <div className="flex gap-4">
-                  <button onClick={() => toggleMatchStatus(match)} className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
-                    {match.is_open ? '🚫 إغلاق التوقعات' : '✅ فتح التوقعات'}
-                  </button>
-                  <button onClick={() => openEditModal(match)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal">تعديل النتيجة</button>
+                  <div className="flex justify-between items-center mb-6 pt-8">
+                    <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
+                    <div className="px-8 text-xl font-light">VS</div>
+                    <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
+                  </div>
+
+                  <div className="flex gap-4">
+                    <button onClick={() => toggleMatchStatus(match)} className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                      {match.is_open ? '🚫 إغلاق التوقعات' : '✅ فتح التوقعات'}
+                    </button>
+                    <button onClick={() => openEditModal(match)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal">تعديل النتيجة</button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="mt-12 flex justify-center">
