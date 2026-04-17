@@ -7,17 +7,24 @@ export default function Admin() {
   const [user, setUser] = useState<any>(null);
   const [matches, setMatches] = useState<any[]>([]);
   const [editingMatch, setEditingMatch] = useState<any>(null);
-  const [actualForm, setActualForm] = useState({ homeScore: 0, awayScore: 0, firstScorer: '', extraTime: false });
+  const [actualForm, setActualForm] = useState({ homeScore: 0, awayScore: 0 });
   const [loading, setLoading] = useState(true);
+  // عدد التوقعات لكل ماتش: { fixture_id: count }
+  const [predictionCounts, setPredictionCounts] = useState<Record<number, number>>({});
   const router = useRouter();
 
   const ADMIN_EMAIL = 'i.g.webmaster.web@gmail.com';
 
-  // ─── حساب إحصائيات مباشرة من الـ state (دايماً دقيقة) ───────────────────
+  // ✅ إحصائيات محسوبة من الـ state مباشرة — دايماً دقيقة
   const computedStats = {
     totalMatches: matches.length,
     openMatches: matches.filter(m => m.is_open).length,
     closedMatches: matches.filter(m => !m.is_open).length,
+    matchesWithResult: matches.filter(m =>
+      m.actual_home_score !== null && m.actual_home_score !== undefined &&
+      m.actual_away_score !== null && m.actual_away_score !== undefined
+    ).length,
+    totalPredictors: Object.values(predictionCounts).reduce((a, b) => a + b, 0),
   };
 
   useEffect(() => {
@@ -39,6 +46,7 @@ export default function Admin() {
       const apiData = await res.json();
       const apiMatches = apiData.response || [];
 
+      // ✅ نجيب النتايج من fixtures مباشرة
       const { data: supabaseFixtures } = await supabase
         .from('fixtures')
         .select('id, is_open, actual_home_score, actual_away_score');
@@ -47,20 +55,23 @@ export default function Admin() {
 
       const merged = apiMatches.map((m: any) => {
         const supabaseData = supabaseMap.get(m.fixture.id);
-        const hasResult =
-          supabaseData?.actual_home_score !== null &&
-          supabaseData?.actual_home_score !== undefined &&
-          supabaseData?.actual_away_score !== null &&
-          supabaseData?.actual_away_score !== undefined;
 
-        // ✅ ماتش فيه نتيجة = مغلق تلقائياً
+        const homeScore = supabaseData?.actual_home_score;
+        const awayScore = supabaseData?.actual_away_score;
+
+        // ✅ التحقق الصحيح من وجود النتيجة (0 قيمة صالحة!)
+        const hasResult =
+          homeScore !== null && homeScore !== undefined &&
+          awayScore !== null && awayScore !== undefined;
+
+        // ✅ ماتش بنتيجة = مغلق تلقائياً
         const isOpen = hasResult ? false : (supabaseData ? supabaseData.is_open : true);
 
         return {
           ...m,
           is_open: isOpen,
-          actual_home_score: supabaseData?.actual_home_score ?? null,
-          actual_away_score: supabaseData?.actual_away_score ?? null,
+          actual_home_score: hasResult ? homeScore : null,
+          actual_away_score: hasResult ? awayScore : null,
         };
       });
 
@@ -71,25 +82,32 @@ export default function Admin() {
   };
 
   const loadStats = async () => {
+    // إحصائيات المستخدمين والنقاط
     const { count: totalPredictions, data: predictionsData } = await supabase
       .from('predictions')
-      .select('user_id, points', { count: 'exact' });
+      .select('user_id, fixture_id, points', { count: 'exact' });
 
     const uniqueUsers = new Set(predictionsData?.map(p => p.user_id) || []);
     const totalPoints = predictionsData?.reduce((sum, p) => sum + (p.points || 0), 0) || 0;
     const avgPoints = uniqueUsers.size > 0 ? Math.round(totalPoints / uniqueUsers.size) : 0;
 
-    setStats(prev => ({
-      ...prev,
+    // ✅ عدد التوقعات لكل ماتش
+    const counts: Record<number, number> = {};
+    predictionsData?.forEach(p => {
+      counts[p.fixture_id] = (counts[p.fixture_id] || 0) + 1;
+    });
+    setPredictionCounts(counts);
+
+    setStats({
       totalUsers: uniqueUsers.size,
       totalPredictions: totalPredictions || 0,
       totalPoints,
       avgPoints,
-    }));
+    });
     setLoading(false);
   };
 
-  // 🗑️ مسح النتايج التجاربية
+  // 🗑️ مسح كل النتايج التجاربية
   const clearTestResults = async () => {
     if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟')) return;
     const { error } = await supabase
@@ -99,13 +117,12 @@ export default function Admin() {
     if (error) {
       alert('خطأ: ' + error.message);
     } else {
-      // إزالة النتايج من الـ state + إعادة فتح الماتشات اللي كانت مغلقة بسببها
       setMatches(prev =>
         prev.map(m => ({
           ...m,
           actual_home_score: null,
           actual_away_score: null,
-          is_open: true, // يرجع مفتوح بعد مسح النتيجة
+          is_open: true,
         }))
       );
       alert('✅ تم مسح كل النتايج التجاربية');
@@ -115,9 +132,8 @@ export default function Admin() {
   const openAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد فتح التوقعات لكل الماتشات؟')) return;
 
-    // ✅ فقط الماتشات اللي مالهاش نتيجة تتفتح
     const matchesWithoutResult = matches
-      .filter(m => m.actual_home_score === null || m.actual_away_score === null)
+      .filter(m => m.actual_home_score === null || m.actual_home_score === undefined)
       .map(m => m.fixture.id);
 
     if (matchesWithoutResult.length === 0) {
@@ -135,7 +151,7 @@ export default function Admin() {
     } else {
       setMatches(prev =>
         prev.map(m => {
-          const hasResult = m.actual_home_score !== null && m.actual_away_score !== null;
+          const hasResult = m.actual_home_score !== null && m.actual_home_score !== undefined;
           return hasResult ? m : { ...m, is_open: true };
         })
       );
@@ -155,9 +171,10 @@ export default function Admin() {
   };
 
   const toggleMatchStatus = async (match: any) => {
-    const hasResult = match.actual_home_score !== null && match.actual_away_score !== null;
+    const hasResult =
+      match.actual_home_score !== null && match.actual_home_score !== undefined &&
+      match.actual_away_score !== null && match.actual_away_score !== undefined;
 
-    // ✅ منع فتح ماتش عنده نتيجة
     if (!match.is_open && hasResult) {
       alert('⚠️ لازم تمسح النتيجة الأول عشان تفتح التوقعات');
       return;
@@ -196,23 +213,20 @@ export default function Admin() {
     setActualForm({
       homeScore: match.actual_home_score ?? 0,
       awayScore: match.actual_away_score ?? 0,
-      firstScorer: '',
-      extraTime: false,
     });
   };
 
   const closeEditModal = () => setEditingMatch(null);
 
+  // ✅ الحفظ في fixtures (مش predictions)
   const saveActualResult = async () => {
     if (!editingMatch) return;
-
-    // ✅ حفظ النتيجة في fixtures (مش predictions)
     const { error } = await supabase
       .from('fixtures')
       .update({
         actual_home_score: actualForm.homeScore,
         actual_away_score: actualForm.awayScore,
-        is_open: false, // ✅ إغلاق تلقائي عند حفظ النتيجة
+        is_open: false,
       })
       .eq('id', editingMatch.fixture.id);
 
@@ -226,7 +240,7 @@ export default function Admin() {
                 ...m,
                 actual_home_score: actualForm.homeScore,
                 actual_away_score: actualForm.awayScore,
-                is_open: false, // ✅ يتغلق فوراً في الـ state
+                is_open: false,
               }
             : m
         )
@@ -236,10 +250,9 @@ export default function Admin() {
     }
   };
 
-  // ✅ مسح نتيجة ماتش واحد فقط
+  // ✅ مسح نتيجة ماتش واحد
   const clearSingleResult = async (match: any) => {
     if (!confirm(`مسح نتيجة ${match.teams.home.name} vs ${match.teams.away.name}?`)) return;
-
     const { error } = await supabase
       .from('fixtures')
       .update({ actual_home_score: null, actual_away_score: null })
@@ -255,12 +268,12 @@ export default function Admin() {
             : m
         )
       );
-      alert('✅ تم مسح النتيجة — يمكنك الآن فتح التوقعات');
+      alert('✅ تم مسح النتيجة');
     }
   };
 
   const [stats, setStats] = useState({
-    totalUsers: 0, totalPredictions: 0, totalPoints: 0, avgPoints: 0
+    totalUsers: 0, totalPredictions: 0, totalPoints: 0, avgPoints: 0,
   });
 
   if (loading) return (
@@ -273,7 +286,9 @@ export default function Admin() {
     <>
       <main className="min-h-screen bg-black text-white p-6">
         <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
+
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
             <div className="flex items-center gap-4">
               <span className="text-6xl">🔧</span>
               <h1 className="text-5xl font-bold text-red-600 font-tajawal">Admin Panel</h1>
@@ -281,37 +296,48 @@ export default function Admin() {
             <div className="flex gap-3 flex-wrap justify-end">
               <button onClick={openAllMatches} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">✅ فتح الكل</button>
               <button onClick={closeAllMatches} className="bg-red-600 hover:bg-red-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🚫 إغلاق الكل</button>
-              <button onClick={clearTestResults} className="bg-orange-600 hover:bg-orange-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🗑️ مسح النتايج التجاربية</button>
+              <button onClick={clearTestResults} className="bg-orange-600 hover:bg-orange-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🗑️ مسح النتايج</button>
               <button onClick={() => router.push('/dashboard')} className="bg-zinc-700 hover:bg-zinc-600 px-6 py-4 rounded-3xl font-tajawal text-lg">رجوع للداشبورد</button>
             </div>
           </div>
 
-          {/* ✅ إحصائيات محسوبة من الـ state مباشرة */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
-            <div className="bg-zinc-900 p-6 rounded-3xl text-center">
-              <p className="text-white/60 text-sm">إجمالي الماتشات</p>
-              <p className="text-4xl font-bold text-white mt-2">{computedStats.totalMatches}</p>
+          {/* ✅ إحصائيات — الصف الأول من الـ state، الثاني من Supabase */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-10">
+            <div className="bg-zinc-900 p-5 rounded-3xl text-center col-span-1">
+              <p className="text-white/60 text-xs">إجمالي الماتشات</p>
+              <p className="text-3xl font-bold text-white mt-1">{computedStats.totalMatches}</p>
             </div>
-            <div className="bg-emerald-900/30 p-6 rounded-3xl text-center border border-emerald-500/30">
-              <p className="text-emerald-400 text-sm">مفتوحة</p>
-              <p className="text-4xl font-bold text-emerald-400 mt-2">{computedStats.openMatches}</p>
+            <div className="bg-emerald-900/30 p-5 rounded-3xl text-center border border-emerald-500/30">
+              <p className="text-emerald-400 text-xs">مفتوحة</p>
+              <p className="text-3xl font-bold text-emerald-400 mt-1">{computedStats.openMatches}</p>
             </div>
-            <div className="bg-red-900/30 p-6 rounded-3xl text-center border border-red-500/30">
-              <p className="text-red-400 text-sm">مغلقة</p>
-              <p className="text-4xl font-bold text-red-400 mt-2">{computedStats.closedMatches}</p>
+            <div className="bg-red-900/30 p-5 rounded-3xl text-center border border-red-500/30">
+              <p className="text-red-400 text-xs">مغلقة</p>
+              <p className="text-3xl font-bold text-red-400 mt-1">{computedStats.closedMatches}</p>
             </div>
-            <div className="bg-zinc-900 p-6 rounded-3xl text-center">
-              <p className="text-white/60 text-sm">المستخدمين</p>
-              <p className="text-4xl font-bold text-white mt-2">{stats.totalUsers}</p>
+            {/* ✅ جديد: ماتشات بنتيجة */}
+            <div className="bg-green-900/30 p-5 rounded-3xl text-center border border-green-500/30">
+              <p className="text-green-400 text-xs">لها نتيجة</p>
+              <p className="text-3xl font-bold text-green-400 mt-1">{computedStats.matchesWithResult}</p>
             </div>
-            <div className="bg-zinc-900 p-6 rounded-3xl text-center">
-              <p className="text-white/60 text-sm">إجمالي التوقعات</p>
-              <p className="text-4xl font-bold text-white mt-2">{stats.totalPredictions}</p>
+            <div className="bg-zinc-900 p-5 rounded-3xl text-center">
+              <p className="text-white/60 text-xs">المستخدمين</p>
+              <p className="text-3xl font-bold text-white mt-1">{stats.totalUsers}</p>
             </div>
-            <div className="bg-amber-900/30 p-6 rounded-3xl text-center border border-amber-500/30">
-              <p className="text-amber-400 text-sm">مجموع النقاط</p>
-              <p className="text-4xl font-bold text-amber-400 mt-2">{stats.totalPoints}</p>
-              <p className="text-xs text-amber-400/70 mt-1">متوسط: {stats.avgPoints} نقطة</p>
+            <div className="bg-zinc-900 p-5 rounded-3xl text-center">
+              <p className="text-white/60 text-xs">إجمالي التوقعات</p>
+              <p className="text-3xl font-bold text-white mt-1">{stats.totalPredictions}</p>
+            </div>
+            {/* ✅ جديد: عدد اللي عملوا توقع */}
+            <div className="bg-blue-900/30 p-5 rounded-3xl text-center border border-blue-500/30">
+              <p className="text-blue-400 text-xs">عدد المتوقعين</p>
+              <p className="text-3xl font-bold text-blue-400 mt-1">{stats.totalUsers}</p>
+              <p className="text-xs text-blue-400/70 mt-0.5">{stats.totalPredictions} توقع</p>
+            </div>
+            <div className="bg-amber-900/30 p-5 rounded-3xl text-center border border-amber-500/30">
+              <p className="text-amber-400 text-xs">مجموع النقاط</p>
+              <p className="text-3xl font-bold text-amber-400 mt-1">{stats.totalPoints}</p>
+              <p className="text-xs text-amber-400/70 mt-0.5">متوسط: {stats.avgPoints}</p>
             </div>
           </div>
 
@@ -320,10 +346,11 @@ export default function Admin() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {matches.map((match) => {
               const hasResult =
-                match.actual_home_score !== null &&
-                match.actual_home_score !== undefined &&
-                match.actual_away_score !== null &&
-                match.actual_away_score !== undefined;
+                match.actual_home_score !== null && match.actual_home_score !== undefined &&
+                match.actual_away_score !== null && match.actual_away_score !== undefined;
+
+              // ✅ عدد المتوقعين لهذا الماتش
+              const matchPredictors = predictionCounts[match.fixture.id] || 0;
 
               return (
                 <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative pt-16">
@@ -333,7 +360,6 @@ export default function Admin() {
                     <span className={`px-4 py-1.5 rounded-2xl text-sm font-bold whitespace-nowrap ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
                       {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
                     </span>
-                    {/* ✅ بادج النتيجة يعرض الأرقام الفعلية */}
                     <span className={`px-4 py-1.5 rounded-2xl text-sm font-bold whitespace-nowrap ${hasResult ? 'bg-green-500 text-white' : 'bg-zinc-500 text-white'}`}>
                       {hasResult
                         ? `📊 ${match.actual_home_score} - ${match.actual_away_score}`
@@ -341,7 +367,8 @@ export default function Admin() {
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-center mb-6">
+                  {/* أسماء الفرق */}
+                  <div className="flex justify-between items-center mb-4">
                     <div className="flex-1 text-center">
                       <p className="font-tajawal text-2xl">{match.teams.home.name}</p>
                     </div>
@@ -351,8 +378,14 @@ export default function Admin() {
                     </div>
                   </div>
 
+                  {/* ✅ عدد المتوقعين للماتش */}
+                  <div className="text-center mb-5">
+                    <span className="text-sm text-blue-400 bg-blue-900/30 px-4 py-1 rounded-full border border-blue-500/30">
+                      👥 {matchPredictors} متوقع
+                    </span>
+                  </div>
+
                   <div className="flex gap-3 flex-wrap">
-                    {/* ✅ زرار الفتح/الإغلاق — معطّل لو فيه نتيجة وعايز يفتح */}
                     <button
                       onClick={() => toggleMatchStatus(match)}
                       disabled={!match.is_open && hasResult}
@@ -364,7 +397,11 @@ export default function Admin() {
                             : 'bg-green-600 hover:bg-green-700'
                         }`}
                     >
-                      {match.is_open ? '🚫 إغلاق التوقعات' : (hasResult ? '🔒 مغلق (فيه نتيجة)' : '✅ فتح التوقعات')}
+                      {match.is_open
+                        ? '🚫 إغلاق التوقعات'
+                        : hasResult
+                          ? '🔒 مغلق (فيه نتيجة)'
+                          : '✅ فتح التوقعات'}
                     </button>
 
                     <button
@@ -374,7 +411,7 @@ export default function Admin() {
                       تعديل النتيجة
                     </button>
 
-                    {/* ✅ زرار مسح نتيجة ماتش واحد — يظهر فقط لو فيه نتيجة */}
+                    {/* ✅ زرار مسح النتيجة — يظهر فقط لو فيه نتيجة */}
                     {hasResult && (
                       <button
                         onClick={() => clearSingleResult(match)}
@@ -411,10 +448,16 @@ export default function Admin() {
             className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 shadow-2xl border border-green-500/40"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ color: '#ffffff', fontWeight: '700' }} className="text-3xl text-center mb-8 font-tajawal">
+            <h2 style={{ color: '#ffffff', fontWeight: '700' }} className="text-3xl text-center mb-2 font-tajawal">
               {editingMatch.teams.home.name} × {editingMatch.teams.away.name}
             </h2>
-            <div className="space-y-8">
+            {/* ✅ عرض النتيجة الحالية في الـ Modal */}
+            {editingMatch.actual_home_score !== null && editingMatch.actual_home_score !== undefined && (
+              <p className="text-center text-green-400 mb-6 font-tajawal">
+                النتيجة الحالية: {editingMatch.actual_home_score} - {editingMatch.actual_away_score}
+              </p>
+            )}
+            <div className="space-y-8 mt-6">
               <div className="flex gap-12 justify-center">
                 <div className="text-center">
                   <p style={{ color: '#ffffff', fontWeight: '600' }} className="text-xl mb-3 font-tajawal">{editingMatch.teams.home.name}</p>
