@@ -61,18 +61,17 @@ export default function Admin() {
 
     const { count: totalPredictions, data: predictionsData } = await supabase
       .from('predictions')
-      .select('user_id', { count: 'exact' });
+      .select('user_id, points', { count: 'exact' });
 
-    const uniqueUsersWithPredictions = new Set(predictionsData?.map(p => p.user_id) || []);
-    const totalPointsData = await supabase.from('predictions').select('points');
-    const totalPoints = totalPointsData.data?.reduce((sum, p) => sum + (p.points || 0), 0) || 0;
-    const avgPoints = uniqueUsersWithPredictions.size > 0 ? Math.round(totalPoints / uniqueUsersWithPredictions.size) : 0;
+    const uniqueUsers = new Set(predictionsData?.map(p => p.user_id) || []);
+    const totalPoints = predictionsData?.reduce((sum, p) => sum + (p.points || 0), 0) || 0;
+    const avgPoints = uniqueUsers.size > 0 ? Math.round(totalPoints / uniqueUsers.size) : 0;
 
     setStats({
       totalMatches,
       openMatches,
       closedMatches: totalMatches - openMatches,
-      totalUsers: uniqueUsersWithPredictions.size,           // عدد الذين قاموا بتوقع
+      totalUsers: uniqueUsers.size,
       totalPredictions: totalPredictions || 0,
       totalPoints,
       avgPoints
@@ -80,9 +79,9 @@ export default function Admin() {
     setLoading(false);
   };
 
-  // مسح كل النتايج التجاربية (الجديد)
+  // 🗑️ مسح كل النتايج التجاربية (جديد)
   const clearTestResults = async () => {
-    if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟ (هيتمسح النتايج اليدوية فقط)')) return;
+    if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟\n(هيتمسح النتايج اليدوية فقط وهيترجع الماتشات بدون نتيجة)')) return;
     const { error } = await supabase
       .from('fixtures')
       .update({ actual_home_score: null, actual_away_score: null });
@@ -100,9 +99,8 @@ export default function Admin() {
     const { error } = await supabase.from('fixtures').update({ is_open: true }).gt('id', 0);
     if (error) alert('خطأ: ' + error.message);
     else {
+      setMatches(prev => prev.map(m => ({ ...m, is_open: true })));
       alert('✅ تم فتح التوقعات لكل الماتشات');
-      await loadMatches();
-      await loadStats();
     }
   };
 
@@ -111,9 +109,8 @@ export default function Admin() {
     const { error } = await supabase.from('fixtures').update({ is_open: false }).gt('id', 0);
     if (error) alert('خطأ: ' + error.message);
     else {
+      setMatches(prev => prev.map(m => ({ ...m, is_open: false })));
       alert('✅ تم إغلاق التوقعات لكل الماتشات');
-      await loadMatches();
-      await loadStats();
     }
   };
 
@@ -122,8 +119,12 @@ export default function Admin() {
     const { error } = await supabase.from('fixtures').update({ is_open: newStatus }).eq('id', match.fixture.id);
     if (error) alert('خطأ: ' + error.message);
     else {
+      setMatches(prev =>
+        prev.map(m =>
+          m.fixture.id === match.fixture.id ? { ...m, is_open: newStatus } : m
+        )
+      );
       alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت');
-      await loadMatches();
     }
   };
 
@@ -134,7 +135,6 @@ export default function Admin() {
     if (data.success) {
       alert(data.message);
       await loadMatches();
-      await loadStats();
     } else alert('خطأ: ' + data.error);
   };
 
@@ -157,10 +157,15 @@ export default function Admin() {
 
     if (error) alert('خطأ: ' + error.message);
     else {
+      setMatches(prev =>
+        prev.map(m =>
+          m.fixture.id === editingMatch.fixture.id
+            ? { ...m, actual_home_score: actualForm.homeScore, actual_away_score: actualForm.awayScore }
+            : m
+        )
+      );
       alert('✅ النتيجة الفعلية اتسجلت');
       closeEditModal();
-      await loadMatches();
-      await loadStats();
     }
   };
 
@@ -201,22 +206,6 @@ export default function Admin() {
             <div className="bg-red-900/30 p-6 rounded-3xl text-center border border-red-500/30">
               <p className="text-red-400 text-sm">مغلقة</p>
               <p className="text-4xl font-bold text-red-400 mt-2">{stats.closedMatches}</p>
-            </div>
-          </div>
-
-          {/* إحصائيات المستخدمين - 3 أعمدة جديدة */}
-          <div className="grid grid-cols-3 gap-6 mb-10">
-            <div className="bg-zinc-900 p-6 rounded-3xl text-center">
-              <p className="text-white/60 text-sm">المستخدمين</p>
-              <p className="text-4xl font-bold text-white mt-2">{stats.totalUsers}</p>
-            </div>
-            <div className="bg-zinc-900 p-6 rounded-3xl text-center">
-              <p className="text-white/60 text-sm">الذين قاموا بتوقع</p>
-              <p className="text-4xl font-bold text-white mt-2">{stats.totalUsers}</p>
-            </div>
-            <div className="bg-zinc-900 p-6 rounded-3xl text-center">
-              <p className="text-white/60 text-sm">إجمالي التوقعات</p>
-              <p className="text-4xl font-bold text-white mt-2">{stats.totalPredictions}</p>
             </div>
           </div>
 
