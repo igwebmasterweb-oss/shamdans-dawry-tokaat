@@ -32,10 +32,7 @@ export default function Admin() {
       const apiData = await res.json();
       const apiMatches = apiData.response || [];
 
-      const { data: supabaseFixtures } = await supabase
-        .from('fixtures')
-        .select('id, is_open, actual_home_score, actual_away_score');
-
+      const { data: supabaseFixtures } = await supabase.from('fixtures').select('id, is_open, actual_home_score, actual_away_score');
       const supabaseMap = new Map(supabaseFixtures?.map(f => [f.id, f]) || []);
 
       const merged = apiMatches.map((m: any) => {
@@ -59,9 +56,7 @@ export default function Admin() {
     const totalMatches = fixturesData?.length || 0;
     const openMatches = fixturesData?.filter(m => m.is_open).length || 0;
 
-    const { count: totalPredictions, data: predictionsData } = await supabase
-      .from('predictions')
-      .select('user_id, points', { count: 'exact' });
+    const { count: totalPredictions, data: predictionsData } = await supabase.from('predictions').select('user_id, points', { count: 'exact' });
 
     const uniqueUsers = new Set(predictionsData?.map(p => p.user_id) || []);
     const totalPoints = predictionsData?.reduce((sum, p) => sum + (p.points || 0), 0) || 0;
@@ -87,6 +82,7 @@ export default function Admin() {
       alert('✅ تم فتح التوقعات لكل الماتشات');
       await loadMatches();
       await loadStats();
+      window.location.reload();   // ← force refresh
     }
   };
 
@@ -98,6 +94,7 @@ export default function Admin() {
       alert('✅ تم إغلاق التوقعات لكل الماتشات');
       await loadMatches();
       await loadStats();
+      window.location.reload();   // ← force refresh
     }
   };
 
@@ -108,6 +105,7 @@ export default function Admin() {
     else {
       alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت');
       await loadMatches();
+      window.location.reload();   // ← force refresh
     }
   };
 
@@ -119,6 +117,7 @@ export default function Admin() {
       alert(data.message);
       await loadMatches();
       await loadStats();
+      window.location.reload();
     } else alert('خطأ: ' + data.error);
   };
 
@@ -131,20 +130,14 @@ export default function Admin() {
 
   const saveActualResult = async () => {
     if (!editingMatch) return;
-    const { error } = await supabase
-      .from('predictions')
-      .update({
-        actual_home_score: actualForm.homeScore,
-        actual_away_score: actualForm.awayScore,
-      })
-      .eq('fixture_id', editingMatch.fixture.id);
-
+    const { error } = await supabase.from('predictions').update({ actual_home_score: actualForm.homeScore, actual_away_score: actualForm.awayScore }).eq('fixture_id', editingMatch.fixture.id);
     if (error) alert('خطأ: ' + error.message);
     else {
       alert('✅ النتيجة الفعلية اتسجلت');
       closeEditModal();
       await loadMatches();
       await loadStats();
+      window.location.reload();
     }
   };
 
@@ -167,6 +160,7 @@ export default function Admin() {
             <div className="flex gap-3">
               <button onClick={openAllMatches} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">✅ فتح الكل</button>
               <button onClick={closeAllMatches} className="bg-red-600 hover:bg-red-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🚫 إغلاق الكل</button>
+              <button onClick={() => window.location.reload()} className="bg-blue-600 hover:bg-blue-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🔄 Refresh</button>
               <button onClick={() => router.push('/dashboard')} className="bg-zinc-700 hover:bg-zinc-600 px-6 py-4 rounded-3xl font-tajawal text-lg">رجوع للداشبورد</button>
             </div>
           </div>
@@ -207,12 +201,12 @@ export default function Admin() {
               const hasResult = match.actual_home_score !== null && match.actual_away_score !== null;
               return (
                 <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative pt-14">
-                  {/* بادج الحالة - يسار */}
+                  {/* بادج الحالة */}
                   <div className={`absolute top-6 left-6 px-5 py-1.5 rounded-2xl text-sm font-bold ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
                     {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
                   </div>
 
-                  {/* بادج النتيجة - يمين */}
+                  {/* بادج النتيجة */}
                   <div className={`absolute top-6 right-6 px-5 py-1.5 rounded-2xl text-sm font-bold ${hasResult ? 'bg-green-500 text-white' : 'bg-zinc-500 text-white'}`}>
                     {hasResult ? '📊 نتيجة مسجلة' : '⏳ بدون نتيجة'}
                   </div>
