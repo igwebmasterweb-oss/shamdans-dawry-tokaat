@@ -26,17 +26,40 @@ export default function Admin() {
     });
   }, [router]);
 
+  // دمج البيانات من API + Supabase
   const loadMatches = async () => {
     try {
+      // 1. جلب البيانات من API-Football
       const res = await fetch('/api/fixtures');
-      const data = await res.json();
-      if (data.response) setMatches(data.response.slice(0, 30));
+      const apiData = await res.json();
+      const apiMatches = apiData.response || [];
+
+      // 2. جلب حالة is_open من جدول fixtures في Supabase
+      const { data: supabaseFixtures } = await supabase
+        .from('fixtures')
+        .select('id, is_open, actual_home_score, actual_away_score');
+
+      const supabaseMap = new Map(supabaseFixtures?.map(f => [f.id, f]) || []);
+
+      // 3. دمج البيانات
+      const merged = apiMatches.map((m: any) => {
+        const supabaseData = supabaseMap.get(m.fixture.id);
+        return {
+          ...m,
+          is_open: supabaseData ? supabaseData.is_open : true,
+          actual_home_score: supabaseData ? supabaseData.actual_home_score : null,
+          actual_away_score: supabaseData ? supabaseData.actual_away_score : null
+        };
+      });
+
+      setMatches(merged);
     } catch (err) {
       console.error(err);
     }
   };
 
   const loadStats = async () => {
+    // ... (نفس الكود السابق للإحصائيات)
     const { data: fixturesData } = await supabase.from('fixtures').select('is_open');
     const totalMatches = fixturesData?.length || 0;
     const openMatches = fixturesData?.filter(m => m.is_open).length || 0;
@@ -61,7 +84,7 @@ export default function Admin() {
     setLoading(false);
   };
 
-  // فتح الكل
+  // باقي الدوال (مُصححة)
   const openAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد فتح التوقعات لكل الماتشات؟')) return;
     const { error } = await supabase.from('fixtures').update({ is_open: true }).gt('id', 0);
@@ -73,7 +96,6 @@ export default function Admin() {
     }
   };
 
-  // إغلاق الكل
   const closeAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
     const { error } = await supabase.from('fixtures').update({ is_open: false }).gt('id', 0);
@@ -188,7 +210,7 @@ export default function Admin() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {matches.map((match) => {
-              const hasResult = match.goals?.home !== null && match.goals?.away !== null;
+              const hasResult = match.actual_home_score !== null && match.actual_away_score !== null;
               return (
                 <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative">
                   {/* بادج الحالة */}
@@ -201,17 +223,14 @@ export default function Admin() {
                     {hasResult ? '📊 نتيجة مسجلة' : '⏳ بدون نتيجة'}
                   </div>
 
-                  <div className="flex justify-between items-center mb-6 pt-10">
+                  <div className="flex justify-between items-center mb-6 pt-12">
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
                     <div className="px-8 text-xl font-light">VS</div>
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
                   </div>
 
                   <div className="flex gap-4">
-                    <button 
-                      onClick={() => toggleMatchStatus(match)} 
-                      className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
-                    >
+                    <button onClick={() => toggleMatchStatus(match)} className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
                       {match.is_open ? '🚫 إغلاق التوقعات' : '✅ فتح التوقعات'}
                     </button>
                     <button onClick={() => openEditModal(match)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal">تعديل النتيجة</button>
