@@ -49,7 +49,7 @@ export default function Dashboard() {
         const sb = supabaseMap.get(m.fixture.id);
         return {
           ...m,
-          is_open: sb ? sb.is_open : true,
+          is_open: sb ? sb.is_open : false,
           actual_home_score: sb?.actual_home_score ?? null,
           actual_away_score: sb?.actual_away_score ?? null,
         };
