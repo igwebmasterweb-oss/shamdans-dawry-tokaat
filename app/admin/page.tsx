@@ -61,17 +61,18 @@ export default function Admin() {
 
     const { count: totalPredictions, data: predictionsData } = await supabase
       .from('predictions')
-      .select('user_id, points', { count: 'exact' });
+      .select('user_id', { count: 'exact' });
 
-    const uniqueUsers = new Set(predictionsData?.map(p => p.user_id) || []);
-    const totalPoints = predictionsData?.reduce((sum, p) => sum + (p.points || 0), 0) || 0;
-    const avgPoints = uniqueUsers.size > 0 ? Math.round(totalPoints / uniqueUsers.size) : 0;
+    const uniqueUsersWithPredictions = new Set(predictionsData?.map(p => p.user_id) || []);
+    const totalPointsData = await supabase.from('predictions').select('points');
+    const totalPoints = totalPointsData.data?.reduce((sum, p) => sum + (p.points || 0), 0) || 0;
+    const avgPoints = uniqueUsersWithPredictions.size > 0 ? Math.round(totalPoints / uniqueUsersWithPredictions.size) : 0;
 
     setStats({
       totalMatches,
       openMatches,
       closedMatches: totalMatches - openMatches,
-      totalUsers: uniqueUsers.size,
+      totalUsers: uniqueUsersWithPredictions.size,           // عدد الذين قاموا بتوقع
       totalPredictions: totalPredictions || 0,
       totalPoints,
       avgPoints
@@ -79,13 +80,29 @@ export default function Admin() {
     setLoading(false);
   };
 
+  // مسح كل النتايج التجاربية (الجديد)
+  const clearTestResults = async () => {
+    if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟ (هيتمسح النتايج اليدوية فقط)')) return;
+    const { error } = await supabase
+      .from('fixtures')
+      .update({ actual_home_score: null, actual_away_score: null });
+
+    if (error) alert('خطأ: ' + error.message);
+    else {
+      alert('✅ تم مسح كل النتايج التجاربية');
+      await loadMatches();
+      await loadStats();
+    }
+  };
+
   const openAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد فتح التوقعات لكل الماتشات؟')) return;
     const { error } = await supabase.from('fixtures').update({ is_open: true }).gt('id', 0);
     if (error) alert('خطأ: ' + error.message);
     else {
-      setMatches(prev => prev.map(m => ({ ...m, is_open: true })));
       alert('✅ تم فتح التوقعات لكل الماتشات');
+      await loadMatches();
+      await loadStats();
     }
   };
 
@@ -94,8 +111,9 @@ export default function Admin() {
     const { error } = await supabase.from('fixtures').update({ is_open: false }).gt('id', 0);
     if (error) alert('خطأ: ' + error.message);
     else {
-      setMatches(prev => prev.map(m => ({ ...m, is_open: false })));
       alert('✅ تم إغلاق التوقعات لكل الماتشات');
+      await loadMatches();
+      await loadStats();
     }
   };
 
@@ -104,12 +122,8 @@ export default function Admin() {
     const { error } = await supabase.from('fixtures').update({ is_open: newStatus }).eq('id', match.fixture.id);
     if (error) alert('خطأ: ' + error.message);
     else {
-      setMatches(prev =>
-        prev.map(m =>
-          m.fixture.id === match.fixture.id ? { ...m, is_open: newStatus } : m
-        )
-      );
       alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت');
+      await loadMatches();
     }
   };
 
@@ -120,6 +134,7 @@ export default function Admin() {
     if (data.success) {
       alert(data.message);
       await loadMatches();
+      await loadStats();
     } else alert('خطأ: ' + data.error);
   };
 
@@ -142,15 +157,10 @@ export default function Admin() {
 
     if (error) alert('خطأ: ' + error.message);
     else {
-      setMatches(prev =>
-        prev.map(m =>
-          m.fixture.id === editingMatch.fixture.id
-            ? { ...m, actual_home_score: actualForm.homeScore, actual_away_score: actualForm.awayScore }
-            : m
-        )
-      );
       alert('✅ النتيجة الفعلية اتسجلت');
       closeEditModal();
+      await loadMatches();
+      await loadStats();
     }
   };
 
@@ -173,12 +183,13 @@ export default function Admin() {
             <div className="flex gap-3">
               <button onClick={openAllMatches} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">✅ فتح الكل</button>
               <button onClick={closeAllMatches} className="bg-red-600 hover:bg-red-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🚫 إغلاق الكل</button>
+              <button onClick={clearTestResults} className="bg-orange-600 hover:bg-orange-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🗑️ مسح النتايج التجاربية</button>
               <button onClick={() => router.push('/dashboard')} className="bg-zinc-700 hover:bg-zinc-600 px-6 py-4 rounded-3xl font-tajawal text-lg">رجوع للداشبورد</button>
             </div>
           </div>
 
-          {/* إحصائيات */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
+          {/* إحصائيات - 3 أعمدة كما طلبت */}
+          <div className="grid grid-cols-3 gap-6 mb-10">
             <div className="bg-zinc-900 p-6 rounded-3xl text-center">
               <p className="text-white/60 text-sm">إجمالي الماتشات</p>
               <p className="text-4xl font-bold text-white mt-2">{stats.totalMatches}</p>
@@ -191,18 +202,21 @@ export default function Admin() {
               <p className="text-red-400 text-sm">مغلقة</p>
               <p className="text-4xl font-bold text-red-400 mt-2">{stats.closedMatches}</p>
             </div>
+          </div>
+
+          {/* إحصائيات المستخدمين - 3 أعمدة جديدة */}
+          <div className="grid grid-cols-3 gap-6 mb-10">
             <div className="bg-zinc-900 p-6 rounded-3xl text-center">
               <p className="text-white/60 text-sm">المستخدمين</p>
               <p className="text-4xl font-bold text-white mt-2">{stats.totalUsers}</p>
             </div>
             <div className="bg-zinc-900 p-6 rounded-3xl text-center">
+              <p className="text-white/60 text-sm">الذين قاموا بتوقع</p>
+              <p className="text-4xl font-bold text-white mt-2">{stats.totalUsers}</p>
+            </div>
+            <div className="bg-zinc-900 p-6 rounded-3xl text-center">
               <p className="text-white/60 text-sm">إجمالي التوقعات</p>
               <p className="text-4xl font-bold text-white mt-2">{stats.totalPredictions}</p>
-            </div>
-            <div className="bg-amber-900/30 p-6 rounded-3xl text-center border border-amber-500/30">
-              <p className="text-amber-400 text-sm">مجموع النقاط</p>
-              <p className="text-4xl font-bold text-amber-400 mt-2">{stats.totalPoints}</p>
-              <p className="text-xs text-amber-400/70 mt-1">متوسط: {stats.avgPoints} نقطة</p>
             </div>
           </div>
 
@@ -214,32 +228,25 @@ export default function Admin() {
               return (
                 <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative pt-14">
                   <div className="absolute top-4 left-4 right-4 flex justify-between items-center">
-                    {/* بادج الحالة */}
                     <span className={`px-5 py-1.5 rounded-2xl text-sm font-bold ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
                       {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
                     </span>
-                    {/* بادج النتيجة */}
                     <span className={`px-5 py-1.5 rounded-2xl text-sm font-bold ${hasResult ? 'bg-green-500 text-white' : 'bg-zinc-500 text-white'}`}>
                       {hasResult ? '📊 نتيجة مسجلة' : '⏳ بدون نتيجة'}
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-center mb-6 pt-8">
+                  <div className="flex justify-between items-center mb-6">
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
                     <div className="px-8 text-xl font-light">VS</div>
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
                   </div>
 
                   <div className="flex gap-4">
-                    <button
-                      onClick={() => toggleMatchStatus(match)}
-                      className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
-                    >
+                    <button onClick={() => toggleMatchStatus(match)} className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
                       {match.is_open ? '🚫 إغلاق التوقعات' : '✅ فتح التوقعات'}
                     </button>
-                    <button onClick={() => openEditModal(match)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal">
-                      تعديل النتيجة
-                    </button>
+                    <button onClick={() => openEditModal(match)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal">تعديل النتيجة</button>
                   </div>
                 </div>
               );
@@ -247,9 +254,7 @@ export default function Admin() {
           </div>
 
           <div className="mt-12 flex justify-center">
-            <button onClick={autoUpdateFromAPI} className="bg-emerald-600 hover:bg-emerald-700 px-10 py-5 rounded-3xl font-tajawal text-lg font-bold flex items-center gap-3">
-              🔄 تحديث أوتوماتيك من API-Football
-            </button>
+            <button onClick={autoUpdateFromAPI} className="bg-emerald-600 hover:bg-emerald-700 px-10 py-5 rounded-3xl font-tajawal text-lg font-bold flex items-center gap-3">🔄 تحديث أوتوماتيك من API-Football</button>
           </div>
         </div>
       </main>
