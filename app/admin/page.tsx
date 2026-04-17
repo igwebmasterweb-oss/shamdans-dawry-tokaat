@@ -64,45 +64,46 @@ export default function Admin() {
   // فتح الكل
   const openAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد فتح التوقعات لكل الماتشات؟')) return;
-    const { error } = await supabase
-      .from('fixtures')
-      .update({ is_open: true })
-      .gt('id', 0);
-
+    const { error } = await supabase.from('fixtures').update({ is_open: true }).gt('id', 0);
     if (error) alert('خطأ: ' + error.message);
-    else { alert('✅ تم فتح التوقعات لكل الماتشات'); loadMatches(); loadStats(); }
+    else {
+      alert('✅ تم فتح التوقعات لكل الماتشات');
+      await loadMatches();
+      await loadStats();
+    }
   };
 
   // إغلاق الكل
   const closeAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
-    const { error } = await supabase
-      .from('fixtures')
-      .update({ is_open: false })
-      .gt('id', 0);
-
+    const { error } = await supabase.from('fixtures').update({ is_open: false }).gt('id', 0);
     if (error) alert('خطأ: ' + error.message);
-    else { alert('✅ تم إغلاق التوقعات لكل الماتشات'); loadMatches(); loadStats(); }
+    else {
+      alert('✅ تم إغلاق التوقعات لكل الماتشات');
+      await loadMatches();
+      await loadStats();
+    }
   };
 
-  // فتح/إغلاق ماتش واحد
   const toggleMatchStatus = async (match: any) => {
     const newStatus = !match.is_open;
-    const { error } = await supabase
-      .from('fixtures')
-      .update({ is_open: newStatus })
-      .eq('id', match.fixture.id);     // ← التصليح هنا (استخدمنا id)
-
+    const { error } = await supabase.from('fixtures').update({ is_open: newStatus }).eq('id', match.fixture.id);
     if (error) alert('خطأ: ' + error.message);
-    else { alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت'); loadMatches(); }
+    else {
+      alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت');
+      await loadMatches();
+    }
   };
 
   const autoUpdateFromAPI = async () => {
     if (!confirm('هل تريد تحديث كل النتايج الفعلية تلقائيًا من API-Football؟')) return;
     const res = await fetch('/api/update-results');
     const data = await res.json();
-    if (data.success) { alert(data.message); loadMatches(); loadStats(); }
-    else alert('خطأ: ' + data.error);
+    if (data.success) {
+      alert(data.message);
+      await loadMatches();
+      await loadStats();
+    } else alert('خطأ: ' + data.error);
   };
 
   const openEditModal = (match: any) => {
@@ -123,7 +124,12 @@ export default function Admin() {
       .eq('fixture_id', editingMatch.fixture.id);
 
     if (error) alert('خطأ: ' + error.message);
-    else { alert('✅ النتيجة الفعلية اتسجلت'); closeEditModal(); loadMatches(); loadStats(); }
+    else {
+      alert('✅ النتيجة الفعلية اتسجلت');
+      closeEditModal();
+      await loadMatches();
+      await loadStats();
+    }
   };
 
   const [stats, setStats] = useState({
@@ -137,6 +143,7 @@ export default function Admin() {
     <>
       <main className="min-h-screen bg-black text-white p-6">
         <div className="max-w-7xl mx-auto">
+
           <div className="flex justify-between items-center mb-8">
             <div className="flex items-center gap-4">
               <span className="text-6xl">🔧</span>
@@ -149,7 +156,7 @@ export default function Admin() {
             </div>
           </div>
 
-          {/* إحصائيات */}
+          {/* إحصائيات مطورة */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
             <div className="bg-zinc-900 p-6 rounded-3xl text-center">
               <p className="text-white/60 text-sm">إجمالي الماتشات</p>
@@ -182,12 +189,18 @@ export default function Admin() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {matches.map((match) => (
-              <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all">
+              <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative">
+                {/* بادج الحالة الجديدة */}
+                <div className={`absolute top-6 left-6 px-4 py-1 rounded-2xl text-sm font-bold ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+                  {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
+                </div>
+
                 <div className="flex justify-between items-center mb-6">
                   <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
                   <div className="px-8 text-xl font-light">VS</div>
                   <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
                 </div>
+
                 <div className="flex gap-4">
                   <button onClick={() => toggleMatchStatus(match)} className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
                     {match.is_open ? '🚫 إغلاق التوقعات' : '✅ فتح التوقعات'}
@@ -204,7 +217,7 @@ export default function Admin() {
         </div>
       </main>
 
-      {/* Modal */}
+      {/* Modal تعديل النتيجة */}
       {editingMatch && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeEditModal}>
           <div style={{ position: 'relative' }} className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 shadow-2xl border border-green-500/40" onClick={(e) => e.stopPropagation()}>
