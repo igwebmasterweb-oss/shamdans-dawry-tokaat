@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,95 +8,47 @@ const supabase = createClient(
 
 export async function GET() {
   try {
-    const res = await fetch(
-      'https://v3.football.api-sports.io/fixtures?league=1&season=2026',
-      {
-        headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY || '' },
-        next: { revalidate: 60 },
-      }
-    );
+    // جيب كل الـ fixtures اللي عندها نتيجة فعلية
+    const { data: fixtures, error: fixturesError } = await supabase
+      .from('fixtures')
+      .select('api_fixture_id, actual_home_score, actual_away_score, first_scorer, went_extra_time, surprise_answer, surprise_question')
+      .not('actual_home_score', 'is', null)
+      .not('actual_away_score', 'is', null);
 
-    const apiData = await res.json();
-    if (!apiData.response || apiData.response.length === 0) {
-      return NextResponse.json({ message: 'لا توجد ماتشات' });
+    if (fixturesError) throw fixturesError;
+    if (!fixtures || fixtures.length === 0) {
+      return NextResponse.json({ success: true, message: 'لا توجد ماتشات لها نتائج بعد', updated: 0 });
     }
 
-    let updatedFixtures = 0;
-    let updatedPredictions = 0;
+    let totalUpdated = 0;
 
-    for (const match of apiData.response) {
-      if (match.fixture.status.short !== 'FT') continue;
-
-      const homeScore = match.goals.home;
-      const awayScore = match.goals.away;
-      if (homeScore === null || awayScore === null) continue;
-
-      const fixtureId = match.fixture.id;
-
-      // ✅ جيب أول هدف من API
-      const firstScorerFromAPI = match.events
-        ?.filter((e: any) => e.type === 'Goal' && e.detail !== 'Own Goal')
-        ?.sort((a: any, b: any) => a.time.elapsed - b.time.elapsed)?.[0]
-        ?.player?.name || null;
-
-      // ✅ وقت إضافي من API
-      const wentExtraTime =
-        match.fixture.status.short === 'AET' ||
-        match.fixture.status.short === 'PEN' ||
-        (match.score?.extratime?.home !== null);
-
-      // ✅ 1. حدّث fixtures
-      const { error: fixtureError } = await supabase
-        .from('fixtures')
-        .update({
-          actual_home_score: homeScore,
-          actual_away_score: awayScore,
-          is_open: false,
-          first_scorer: firstScorerFromAPI,
-          went_extra_time: wentExtraTime,
-        })
-        .eq('api_fixture_id', fixtureId)
-        .is('actual_home_score', null);
-
-      if (!fixtureError) updatedFixtures++;
-
-      // ✅ 2. جيب بيانات الـ fixture من Supabase (لو الأدمن ضيف مفاجأة يدوياً)
-      const { data: fixtureData } = await supabase
-        .from('fixtures')
-        .select('first_scorer, went_extra_time, surprise_answer')
-        .eq('api_fixture_id', fixtureId)
-        .single();
-
-      const actualFirstScorer = fixtureData?.first_scorer || firstScorerFromAPI;
-      const actualExtraTime = fixtureData?.went_extra_time ?? wentExtraTime;
-      const actualSurprise = fixtureData?.surprise_answer || null;
-
-      // ✅ 3. جيب كل التوقعات على الماتش
-      const { data: predictions } = await supabase
+    for (const fixture of fixtures) {
+      // جيب كل التوقعات على الماتش ده (حتى اللي نقاطها 0 عشان نعيد حسابها)
+      const { data: predictions, error: predError } = await supabase
         .from('predictions')
         .select('*')
-        .eq('fixture_id', fixtureId)
-        .is('actual_home_score', null);
+        .eq('fixture_id', fixture.api_fixture_id);
 
-      if (!predictions || predictions.length === 0) continue;
+      if (predError || !predictions) continue;
 
-      // ✅ 4. احسب نقاط كل متوقع
       for (const pred of predictions) {
         let points = 0;
         const breakdown: string[] = [];
 
+        const actualHome = fixture.actual_home_score;
+        const actualAway = fixture.actual_away_score;
         const predHome = pred.predicted_home_score;
         const predAway = pred.predicted_away_score;
 
-        // النتيجة الكاملة = 10 نقاط
-        if (predHome === homeScore && predAway === awayScore) {
+        // نتيجة كاملة = 10 نقاط
+        if (predHome === actualHome && predAway === actualAway) {
           points += 10;
           breakdown.push('نتيجة كاملة +10');
         } else {
-          // الفريق الفايز صح = 5 نقاط
-          const actualWinner = homeScore > awayScore ? 'home' : awayScore > homeScore ? 'away' : 'draw';
-          const predWinner = predHome > predAway ? 'home' : predAway > predHome ? 'away' : 'draw';
-          if (actualWinner === predWinner) {
+          // فايز صح (تعادل / فوز نفس الفريق) = 5 نقاط
+          const actualResult = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw';
+          const predResult = predHome > predAway ? 'home' : predAway > predHome ? 'away' : 'draw';
+          if (actualResult === predResult) {
             points += 5;
             breakdown.push('فايز صح +5');
           }
@@ -104,55 +56,52 @@ export async function GET() {
 
         // أول هدف = 3 نقاط
         if (
-          actualFirstScorer &&
+          fixture.first_scorer &&
           pred.predicted_first_scorer &&
-          pred.predicted_first_scorer !== 'غير محدد' &&
-          actualFirstScorer.toLowerCase().includes(pred.predicted_first_scorer.toLowerCase())
+          fixture.first_scorer.trim().toLowerCase() === pred.predicted_first_scorer.trim().toLowerCase()
         ) {
           points += 3;
           breakdown.push('أول هدف +3');
         }
 
         // وقت إضافي = 2 نقاط
-        if (pred.predicted_extra_time === actualExtraTime) {
+        if (fixture.went_extra_time === pred.predicted_extra_time) {
           points += 2;
           breakdown.push('وقت إضافي +2');
         }
 
-        // مفاجأة الجولة = 5 نقاط (مطابقة نصية بسيطة)
+        // مفاجأة = 5 نقاط
         if (
-          actualSurprise &&
+          fixture.surprise_answer &&
           pred.surprise_answer &&
-          pred.surprise_answer !== 'لا توجد مفاجأة' &&
-          actualSurprise.toLowerCase().includes(pred.surprise_answer.toLowerCase())
+          fixture.surprise_answer.trim().toLowerCase() === pred.surprise_answer.trim().toLowerCase()
         ) {
           points += 5;
           breakdown.push('مفاجأة +5');
         }
 
-        // ✅ 5. حدّث التوقع
-        await supabase
+        // حدّث التوقع
+        const { error: updateError } = await supabase
           .from('predictions')
           .update({
-            actual_home_score: homeScore,
-            actual_away_score: awayScore,
             points,
+            actual_home_score: actualHome,
+            actual_away_score: actualAway,
           })
           .eq('id', pred.id);
 
-        updatedPredictions++;
+        if (!updateError) totalUpdated++;
       }
     }
 
     return NextResponse.json({
       success: true,
-      message: `✅ تم تحديث ${updatedFixtures} ماتش و${updatedPredictions} توقع`,
-      updatedFixtures,
-      updatedPredictions,
+      message: `✅ تم تحديث ${totalUpdated} توقع بنجاح`,
+      updated: totalUpdated,
     });
 
-  } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (error: any) {
+    console.error('update-results error:', error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
