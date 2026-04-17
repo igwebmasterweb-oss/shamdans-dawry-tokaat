@@ -8,6 +8,11 @@ export default function Admin() {
   const [matches, setMatches] = useState<any[]>([]);
   const [editingMatch, setEditingMatch] = useState<any>(null);
   const [actualForm, setActualForm] = useState({ homeScore: 0, awayScore: 0 });
+  const [actualFormExtra, setActualFormExtra] = useState({
+    firstScorer: '',
+    wentExtraTime: false,
+    surpriseAnswer: '',
+  });
   const [loading, setLoading] = useState(true);
   const [predictionCounts, setPredictionCounts] = useState<Record<number, number>>({});
   const [stats, setStats] = useState({ totalUsers: 0, totalPredictions: 0, totalPoints: 0, avgPoints: 0 });
@@ -46,7 +51,7 @@ export default function Admin() {
 
       const { data: supabaseFixtures } = await supabase
         .from('fixtures')
-        .select('id, api_fixture_id, is_open, actual_home_score, actual_away_score');
+        .select('id, api_fixture_id, is_open, actual_home_score, actual_away_score, first_scorer, went_extra_time, surprise_answer');
 
       const supabaseMap = new Map(supabaseFixtures?.map(f => [f.api_fixture_id, f]) || []);
 
@@ -63,6 +68,9 @@ export default function Admin() {
           is_open: isOpen,
           actual_home_score: hasResult ? homeScore : null,
           actual_away_score: hasResult ? awayScore : null,
+          first_scorer: supabaseData?.first_scorer || null,
+          went_extra_time: supabaseData?.went_extra_time || false,
+          surprise_answer: supabaseData?.surprise_answer || null,
         };
       });
 
@@ -90,10 +98,8 @@ export default function Admin() {
     setStats({ totalUsers: uniqueUsers.size, totalPredictions: totalPredictions || 0, totalPoints, avgPoints });
   };
 
-  // ✅ closeAllMatches عبر API Route بـ service role
   const closeAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
-
     const fixtureIds = matches.map(m => m.fixture.id);
     const res = await fetch('/api/admin-close-all', {
       method: 'POST',
@@ -101,7 +107,6 @@ export default function Admin() {
       body: JSON.stringify({ fixtureIds, is_open: false }),
     });
     const data = await res.json();
-
     if (!data.success) alert('خطأ: ' + data.error);
     else {
       setMatches(prev => prev.map(m => ({ ...m, is_open: false })));
@@ -109,19 +114,15 @@ export default function Admin() {
     }
   };
 
-  // ✅ openAllMatches عبر API Route بـ service role
   const openAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد فتح التوقعات لكل الماتشات؟')) return;
-
     const matchesWithoutResult = matches.filter(
       m => m.actual_home_score === null || m.actual_home_score === undefined
     );
-
     if (matchesWithoutResult.length === 0) {
       alert('⚠️ كل الماتشات عندها نتايج، امسح النتايج الأول');
       return;
     }
-
     const fixtureIds = matchesWithoutResult.map(m => m.fixture.id);
     const res = await fetch('/api/admin-close-all', {
       method: 'POST',
@@ -129,7 +130,6 @@ export default function Admin() {
       body: JSON.stringify({ fixtureIds, is_open: true }),
     });
     const data = await res.json();
-
     if (!data.success) alert('خطأ: ' + data.error);
     else {
       setMatches(prev =>
@@ -149,14 +149,10 @@ export default function Admin() {
       const res = await fetch('/api/sync-fixtures');
       const data = await res.json();
       if (data.success) {
-        alert(`✅ تمت المزامنة! إجمالي الماتشات: ${data.count} — جديد: ${data.added}`);
+        alert(`✅ تمت المزامنة! إجمالي: ${data.count} — جديد: ${data.added}`);
         await loadMatches();
-      } else {
-        alert('خطأ: ' + data.error);
-      }
-    } catch (err) {
-      alert('خطأ في الاتصال');
-    }
+      } else alert('خطأ: ' + data.error);
+    } catch { alert('خطأ في الاتصال'); }
     setSyncing(false);
   };
 
@@ -169,15 +165,12 @@ export default function Admin() {
       return;
     }
     const newStatus = !match.is_open;
-
-    // ✅ toggleMatchStatus عبر API Route كمان
     const res = await fetch('/api/admin-close-all', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fixtureIds: [match.fixture.id], is_open: newStatus }),
     });
     const data = await res.json();
-
     if (!data.success) alert('خطأ: ' + data.error);
     else {
       setMatches(prev => prev.map(m => m.fixture.id === match.fixture.id ? { ...m, is_open: newStatus } : m));
@@ -195,31 +188,60 @@ export default function Admin() {
 
   const openEditModal = (match: any) => {
     setEditingMatch(match);
-    setActualForm({ homeScore: match.actual_home_score ?? 0, awayScore: match.actual_away_score ?? 0 });
+    setActualForm({
+      homeScore: match.actual_home_score ?? 0,
+      awayScore: match.actual_away_score ?? 0,
+    });
+    setActualFormExtra({
+      firstScorer: match.first_scorer || '',
+      wentExtraTime: match.went_extra_time || false,
+      surpriseAnswer: match.surprise_answer || '',
+    });
   };
 
   const closeEditModal = () => setEditingMatch(null);
 
   const saveActualResult = async () => {
     if (!editingMatch) return;
+
+    // ✅ يستخدم service role عبر admin-close-all لفتح/إغلاق
+    // لكن النتيجة تتحفظ عبر supabase مباشرة (upsert)
+    const { createClient } = await import('@supabase/supabase-js');
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
     const { error } = await supabase
       .from('fixtures')
       .upsert({
         api_fixture_id: editingMatch.fixture.id,
         actual_home_score: actualForm.homeScore,
         actual_away_score: actualForm.awayScore,
+        first_scorer: actualFormExtra.firstScorer || null,
+        went_extra_time: actualFormExtra.wentExtraTime,
+        surprise_answer: actualFormExtra.surpriseAnswer || null,
         is_open: false,
       }, { onConflict: 'api_fixture_id' });
+
     if (error) alert('خطأ: ' + error.message);
     else {
       setMatches(prev =>
         prev.map(m =>
           m.fixture.id === editingMatch.fixture.id
-            ? { ...m, actual_home_score: actualForm.homeScore, actual_away_score: actualForm.awayScore, is_open: false }
+            ? {
+                ...m,
+                actual_home_score: actualForm.homeScore,
+                actual_away_score: actualForm.awayScore,
+                first_scorer: actualFormExtra.firstScorer || null,
+                went_extra_time: actualFormExtra.wentExtraTime,
+                surprise_answer: actualFormExtra.surpriseAnswer || null,
+                is_open: false,
+              }
             : m
         )
       );
-      alert('✅ النتيجة الفعلية اتسجلت والماتش اتغلق');
+      alert('✅ النتيجة اتسجلت والماتش اتغلق');
       closeEditModal();
     }
   };
@@ -228,14 +250,20 @@ export default function Admin() {
     if (!confirm(`مسح نتيجة ${match.teams.home.name} vs ${match.teams.away.name}?`)) return;
     const { error } = await supabase
       .from('fixtures')
-      .update({ actual_home_score: null, actual_away_score: null })
+      .update({
+        actual_home_score: null,
+        actual_away_score: null,
+        first_scorer: null,
+        went_extra_time: false,
+        surprise_answer: null,
+      })
       .eq('api_fixture_id', match.fixture.id);
     if (error) alert('خطأ: ' + error.message);
     else {
       setMatches(prev =>
         prev.map(m =>
           m.fixture.id === match.fixture.id
-            ? { ...m, actual_home_score: null, actual_away_score: null }
+            ? { ...m, actual_home_score: null, actual_away_score: null, first_scorer: null, went_extra_time: false, surprise_answer: null }
             : m
         )
       );
@@ -247,11 +275,25 @@ export default function Admin() {
     if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟')) return;
     const { error } = await supabase
       .from('fixtures')
-      .update({ actual_home_score: null, actual_away_score: null })
+      .update({
+        actual_home_score: null,
+        actual_away_score: null,
+        first_scorer: null,
+        went_extra_time: false,
+        surprise_answer: null,
+      })
       .not('api_fixture_id', 'is', null);
     if (error) alert('خطأ: ' + error.message);
     else {
-      setMatches(prev => prev.map(m => ({ ...m, actual_home_score: null, actual_away_score: null, is_open: true })));
+      setMatches(prev => prev.map(m => ({
+        ...m,
+        actual_home_score: null,
+        actual_away_score: null,
+        first_scorer: null,
+        went_extra_time: false,
+        surprise_answer: null,
+        is_open: true,
+      })));
       alert('✅ تم مسح كل النتايج التجاربية');
     }
   };
@@ -343,16 +385,34 @@ export default function Admin() {
                       {hasResult ? `📊 ${match.actual_home_score} - ${match.actual_away_score}` : '⏳ بدون نتيجة'}
                     </span>
                   </div>
+
                   <div className="flex justify-between items-center mb-4">
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
                     <div className="px-8 text-xl font-light">VS</div>
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
                   </div>
+
+                  {/* ✅ تفاصيل النتيجة الإضافية */}
+                  {hasResult && (
+                    <div className="text-center mb-3 space-y-1">
+                      {match.first_scorer && (
+                        <p className="text-yellow-400 text-sm">⚽ أول هدف: {match.first_scorer}</p>
+                      )}
+                      <p className="text-blue-400 text-sm">
+                        ⏱️ وقت إضافي: {match.went_extra_time ? 'نعم' : 'لا'}
+                      </p>
+                      {match.surprise_answer && (
+                        <p className="text-purple-400 text-sm">🎯 المفاجأة: {match.surprise_answer}</p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="text-center mb-5">
                     <span className="text-sm text-blue-400 bg-blue-900/30 px-4 py-1 rounded-full border border-blue-500/30">
                       👥 {matchPredictors} متوقع
                     </span>
                   </div>
+
                   <div className="flex gap-3 flex-wrap">
                     <button
                       onClick={() => toggleMatchStatus(match)}
@@ -402,11 +462,11 @@ export default function Admin() {
       {/* Modal النتيجة */}
       {editingMatch && (
         <div
-          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}
           onClick={closeEditModal}
         >
           <div
-            className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 shadow-2xl border border-green-500/40"
+            className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 my-8 shadow-2xl border border-green-500/40"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 style={{ color: '#ffffff', fontWeight: '700' }} className="text-3xl text-center mb-2 font-tajawal">
@@ -417,7 +477,9 @@ export default function Admin() {
                 النتيجة الحالية: {editingMatch.actual_home_score} - {editingMatch.actual_away_score}
               </p>
             )}
-            <div className="space-y-8 mt-6">
+
+            <div className="space-y-6 mt-6">
+              {/* النتيجة */}
               <div className="flex gap-12 justify-center">
                 <div className="text-center">
                   <p style={{ color: '#ffffff', fontWeight: '600' }} className="text-xl mb-3 font-tajawal">{editingMatch.teams.home.name}</p>
@@ -437,9 +499,64 @@ export default function Admin() {
                   />
                 </div>
               </div>
+
+              {/* ✅ أول هدف */}
+              <div>
+                <label style={{ color: '#e5e5e5', fontWeight: '600' }} className="block mb-2 font-tajawal text-lg">
+                  ⚽ أول هدف (اسم اللاعب)
+                </label>
+                <input
+                  type="text"
+                  value={actualFormExtra.firstScorer}
+                  onChange={(e) => setActualFormExtra({ ...actualFormExtra, firstScorer: e.target.value })}
+                  className="w-full bg-white text-black px-6 py-4 rounded-3xl text-lg font-tajawal"
+                  style={{ color: '#111111', fontWeight: '600' }}
+                  placeholder="مثال: صلاح"
+                />
+              </div>
+
+              {/* ✅ وقت إضافي */}
+              <div className="flex items-center gap-4 bg-zinc-800 px-6 py-4 rounded-3xl">
+                <input
+                  type="checkbox"
+                  checked={actualFormExtra.wentExtraTime}
+                  onChange={(e) => setActualFormExtra({ ...actualFormExtra, wentExtraTime: e.target.checked })}
+                  className="w-6 h-6 accent-green-500"
+                />
+                <label style={{ color: '#ffffff', fontWeight: '600' }} className="font-tajawal text-lg">
+                  ⏱️ الماتش راح وقت إضافي؟
+                </label>
+              </div>
+
+              {/* ✅ مفاجأة الجولة */}
+              <div>
+                <label style={{ color: '#e5e5e5', fontWeight: '600' }} className="block mb-2 font-tajawal text-lg">
+                  🎯 الإجابة الصح لمفاجأة الجولة
+                </label>
+                <input
+                  type="text"
+                  value={actualFormExtra.surpriseAnswer}
+                  onChange={(e) => setActualFormExtra({ ...actualFormExtra, surpriseAnswer: e.target.value })}
+                  className="w-full bg-white text-black px-6 py-4 rounded-3xl text-lg font-tajawal"
+                  style={{ color: '#111111', fontWeight: '600' }}
+                  placeholder="الإجابة الصح للمفاجأة"
+                />
+              </div>
+
+              {/* نظام النقاط */}
+              <div className="bg-zinc-800 rounded-2xl p-4 text-sm font-tajawal space-y-1">
+                <p className="text-white/70 font-bold mb-2">نظام النقاط:</p>
+                <p className="text-yellow-400">🏆 نتيجة كاملة صح = 10 نقاط</p>
+                <p className="text-green-400">✅ فايز صح = 5 نقاط</p>
+                <p className="text-blue-400">⚽ أول هدف صح = 3 نقاط</p>
+                <p className="text-purple-400">⏱️ وقت إضافي صح = 2 نقاط</p>
+                <p className="text-pink-400">🎯 مفاجأة صح = 5 نقاط</p>
+                <p className="text-white/50 mt-2">أقصى نقاط = 25 نقطة</p>
+              </div>
+
               <div className="flex gap-4">
                 <button onClick={closeEditModal} className="flex-1 py-5 rounded-3xl font-tajawal text-xl" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#ffffff' }}>إلغاء</button>
-                <button onClick={saveActualResult} className="flex-1 py-5 rounded-3xl font-bold text-xl font-tajawal" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#22c55e' }}>حفظ النتيجة</button>
+                <button onClick={saveActualResult} className="flex-1 py-5 rounded-3xl font-bold text-xl font-tajawal" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#22c55e' }}>حفظ النتيجة ✅</button>
               </div>
             </div>
           </div>
