@@ -45,10 +45,9 @@ export default function Admin() {
 
       const { data: supabaseFixtures } = await supabase
         .from('fixtures')
-        // ✅ إضافة api_fixture_id للـ select
         .select('id, api_fixture_id, is_open, actual_home_score, actual_away_score');
 
-      // ✅ البحث بـ api_fixture_id (نفس رقم API-Football) مش id الداخلي
+      // ✅ البحث بـ api_fixture_id (نفس رقم API-Football)
       const supabaseMap = new Map(supabaseFixtures?.map(f => [f.api_fixture_id, f]) || []);
 
       const merged = apiMatches.map((m: any) => {
@@ -56,10 +55,12 @@ export default function Admin() {
         const homeScore = supabaseData?.actual_home_score;
         const awayScore = supabaseData?.actual_away_score;
 
+        // ✅ التحقق الصحيح — 0 قيمة صالحة
         const hasResult =
           homeScore !== null && homeScore !== undefined &&
           awayScore !== null && awayScore !== undefined;
 
+        // ✅ ماتش بنتيجة = مغلق تلقائياً
         const isOpen = hasResult ? false : (supabaseData ? supabaseData.is_open : true);
 
         return {
@@ -67,8 +68,6 @@ export default function Admin() {
           is_open: isOpen,
           actual_home_score: hasResult ? homeScore : null,
           actual_away_score: hasResult ? awayScore : null,
-          // ✅ نحفظ الـ id الداخلي عشان نستخدمه في الـ update
-          _supabase_id: supabaseData?.id ?? null,
         };
       });
 
@@ -123,14 +122,13 @@ export default function Admin() {
 
     const matchesWithoutResult = matches
       .filter(m => m.actual_home_score === null || m.actual_home_score === undefined)
-      .map(m => m.fixture.id); // api_fixture_id
+      .map(m => m.fixture.id);
 
     if (matchesWithoutResult.length === 0) {
       alert('⚠️ كل الماتشات عندها نتايج، امسح النتايج الأول');
       return;
     }
 
-    // ✅ استخدام api_fixture_id في الـ filter
     const { error } = await supabase
       .from('fixtures')
       .update({ is_open: true })
@@ -151,7 +149,11 @@ export default function Admin() {
 
   const closeAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
-    const { error } = await supabase.from('fixtures').update({ is_open: false }).gt('id', 0);
+    const { error } = await supabase
+      .from('fixtures')
+      .update({ is_open: false })
+      .gt('id', 0);
+
     if (error) {
       alert('خطأ: ' + error.message);
     } else {
@@ -171,11 +173,13 @@ export default function Admin() {
     }
 
     const newStatus = !match.is_open;
-    // ✅ استخدام api_fixture_id
+
     const { error } = await supabase
       .from('fixtures')
-      .update({ is_open: newStatus })
-      .eq('api_fixture_id', match.fixture.id);
+      .upsert({
+        api_fixture_id: match.fixture.id,
+        is_open: newStatus,
+      }, { onConflict: 'api_fixture_id' });
 
     if (error) {
       alert('خطأ: ' + error.message);
@@ -209,15 +213,16 @@ export default function Admin() {
 
   const saveActualResult = async () => {
     if (!editingMatch) return;
-    // ✅ استخدام api_fixture_id
+
+    // ✅ upsert في fixtures بـ api_fixture_id
     const { error } = await supabase
       .from('fixtures')
-      .update({
+      .upsert({
+        api_fixture_id: editingMatch.fixture.id,
         actual_home_score: actualForm.homeScore,
         actual_away_score: actualForm.awayScore,
         is_open: false,
-      })
-      .eq('api_fixture_id', editingMatch.fixture.id);
+      }, { onConflict: 'api_fixture_id' });
 
     if (error) {
       alert('خطأ: ' + error.message);
@@ -236,7 +241,7 @@ export default function Admin() {
 
   const clearSingleResult = async (match: any) => {
     if (!confirm(`مسح نتيجة ${match.teams.home.name} vs ${match.teams.away.name}?`)) return;
-    // ✅ استخدام api_fixture_id
+
     const { error } = await supabase
       .from('fixtures')
       .update({ actual_home_score: null, actual_away_score: null })
@@ -284,6 +289,7 @@ export default function Admin() {
             </div>
           </div>
 
+          {/* إحصائيات */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-10">
             <div className="bg-zinc-900 p-5 rounded-3xl text-center">
               <p className="text-white/60 text-xs">إجمالي الماتشات</p>
@@ -420,7 +426,7 @@ export default function Admin() {
               {editingMatch.teams.home.name} × {editingMatch.teams.away.name}
             </h2>
             {editingMatch.actual_home_score !== null && editingMatch.actual_home_score !== undefined && (
-              <p className="text-center text-green-400 mb-6 font-tajawal">
+              <p className="text-center text-green-400 mb-4 font-tajawal">
                 النتيجة الحالية: {editingMatch.actual_home_score} - {editingMatch.actual_away_score}
               </p>
             )}
