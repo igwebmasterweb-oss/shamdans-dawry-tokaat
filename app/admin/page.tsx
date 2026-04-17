@@ -10,6 +10,8 @@ export default function Admin() {
   const [actualForm, setActualForm] = useState({ homeScore: 0, awayScore: 0 });
   const [loading, setLoading] = useState(true);
   const [predictionCounts, setPredictionCounts] = useState<Record<number, number>>({});
+  const [stats, setStats] = useState({ totalUsers: 0, totalPredictions: 0, totalPoints: 0, avgPoints: 0 });
+  const [syncing, setSyncing] = useState(false);
   const router = useRouter();
   const ADMIN_EMAIL = 'i.g.webmaster.web@gmail.com';
 
@@ -68,6 +70,7 @@ export default function Admin() {
     } catch (err) {
       console.error(err);
     }
+    setLoading(false);
   };
 
   const loadStats = async () => {
@@ -85,34 +88,18 @@ export default function Admin() {
     });
     setPredictionCounts(counts);
     setStats({ totalUsers: uniqueUsers.size, totalPredictions: totalPredictions || 0, totalPoints, avgPoints });
-    setLoading(false);
   };
 
-  const clearTestResults = async () => {
-    if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟')) return;
-    const { error } = await supabase
-      .from('fixtures')
-      .update({ actual_home_score: null, actual_away_score: null })
-      .not('api_fixture_id', 'is', null);
-    if (error) alert('خطأ: ' + error.message);
-    else {
-      setMatches(prev => prev.map(m => ({ ...m, actual_home_score: null, actual_away_score: null, is_open: true })));
-      alert('✅ تم مسح كل النتايج التجاربية');
-    }
-  };
-
-  // ✅ الإصلاح: upsert بدل update بـ id
+  // ✅ إصلاح closeAllMatches — update بـ api_fixture_id
   const closeAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
 
-    const upsertData = matches.map(m => ({
-      api_fixture_id: m.fixture.id,
-      is_open: false,
-    }));
+    const fixtureIds = matches.map(m => m.fixture.id);
 
     const { error } = await supabase
       .from('fixtures')
-      .upsert(upsertData, { onConflict: 'api_fixture_id' });
+      .update({ is_open: false })
+      .in('api_fixture_id', fixtureIds);
 
     if (error) alert('خطأ: ' + error.message);
     else {
@@ -148,6 +135,25 @@ export default function Admin() {
       );
       alert('✅ تم فتح التوقعات للماتشات بدون نتيجة');
     }
+  };
+
+  // ✅ زرار مزامنة الماتشات الجديدة
+  const syncNewFixtures = async () => {
+    if (!confirm('مزامنة كل الماتشات من API وإضافة الجديد؟')) return;
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/sync-fixtures');
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ تمت المزامنة! إجمالي الماتشات: ${data.count} — جديد: ${data.added}`);
+        await loadMatches();
+      } else {
+        alert('خطأ: ' + data.error);
+      }
+    } catch (err) {
+      alert('خطأ في الاتصال');
+    }
+    setSyncing(false);
   };
 
   const toggleMatchStatus = async (match: any) => {
@@ -227,7 +233,18 @@ export default function Admin() {
     }
   };
 
-  const [stats, setStats] = useState({ totalUsers: 0, totalPredictions: 0, totalPoints: 0, avgPoints: 0 });
+  const clearTestResults = async () => {
+    if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟')) return;
+    const { error } = await supabase
+      .from('fixtures')
+      .update({ actual_home_score: null, actual_away_score: null })
+      .not('api_fixture_id', 'is', null);
+    if (error) alert('خطأ: ' + error.message);
+    else {
+      setMatches(prev => prev.map(m => ({ ...m, actual_home_score: null, actual_away_score: null, is_open: true })));
+      alert('✅ تم مسح كل النتايج التجاربية');
+    }
+  };
 
   if (loading) return (
     <div className="min-h-screen bg-black flex items-center justify-center text-white text-2xl font-tajawal">
@@ -250,6 +267,14 @@ export default function Admin() {
               <button onClick={openAllMatches} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">✅ فتح الكل</button>
               <button onClick={closeAllMatches} className="bg-red-600 hover:bg-red-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🚫 إغلاق الكل</button>
               <button onClick={clearTestResults} className="bg-orange-600 hover:bg-orange-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🗑️ مسح النتايج</button>
+              {/* ✅ زرار المزامنة الجديد */}
+              <button
+                onClick={syncNewFixtures}
+                disabled={syncing}
+                className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-900 disabled:opacity-50 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold flex items-center gap-2"
+              >
+                {syncing ? '⏳ جاري المزامنة...' : '🔄 مزامنة الماتشات الجديدة'}
+              </button>
               <button onClick={() => router.push('/dashboard')} className="bg-zinc-700 hover:bg-zinc-600 px-6 py-4 rounded-3xl font-tajawal text-lg">رجوع للداشبورد</button>
             </div>
           </div>
