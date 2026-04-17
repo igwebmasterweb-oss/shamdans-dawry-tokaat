@@ -57,7 +57,7 @@ export default function Admin() {
         const hasResult =
           homeScore !== null && homeScore !== undefined &&
           awayScore !== null && awayScore !== undefined;
-        const isOpen = hasResult ? false : (supabaseData ? supabaseData.is_open : true);
+        const isOpen = hasResult ? false : (supabaseData ? supabaseData.is_open : false);
         return {
           ...m,
           is_open: isOpen,
@@ -90,24 +90,26 @@ export default function Admin() {
     setStats({ totalUsers: uniqueUsers.size, totalPredictions: totalPredictions || 0, totalPoints, avgPoints });
   };
 
-  // ✅ إصلاح closeAllMatches — update بـ api_fixture_id
+  // ✅ closeAllMatches عبر API Route بـ service role
   const closeAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
 
     const fixtureIds = matches.map(m => m.fixture.id);
+    const res = await fetch('/api/admin-close-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fixtureIds, is_open: false }),
+    });
+    const data = await res.json();
 
-    const { error } = await supabase
-      .from('fixtures')
-      .update({ is_open: false })
-      .in('api_fixture_id', fixtureIds);
-
-    if (error) alert('خطأ: ' + error.message);
+    if (!data.success) alert('خطأ: ' + data.error);
     else {
       setMatches(prev => prev.map(m => ({ ...m, is_open: false })));
       alert('✅ تم إغلاق التوقعات لكل الماتشات');
     }
   };
 
+  // ✅ openAllMatches عبر API Route بـ service role
   const openAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد فتح التوقعات لكل الماتشات؟')) return;
 
@@ -120,12 +122,15 @@ export default function Admin() {
       return;
     }
 
-    const { error } = await supabase
-      .from('fixtures')
-      .update({ is_open: true })
-      .in('api_fixture_id', matchesWithoutResult.map(m => m.fixture.id));
+    const fixtureIds = matchesWithoutResult.map(m => m.fixture.id);
+    const res = await fetch('/api/admin-close-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fixtureIds, is_open: true }),
+    });
+    const data = await res.json();
 
-    if (error) alert('خطأ: ' + error.message);
+    if (!data.success) alert('خطأ: ' + data.error);
     else {
       setMatches(prev =>
         prev.map(m => {
@@ -137,7 +142,6 @@ export default function Admin() {
     }
   };
 
-  // ✅ زرار مزامنة الماتشات الجديدة
   const syncNewFixtures = async () => {
     if (!confirm('مزامنة كل الماتشات من API وإضافة الجديد؟')) return;
     setSyncing(true);
@@ -165,10 +169,16 @@ export default function Admin() {
       return;
     }
     const newStatus = !match.is_open;
-    const { error } = await supabase
-      .from('fixtures')
-      .upsert({ api_fixture_id: match.fixture.id, is_open: newStatus }, { onConflict: 'api_fixture_id' });
-    if (error) alert('خطأ: ' + error.message);
+
+    // ✅ toggleMatchStatus عبر API Route كمان
+    const res = await fetch('/api/admin-close-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fixtureIds: [match.fixture.id], is_open: newStatus }),
+    });
+    const data = await res.json();
+
+    if (!data.success) alert('خطأ: ' + data.error);
     else {
       setMatches(prev => prev.map(m => m.fixture.id === match.fixture.id ? { ...m, is_open: newStatus } : m));
       alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت');
@@ -267,11 +277,10 @@ export default function Admin() {
               <button onClick={openAllMatches} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">✅ فتح الكل</button>
               <button onClick={closeAllMatches} className="bg-red-600 hover:bg-red-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🚫 إغلاق الكل</button>
               <button onClick={clearTestResults} className="bg-orange-600 hover:bg-orange-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🗑️ مسح النتايج</button>
-              {/* ✅ زرار المزامنة الجديد */}
               <button
                 onClick={syncNewFixtures}
                 disabled={syncing}
-                className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-900 disabled:opacity-50 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold flex items-center gap-2"
+                className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold"
               >
                 {syncing ? '⏳ جاري المزامنة...' : '🔄 مزامنة الماتشات الجديدة'}
               </button>
@@ -381,7 +390,7 @@ export default function Admin() {
           <div className="mt-12 flex justify-center">
             <button
               onClick={autoUpdateFromAPI}
-              className="bg-emerald-600 hover:bg-emerald-700 px-10 py-5 rounded-3xl font-tajawal text-lg font-bold flex items-center gap-3"
+              className="bg-emerald-600 hover:bg-emerald-700 px-10 py-5 rounded-3xl font-tajawal text-lg font-bold"
             >
               🔄 تحديث أوتوماتيك من API-Football
             </button>
@@ -397,7 +406,6 @@ export default function Admin() {
           onClick={closeEditModal}
         >
           <div
-            style={{ position: 'relative' }}
             className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 shadow-2xl border border-green-500/40"
             onClick={(e) => e.stopPropagation()}
           >
@@ -413,29 +421,25 @@ export default function Admin() {
               <div className="flex gap-12 justify-center">
                 <div className="text-center">
                   <p style={{ color: '#ffffff', fontWeight: '600' }} className="text-xl mb-3 font-tajawal">{editingMatch.teams.home.name}</p>
-                  <input
-                    type="number" min={0}
-                    value={actualForm.homeScore}
+                  <input type="number" min={0} value={actualForm.homeScore}
                     onChange={(e) => setActualForm({ ...actualForm, homeScore: Number(e.target.value) })}
-                    className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl border border-green-500/50 focus:border-green-500"
+                    className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl"
                     style={{ color: '#111111', fontWeight: '700' }}
                   />
                 </div>
                 <div className="text-6xl font-light mt-14" style={{ color: '#22c55e' }}>–</div>
                 <div className="text-center">
                   <p style={{ color: '#ffffff', fontWeight: '600' }} className="text-xl mb-3 font-tajawal">{editingMatch.teams.away.name}</p>
-                  <input
-                    type="number" min={0}
-                    value={actualForm.awayScore}
+                  <input type="number" min={0} value={actualForm.awayScore}
                     onChange={(e) => setActualForm({ ...actualForm, awayScore: Number(e.target.value) })}
-                    className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl border border-green-500/50 focus:border-green-500"
+                    className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl"
                     style={{ color: '#111111', fontWeight: '700' }}
                   />
                 </div>
               </div>
               <div className="flex gap-4">
-                <button type="button" onClick={closeEditModal} className="flex-1 py-5 border border-zinc-400 rounded-3xl font-tajawal text-xl" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#ffffff' }}>إلغاء</button>
-                <button type="button" onClick={saveActualResult} className="flex-1 py-5 rounded-3xl font-bold text-xl font-tajawal" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#22c55e' }}>حفظ النتيجة</button>
+                <button onClick={closeEditModal} className="flex-1 py-5 rounded-3xl font-tajawal text-xl" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#ffffff' }}>إلغاء</button>
+                <button onClick={saveActualResult} className="flex-1 py-5 rounded-3xl font-bold text-xl font-tajawal" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#22c55e' }}>حفظ النتيجة</button>
               </div>
             </div>
           </div>
