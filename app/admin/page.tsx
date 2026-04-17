@@ -11,7 +11,6 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [predictionCounts, setPredictionCounts] = useState<Record<number, number>>({});
   const router = useRouter();
-
   const ADMIN_EMAIL = 'i.g.webmaster.web@gmail.com';
 
   const computedStats = {
@@ -47,22 +46,16 @@ export default function Admin() {
         .from('fixtures')
         .select('id, api_fixture_id, is_open, actual_home_score, actual_away_score');
 
-      // ✅ البحث بـ api_fixture_id (نفس رقم API-Football)
       const supabaseMap = new Map(supabaseFixtures?.map(f => [f.api_fixture_id, f]) || []);
 
       const merged = apiMatches.map((m: any) => {
         const supabaseData = supabaseMap.get(m.fixture.id);
         const homeScore = supabaseData?.actual_home_score;
         const awayScore = supabaseData?.actual_away_score;
-
-        // ✅ التحقق الصحيح — 0 قيمة صالحة
         const hasResult =
           homeScore !== null && homeScore !== undefined &&
           awayScore !== null && awayScore !== undefined;
-
-        // ✅ ماتش بنتيجة = مغلق تلقائياً
         const isOpen = hasResult ? false : (supabaseData ? supabaseData.is_open : true);
-
         return {
           ...m,
           is_open: isOpen,
@@ -91,13 +84,7 @@ export default function Admin() {
       counts[p.fixture_id] = (counts[p.fixture_id] || 0) + 1;
     });
     setPredictionCounts(counts);
-
-    setStats({
-      totalUsers: uniqueUsers.size,
-      totalPredictions: totalPredictions || 0,
-      totalPoints,
-      avgPoints,
-    });
+    setStats({ totalUsers: uniqueUsers.size, totalPredictions: totalPredictions || 0, totalPoints, avgPoints });
     setLoading(false);
   };
 
@@ -105,24 +92,41 @@ export default function Admin() {
     if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟')) return;
     const { error } = await supabase
       .from('fixtures')
-      .update({ actual_home_score: null, actual_away_score: null });
-
-    if (error) {
-      alert('خطأ: ' + error.message);
-    } else {
-      setMatches(prev =>
-        prev.map(m => ({ ...m, actual_home_score: null, actual_away_score: null, is_open: true }))
-      );
+      .update({ actual_home_score: null, actual_away_score: null })
+      .not('api_fixture_id', 'is', null);
+    if (error) alert('خطأ: ' + error.message);
+    else {
+      setMatches(prev => prev.map(m => ({ ...m, actual_home_score: null, actual_away_score: null, is_open: true })));
       alert('✅ تم مسح كل النتايج التجاربية');
+    }
+  };
+
+  // ✅ الإصلاح: upsert بدل update بـ id
+  const closeAllMatches = async () => {
+    if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
+
+    const upsertData = matches.map(m => ({
+      api_fixture_id: m.fixture.id,
+      is_open: false,
+    }));
+
+    const { error } = await supabase
+      .from('fixtures')
+      .upsert(upsertData, { onConflict: 'api_fixture_id' });
+
+    if (error) alert('خطأ: ' + error.message);
+    else {
+      setMatches(prev => prev.map(m => ({ ...m, is_open: false })));
+      alert('✅ تم إغلاق التوقعات لكل الماتشات');
     }
   };
 
   const openAllMatches = async () => {
     if (!confirm('هل أنت متأكد تريد فتح التوقعات لكل الماتشات؟')) return;
 
-    const matchesWithoutResult = matches
-      .filter(m => m.actual_home_score === null || m.actual_home_score === undefined)
-      .map(m => m.fixture.id);
+    const matchesWithoutResult = matches.filter(
+      m => m.actual_home_score === null || m.actual_home_score === undefined
+    );
 
     if (matchesWithoutResult.length === 0) {
       alert('⚠️ كل الماتشات عندها نتايج، امسح النتايج الأول');
@@ -132,11 +136,10 @@ export default function Admin() {
     const { error } = await supabase
       .from('fixtures')
       .update({ is_open: true })
-      .in('api_fixture_id', matchesWithoutResult);
+      .in('api_fixture_id', matchesWithoutResult.map(m => m.fixture.id));
 
-    if (error) {
-      alert('خطأ: ' + error.message);
-    } else {
+    if (error) alert('خطأ: ' + error.message);
+    else {
       setMatches(prev =>
         prev.map(m => {
           const hasResult = m.actual_home_score !== null && m.actual_home_score !== undefined;
@@ -147,46 +150,21 @@ export default function Admin() {
     }
   };
 
-  const closeAllMatches = async () => {
-    if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
-    const { error } = await supabase
-      .from('fixtures')
-      .update({ is_open: false })
-      .gt('id', 0);
-
-    if (error) {
-      alert('خطأ: ' + error.message);
-    } else {
-      setMatches(prev => prev.map(m => ({ ...m, is_open: false })));
-      alert('✅ تم إغلاق التوقعات لكل الماتشات');
-    }
-  };
-
   const toggleMatchStatus = async (match: any) => {
     const hasResult =
       match.actual_home_score !== null && match.actual_home_score !== undefined &&
       match.actual_away_score !== null && match.actual_away_score !== undefined;
-
     if (!match.is_open && hasResult) {
       alert('⚠️ لازم تمسح النتيجة الأول عشان تفتح التوقعات');
       return;
     }
-
     const newStatus = !match.is_open;
-
     const { error } = await supabase
       .from('fixtures')
-      .upsert({
-        api_fixture_id: match.fixture.id,
-        is_open: newStatus,
-      }, { onConflict: 'api_fixture_id' });
-
-    if (error) {
-      alert('خطأ: ' + error.message);
-    } else {
-      setMatches(prev =>
-        prev.map(m => m.fixture.id === match.fixture.id ? { ...m, is_open: newStatus } : m)
-      );
+      .upsert({ api_fixture_id: match.fixture.id, is_open: newStatus }, { onConflict: 'api_fixture_id' });
+    if (error) alert('خطأ: ' + error.message);
+    else {
+      setMatches(prev => prev.map(m => m.fixture.id === match.fixture.id ? { ...m, is_open: newStatus } : m));
       alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت');
     }
   };
@@ -195,26 +173,19 @@ export default function Admin() {
     if (!confirm('هل تريد تحديث كل النتايج الفعلية تلقائيًا؟')) return;
     const res = await fetch('/api/update-results');
     const data = await res.json();
-    if (data.success) {
-      alert(data.message);
-      await loadMatches();
-    } else alert('خطأ: ' + data.error);
+    if (data.success) { alert(data.message); await loadMatches(); }
+    else alert('خطأ: ' + data.error);
   };
 
   const openEditModal = (match: any) => {
     setEditingMatch(match);
-    setActualForm({
-      homeScore: match.actual_home_score ?? 0,
-      awayScore: match.actual_away_score ?? 0,
-    });
+    setActualForm({ homeScore: match.actual_home_score ?? 0, awayScore: match.actual_away_score ?? 0 });
   };
 
   const closeEditModal = () => setEditingMatch(null);
 
   const saveActualResult = async () => {
     if (!editingMatch) return;
-
-    // ✅ upsert في fixtures بـ api_fixture_id
     const { error } = await supabase
       .from('fixtures')
       .upsert({
@@ -223,10 +194,8 @@ export default function Admin() {
         actual_away_score: actualForm.awayScore,
         is_open: false,
       }, { onConflict: 'api_fixture_id' });
-
-    if (error) {
-      alert('خطأ: ' + error.message);
-    } else {
+    if (error) alert('خطأ: ' + error.message);
+    else {
       setMatches(prev =>
         prev.map(m =>
           m.fixture.id === editingMatch.fixture.id
@@ -241,15 +210,12 @@ export default function Admin() {
 
   const clearSingleResult = async (match: any) => {
     if (!confirm(`مسح نتيجة ${match.teams.home.name} vs ${match.teams.away.name}?`)) return;
-
     const { error } = await supabase
       .from('fixtures')
       .update({ actual_home_score: null, actual_away_score: null })
       .eq('api_fixture_id', match.fixture.id);
-
-    if (error) {
-      alert('خطأ: ' + error.message);
-    } else {
+    if (error) alert('خطأ: ' + error.message);
+    else {
       setMatches(prev =>
         prev.map(m =>
           m.fixture.id === match.fixture.id
@@ -261,9 +227,7 @@ export default function Admin() {
     }
   };
 
-  const [stats, setStats] = useState({
-    totalUsers: 0, totalPredictions: 0, totalPoints: 0, avgPoints: 0,
-  });
+  const [stats, setStats] = useState({ totalUsers: 0, totalPredictions: 0, totalPoints: 0, avgPoints: 0 });
 
   if (loading) return (
     <div className="min-h-screen bg-black flex items-center justify-center text-white text-2xl font-tajawal">
@@ -276,6 +240,7 @@ export default function Admin() {
       <main className="min-h-screen bg-black text-white p-6">
         <div className="max-w-7xl mx-auto">
 
+          {/* Header */}
           <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
             <div className="flex items-center gap-4">
               <span className="text-6xl">🔧</span>
@@ -328,18 +293,14 @@ export default function Admin() {
           </div>
 
           <h2 className="text-3xl font-tajawal mb-8">إدارة الماتشات</h2>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {matches.map((match) => {
               const hasResult =
                 match.actual_home_score !== null && match.actual_home_score !== undefined &&
                 match.actual_away_score !== null && match.actual_away_score !== undefined;
-
               const matchPredictors = predictionCounts[match.fixture.id] || 0;
-
               return (
                 <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative pt-16">
-
                   <div className="absolute top-4 left-4 right-4 flex justify-between items-center gap-2">
                     <span className={`px-4 py-1.5 rounded-2xl text-sm font-bold whitespace-nowrap ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
                       {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
@@ -348,23 +309,16 @@ export default function Admin() {
                       {hasResult ? `📊 ${match.actual_home_score} - ${match.actual_away_score}` : '⏳ بدون نتيجة'}
                     </span>
                   </div>
-
                   <div className="flex justify-between items-center mb-4">
-                    <div className="flex-1 text-center">
-                      <p className="font-tajawal text-2xl">{match.teams.home.name}</p>
-                    </div>
+                    <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
                     <div className="px-8 text-xl font-light">VS</div>
-                    <div className="flex-1 text-center">
-                      <p className="font-tajawal text-2xl">{match.teams.away.name}</p>
-                    </div>
+                    <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
                   </div>
-
                   <div className="text-center mb-5">
                     <span className="text-sm text-blue-400 bg-blue-900/30 px-4 py-1 rounded-full border border-blue-500/30">
                       👥 {matchPredictors} متوقع
                     </span>
                   </div>
-
                   <div className="flex gap-3 flex-wrap">
                     <button
                       onClick={() => toggleMatchStatus(match)}
@@ -373,20 +327,18 @@ export default function Admin() {
                         ${!match.is_open && hasResult
                           ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
                           : match.is_open
-                            ? 'bg-red-600 hover:bg-red-700'
-                            : 'bg-green-600 hover:bg-green-700'
+                          ? 'bg-red-600 hover:bg-red-700'
+                          : 'bg-green-600 hover:bg-green-700'
                         }`}
                     >
                       {match.is_open ? '🚫 إغلاق التوقعات' : hasResult ? '🔒 مغلق (فيه نتيجة)' : '✅ فتح التوقعات'}
                     </button>
-
                     <button
                       onClick={() => openEditModal(match)}
                       className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal"
                     >
                       تعديل النتيجة
                     </button>
-
                     {hasResult && (
                       <button
                         onClick={() => clearSingleResult(match)}
@@ -409,9 +361,11 @@ export default function Admin() {
               🔄 تحديث أوتوماتيك من API-Football
             </button>
           </div>
+
         </div>
       </main>
 
+      {/* Modal النتيجة */}
       {editingMatch && (
         <div
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
