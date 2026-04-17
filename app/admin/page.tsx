@@ -79,7 +79,7 @@ export default function Admin() {
     setLoading(false);
   };
 
-  // 🗑️ مسح كل النتايج التجاربية
+  // 🗑️ مسح النتايج التجاربية
   const clearTestResults = async () => {
     if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟')) return;
     const { error } = await supabase
@@ -249,10 +249,7 @@ export default function Admin() {
                   </div>
 
                   <div className="flex gap-4">
-                    <button
-                      onClick={() => toggleMatchStatus(match)}
-                      className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
-                    >
+                    <button onClick={() => toggleMatchStatus(match)} className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
                       {match.is_open ? '🚫 إغلاق التوقعات' : '✅ فتح التوقعات'}
                     </button>
                     <button onClick={() => openEditModal(match)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal">تعديل النتيجة</button>
