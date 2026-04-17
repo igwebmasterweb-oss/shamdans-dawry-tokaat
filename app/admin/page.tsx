@@ -3,74 +3,76 @@ import { supabase } from '../../lib/supabase';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function Admin() {
+const ADMIN_EMAILS = ['igwebmaster@gmail.com'];
+
+export default function AdminPage() {
   const [user, setUser] = useState<any>(null);
   const [matches, setMatches] = useState<any[]>([]);
-  const [editingMatch, setEditingMatch] = useState<any>(null);
-  const [actualForm, setActualForm] = useState({ homeScore: 0, awayScore: 0 });
+  const [predictions, setPredictions] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'matches' | 'predictions' | 'leaderboard'>('matches');
+  const [activeRound, setActiveRound] = useState('Group Stage - 1');
+  const [updating, setUpdating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState('');
+
+  // Modal النتيجة
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<any>(null);
   const [actualFormExtra, setActualFormExtra] = useState({
+    homeScore: 0,
+    awayScore: 0,
     firstScorer: '',
     wentExtraTime: false,
     surpriseAnswer: '',
+    surpriseQuestion: '',
   });
-  const [loading, setLoading] = useState(true);
-  const [predictionCounts, setPredictionCounts] = useState<Record<number, number>>({});
-  const [stats, setStats] = useState({ totalUsers: 0, totalPredictions: 0, totalPoints: 0, avgPoints: 0 });
-  const [syncing, setSyncing] = useState(false);
-  const router = useRouter();
-  const ADMIN_EMAIL = 'i.g.webmaster.web@gmail.com';
 
-  const computedStats = {
-    totalMatches: matches.length,
-    openMatches: matches.filter(m => m.is_open).length,
-    closedMatches: matches.filter(m => !m.is_open).length,
-    matchesWithResult: matches.filter(m =>
-      m.actual_home_score !== null && m.actual_home_score !== undefined &&
-      m.actual_away_score !== null && m.actual_away_score !== undefined
-    ).length,
-  };
+  // Modal فتح/غلق التوقعات
+  const [savingResult, setSavingResult] = useState(false);
+
+  const router = useRouter();
+  const rounds = ['Group Stage - 1', 'Group Stage - 2', 'Group Stage - 3'];
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (!data.user || data.user.email !== ADMIN_EMAIL) {
-        alert('❌ هذه الصفحة للأدمن فقط');
+      if (!data.user || !ADMIN_EMAILS.includes(data.user.email || '')) {
         router.push('/dashboard');
-        return;
+      } else {
+        setUser(data.user);
+        loadMatches();
+        loadAllPredictions();
+        loadLeaderboard();
       }
-      setUser(data.user);
-      loadMatches();
-      loadStats();
     });
   }, [router]);
 
   const loadMatches = async () => {
     try {
       const res = await fetch('/api/fixtures');
-      const apiData = await res.json();
-      const apiMatches = apiData.response || [];
+      const data = await res.json();
+      const apiMatches = data.response || [];
 
       const { data: supabaseFixtures } = await supabase
         .from('fixtures')
-        .select('id, api_fixture_id, is_open, actual_home_score, actual_away_score, first_scorer, went_extra_time, surprise_answer');
+        .select('api_fixture_id, is_open, actual_home_score, actual_away_score, first_scorer, went_extra_time, surprise_answer, surprise_question');
 
-      const supabaseMap = new Map(supabaseFixtures?.map(f => [f.api_fixture_id, f]) || []);
+      const supabaseMap = new Map(
+        supabaseFixtures?.map((f: any) => [f.api_fixture_id, f]) || []
+      );
 
       const merged = apiMatches.map((m: any) => {
-        const supabaseData = supabaseMap.get(m.fixture.id);
-        const homeScore = supabaseData?.actual_home_score;
-        const awayScore = supabaseData?.actual_away_score;
-        const hasResult =
-          homeScore !== null && homeScore !== undefined &&
-          awayScore !== null && awayScore !== undefined;
-        const isOpen = hasResult ? false : (supabaseData ? supabaseData.is_open : false);
+        const sb = supabaseMap.get(m.fixture.id);
         return {
           ...m,
-          is_open: isOpen,
-          actual_home_score: hasResult ? homeScore : null,
-          actual_away_score: hasResult ? awayScore : null,
-          first_scorer: supabaseData?.first_scorer || null,
-          went_extra_time: supabaseData?.went_extra_time || false,
-          surprise_answer: supabaseData?.surprise_answer || null,
+          is_open: sb?.is_open ?? false,
+          actual_home_score: sb?.actual_home_score ?? null,
+          actual_away_score: sb?.actual_away_score ?? null,
+          first_scorer: sb?.first_scorer ?? '',
+          went_extra_time: sb?.went_extra_time ?? false,
+          surprise_answer: sb?.surprise_answer ?? '',
+          surprise_question: sb?.surprise_question ?? '',
         };
       });
 
@@ -81,221 +83,198 @@ export default function Admin() {
     setLoading(false);
   };
 
-  const loadStats = async () => {
-    const { count: totalPredictions, data: predictionsData } = await supabase
+  const loadAllPredictions = async () => {
+    const { data } = await supabase
       .from('predictions')
-      .select('user_id, fixture_id, points', { count: 'exact' });
-
-    const uniqueUsers = new Set(predictionsData?.map(p => p.user_id) || []);
-    const totalPoints = predictionsData?.reduce((sum, p) => sum + (p.points || 0), 0) || 0;
-    const avgPoints = uniqueUsers.size > 0 ? Math.round(totalPoints / uniqueUsers.size) : 0;
-
-    const counts: Record<number, number> = {};
-    predictionsData?.forEach(p => {
-      counts[p.fixture_id] = (counts[p.fixture_id] || 0) + 1;
-    });
-    setPredictionCounts(counts);
-    setStats({ totalUsers: uniqueUsers.size, totalPredictions: totalPredictions || 0, totalPoints, avgPoints });
+      .select('*')
+      .order('submitted_at', { ascending: false });
+    setPredictions(data || []);
   };
 
-  const closeAllMatches = async () => {
-    if (!confirm('هل أنت متأكد تريد إغلاق التوقعات لكل الماتشات؟')) return;
-    const fixtureIds = matches.map(m => m.fixture.id);
-    const res = await fetch('/api/admin-close-all', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fixtureIds, is_open: false }),
+  const loadLeaderboard = async () => {
+    const { data } = await supabase
+      .from('predictions')
+      .select('user_id, user_email, points, fixture_id');
+
+    const grouped: any = {};
+    data?.forEach((row: any) => {
+      if (!grouped[row.user_id]) {
+        grouped[row.user_id] = {
+          user_id: row.user_id,
+          user_email: row.user_email,
+          totalPoints: 0,
+          predictionCount: 0,
+          bestPoints: 0,
+        };
+      }
+      grouped[row.user_id].totalPoints += (row.points || 0);
+      grouped[row.user_id].predictionCount += 1;
+      if ((row.points || 0) > grouped[row.user_id].bestPoints) {
+        grouped[row.user_id].bestPoints = row.points || 0;
+      }
     });
-    const data = await res.json();
-    if (!data.success) alert('خطأ: ' + data.error);
-    else {
-      setMatches(prev => prev.map(m => ({ ...m, is_open: false })));
-      alert('✅ تم إغلاق التوقعات لكل الماتشات');
-    }
+
+    const sorted = Object.values(grouped)
+      .sort((a: any, b: any) => b.totalPoints - a.totalPoints);
+    setLeaderboard(sorted);
   };
 
-  const openAllMatches = async () => {
-    if (!confirm('هل أنت متأكد تريد فتح التوقعات لكل الماتشات؟')) return;
-    const matchesWithoutResult = matches.filter(
-      m => m.actual_home_score === null || m.actual_home_score === undefined
-    );
-    if (matchesWithoutResult.length === 0) {
-      alert('⚠️ كل الماتشات عندها نتايج، امسح النتايج الأول');
-      return;
+  // فتح/غلق التوقعات على ماتش
+  const toggleMatchOpen = async (match: any) => {
+    const newStatus = !match.is_open;
+    const fixtureId = match.fixture.id;
+
+    const { data: existing } = await supabase
+      .from('fixtures')
+      .select('id')
+      .eq('api_fixture_id', fixtureId)
+      .single();
+
+    if (existing) {
+      await supabase.from('fixtures').update({ is_open: newStatus }).eq('api_fixture_id', fixtureId);
+    } else {
+      await supabase.from('fixtures').insert({
+        api_fixture_id: fixtureId,
+        is_open: newStatus,
+        home_team: match.teams.home.name,
+        away_team: match.teams.away.name,
+        match_date: match.fixture.date,
+        round: match.league.round,
+      });
     }
-    const fixtureIds = matchesWithoutResult.map(m => m.fixture.id);
-    const res = await fetch('/api/admin-close-all', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fixtureIds, is_open: true }),
-    });
-    const data = await res.json();
-    if (!data.success) alert('خطأ: ' + data.error);
-    else {
-      setMatches(prev =>
-        prev.map(m => {
-          const hasResult = m.actual_home_score !== null && m.actual_home_score !== undefined;
-          return hasResult ? m : { ...m, is_open: true };
-        })
-      );
-      alert('✅ تم فتح التوقعات للماتشات بدون نتيجة');
-    }
+    await loadMatches();
+    showMsg(newStatus ? '✅ التوقعات مفتوحة' : '🔒 التوقعات مغلقة');
   };
 
-  const syncNewFixtures = async () => {
-    if (!confirm('مزامنة كل الماتشات من API وإضافة الجديد؟')) return;
+  // فتح modal النتيجة
+  const openResultModal = (match: any) => {
+    setSelectedMatch(match);
+    setActualFormExtra({
+      homeScore: match.actual_home_score ?? 0,
+      awayScore: match.actual_away_score ?? 0,
+      firstScorer: match.first_scorer ?? '',
+      wentExtraTime: match.went_extra_time ?? false,
+      surpriseAnswer: match.surprise_answer ?? '',
+      surpriseQuestion: match.surprise_question ?? '',
+    });
+    setShowResultModal(true);
+  };
+
+  // حفظ النتيجة اليدوية
+  const saveActualResult = async () => {
+    if (!selectedMatch) return;
+    setSavingResult(true);
+    const fixtureId = selectedMatch.fixture.id;
+
+    const { data: existing } = await supabase
+      .from('fixtures')
+      .select('id')
+      .eq('api_fixture_id', fixtureId)
+      .single();
+
+    const payload = {
+      actual_home_score: actualFormExtra.homeScore,
+      actual_away_score: actualFormExtra.awayScore,
+      first_scorer: actualFormExtra.firstScorer || null,
+      went_extra_time: actualFormExtra.wentExtraTime,
+      surprise_answer: actualFormExtra.surpriseAnswer || null,
+      surprise_question: actualFormExtra.surpriseQuestion || null,
+    };
+
+    if (existing) {
+      await supabase.from('fixtures').update(payload).eq('api_fixture_id', fixtureId);
+    } else {
+      await supabase.from('fixtures').insert({
+        api_fixture_id: fixtureId,
+        is_open: false,
+        home_team: selectedMatch.teams.home.name,
+        away_team: selectedMatch.teams.away.name,
+        match_date: selectedMatch.fixture.date,
+        round: selectedMatch.league.round,
+        ...payload,
+      });
+    }
+
+    setShowResultModal(false);
+    await loadMatches();
+    setSavingResult(false);
+    showMsg('✅ تم حفظ النتيجة بنجاح');
+  };
+
+  // تحديث كل النقاط
+  const updateAllPoints = async () => {
+    setUpdating(true);
+    try {
+      const res = await fetch('/api/update-results');
+      const data = await res.json();
+      showMsg(data.success ? data.message : '❌ خطأ: ' + data.error);
+      if (data.success) {
+        await loadAllPredictions();
+        await loadLeaderboard();
+      }
+    } catch {
+      showMsg('❌ خطأ في الاتصال');
+    }
+    setUpdating(false);
+  };
+
+  // مزامنة الماتشات من API
+  const syncFixtures = async () => {
     setSyncing(true);
     try {
       const res = await fetch('/api/sync-fixtures');
       const data = await res.json();
-      if (data.success) {
-        alert(`✅ تمت المزامنة! إجمالي: ${data.count} — جديد: ${data.added}`);
-        await loadMatches();
-      } else alert('خطأ: ' + data.error);
-    } catch { alert('خطأ في الاتصال'); }
+      showMsg(data.success ? `✅ تم مزامنة ${data.count || ''} ماتش` : '❌ ' + data.error);
+      await loadMatches();
+    } catch {
+      showMsg('❌ خطأ في المزامنة');
+    }
     setSyncing(false);
   };
 
-  const toggleMatchStatus = async (match: any) => {
-    const hasResult =
-      match.actual_home_score !== null && match.actual_home_score !== undefined &&
-      match.actual_away_score !== null && match.actual_away_score !== undefined;
-    if (!match.is_open && hasResult) {
-      alert('⚠️ لازم تمسح النتيجة الأول عشان تفتح التوقعات');
-      return;
+  // فتح/غلق كل الماتشات
+  const openAllMatches = async () => {
+    setUpdating(true);
+    const filtered = matches.filter(m => m.league.round === activeRound);
+    for (const match of filtered) {
+      const fixtureId = match.fixture.id;
+      const { data: existing } = await supabase.from('fixtures').select('id').eq('api_fixture_id', fixtureId).single();
+      if (existing) {
+        await supabase.from('fixtures').update({ is_open: true }).eq('api_fixture_id', fixtureId);
+      } else {
+        await supabase.from('fixtures').insert({
+          api_fixture_id: fixtureId, is_open: true,
+          home_team: match.teams.home.name, away_team: match.teams.away.name,
+          match_date: match.fixture.date, round: match.league.round,
+        });
+      }
     }
-    const newStatus = !match.is_open;
-    const res = await fetch('/api/admin-close-all', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fixtureIds: [match.fixture.id], is_open: newStatus }),
-    });
-    const data = await res.json();
-    if (!data.success) alert('خطأ: ' + data.error);
-    else {
-      setMatches(prev => prev.map(m => m.fixture.id === match.fixture.id ? { ...m, is_open: newStatus } : m));
-      alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت');
-    }
+    await loadMatches();
+    setUpdating(false);
+    showMsg('✅ تم فتح كل الماتشات');
   };
 
-  const autoUpdateFromAPI = async () => {
-    if (!confirm('هل تريد تحديث كل النتايج الفعلية تلقائيًا؟')) return;
-    const res = await fetch('/api/update-results');
-    const data = await res.json();
-    if (data.success) { alert(data.message); await loadMatches(); }
-    else alert('خطأ: ' + data.error);
-  };
-
-  const openEditModal = (match: any) => {
-    setEditingMatch(match);
-    setActualForm({
-      homeScore: match.actual_home_score ?? 0,
-      awayScore: match.actual_away_score ?? 0,
-    });
-    setActualFormExtra({
-      firstScorer: match.first_scorer || '',
-      wentExtraTime: match.went_extra_time || false,
-      surpriseAnswer: match.surprise_answer || '',
-    });
-  };
-
-  const closeEditModal = () => setEditingMatch(null);
-
-  const saveActualResult = async () => {
-    if (!editingMatch) return;
-
-    // ✅ يستخدم service role عبر admin-close-all لفتح/إغلاق
-    // لكن النتيجة تتحفظ عبر supabase مباشرة (upsert)
-    const { createClient } = await import('@supabase/supabase-js');
-    const adminSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-
-    const { error } = await supabase
-      .from('fixtures')
-      .upsert({
-        api_fixture_id: editingMatch.fixture.id,
-        actual_home_score: actualForm.homeScore,
-        actual_away_score: actualForm.awayScore,
-        first_scorer: actualFormExtra.firstScorer || null,
-        went_extra_time: actualFormExtra.wentExtraTime,
-        surprise_answer: actualFormExtra.surpriseAnswer || null,
-        is_open: false,
-      }, { onConflict: 'api_fixture_id' });
-
-    if (error) alert('خطأ: ' + error.message);
-    else {
-      setMatches(prev =>
-        prev.map(m =>
-          m.fixture.id === editingMatch.fixture.id
-            ? {
-                ...m,
-                actual_home_score: actualForm.homeScore,
-                actual_away_score: actualForm.awayScore,
-                first_scorer: actualFormExtra.firstScorer || null,
-                went_extra_time: actualFormExtra.wentExtraTime,
-                surprise_answer: actualFormExtra.surpriseAnswer || null,
-                is_open: false,
-              }
-            : m
-        )
-      );
-      alert('✅ النتيجة اتسجلت والماتش اتغلق');
-      closeEditModal();
+  const closeAllMatches = async () => {
+    setUpdating(true);
+    try {
+      const res = await fetch('/api/admin-close-all');
+      const data = await res.json();
+      showMsg(data.success ? '🔒 تم غلق كل الماتشات' : '❌ ' + data.error);
+      await loadMatches();
+    } catch {
+      showMsg('❌ خطأ في الغلق');
     }
+    setUpdating(false);
   };
 
-  const clearSingleResult = async (match: any) => {
-    if (!confirm(`مسح نتيجة ${match.teams.home.name} vs ${match.teams.away.name}?`)) return;
-    const { error } = await supabase
-      .from('fixtures')
-      .update({
-        actual_home_score: null,
-        actual_away_score: null,
-        first_scorer: null,
-        went_extra_time: false,
-        surprise_answer: null,
-      })
-      .eq('api_fixture_id', match.fixture.id);
-    if (error) alert('خطأ: ' + error.message);
-    else {
-      setMatches(prev =>
-        prev.map(m =>
-          m.fixture.id === match.fixture.id
-            ? { ...m, actual_home_score: null, actual_away_score: null, first_scorer: null, went_extra_time: false, surprise_answer: null }
-            : m
-        )
-      );
-      alert('✅ تم مسح النتيجة');
-    }
+  const showMsg = (msg: string) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(''), 4000);
   };
 
-  const clearTestResults = async () => {
-    if (!confirm('هل أنت متأكد تريد مسح كل النتايج التجاربية؟')) return;
-    const { error } = await supabase
-      .from('fixtures')
-      .update({
-        actual_home_score: null,
-        actual_away_score: null,
-        first_scorer: null,
-        went_extra_time: false,
-        surprise_answer: null,
-      })
-      .not('api_fixture_id', 'is', null);
-    if (error) alert('خطأ: ' + error.message);
-    else {
-      setMatches(prev => prev.map(m => ({
-        ...m,
-        actual_home_score: null,
-        actual_away_score: null,
-        first_scorer: null,
-        went_extra_time: false,
-        surprise_answer: null,
-        is_open: true,
-      })));
-      alert('✅ تم مسح كل النتايج التجاربية');
-    }
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/login');
   };
 
   if (loading) return (
@@ -303,6 +282,11 @@ export default function Admin() {
       جاري التحميل...
     </div>
   );
+
+  const filteredMatches = matches.filter(m => m.league.round === activeRound);
+  const totalPredictions = predictions.length;
+  const gradedPredictions = predictions.filter(p => p.actual_home_score !== null).length;
+  const openMatches = matches.filter(m => m.is_open).length;
 
   return (
     <>
@@ -312,252 +296,381 @@ export default function Admin() {
           {/* Header */}
           <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
             <div className="flex items-center gap-4">
-              <span className="text-6xl">🔧</span>
-              <h1 className="text-5xl font-bold text-red-600 font-tajawal">Admin Panel</h1>
+              <span className="text-5xl">⚙️</span>
+              <div>
+                <h1 className="text-4xl font-bold text-red-600 font-tajawal">لوحة التحكم</h1>
+                <p className="text-white/50 font-tajawal">كأس العالم 2026 — الشمعدان</p>
+              </div>
             </div>
-            <div className="flex gap-3 flex-wrap justify-end">
-              <button onClick={openAllMatches} className="bg-emerald-600 hover:bg-emerald-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">✅ فتح الكل</button>
-              <button onClick={closeAllMatches} className="bg-red-600 hover:bg-red-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🚫 إغلاق الكل</button>
-              <button onClick={clearTestResults} className="bg-orange-600 hover:bg-orange-700 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold">🗑️ مسح النتايج</button>
-              <button
-                onClick={syncNewFixtures}
-                disabled={syncing}
-                className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 px-6 py-4 rounded-3xl font-tajawal text-lg font-bold"
-              >
-                {syncing ? '⏳ جاري المزامنة...' : '🔄 مزامنة الماتشات الجديدة'}
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={syncFixtures} disabled={syncing}
+                className="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 px-5 py-3 rounded-2xl font-tajawal text-sm font-bold">
+                {syncing ? '⏳ مزامنة...' : '🔄 مزامنة الماتشات'}
               </button>
-              <button onClick={() => router.push('/dashboard')} className="bg-zinc-700 hover:bg-zinc-600 px-6 py-4 rounded-3xl font-tajawal text-lg">رجوع للداشبورد</button>
+              <button onClick={updateAllPoints} disabled={updating}
+                className="bg-green-700 hover:bg-green-600 disabled:opacity-50 px-5 py-3 rounded-2xl font-tajawal text-sm font-bold">
+                {updating ? '⏳ تحديث...' : '⚡ تحديث النقاط'}
+              </button>
+              <button onClick={handleLogout}
+                className="bg-red-600 hover:bg-red-700 px-5 py-3 rounded-2xl font-tajawal text-sm">
+                خروج
+              </button>
             </div>
           </div>
 
-          {/* إحصائيات */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-10">
-            <div className="bg-zinc-900 p-5 rounded-3xl text-center">
-              <p className="text-white/60 text-xs">إجمالي الماتشات</p>
-              <p className="text-3xl font-bold text-white mt-1">{computedStats.totalMatches}</p>
+          {/* رسالة الحالة */}
+          {message && (
+            <div className="bg-zinc-800 border border-zinc-600 text-white px-6 py-4 rounded-2xl mb-6 font-tajawal text-center text-lg">
+              {message}
             </div>
-            <div className="bg-emerald-900/30 p-5 rounded-3xl text-center border border-emerald-500/30">
-              <p className="text-emerald-400 text-xs">مفتوحة</p>
-              <p className="text-3xl font-bold text-emerald-400 mt-1">{computedStats.openMatches}</p>
+          )}
+
+          {/* إحصائيات سريعة */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-zinc-900 rounded-3xl p-5 text-center border border-zinc-700">
+              <p className="text-white/50 text-sm font-tajawal">إجمالي التوقعات</p>
+              <p className="text-4xl font-bold text-blue-400 mt-1">{totalPredictions}</p>
             </div>
-            <div className="bg-red-900/30 p-5 rounded-3xl text-center border border-red-500/30">
-              <p className="text-red-400 text-xs">مغلقة</p>
-              <p className="text-3xl font-bold text-red-400 mt-1">{computedStats.closedMatches}</p>
+            <div className="bg-zinc-900 rounded-3xl p-5 text-center border border-zinc-700">
+              <p className="text-white/50 text-sm font-tajawal">توقعات محسوبة</p>
+              <p className="text-4xl font-bold text-green-400 mt-1">{gradedPredictions}</p>
             </div>
-            <div className="bg-green-900/30 p-5 rounded-3xl text-center border border-green-500/30">
-              <p className="text-green-400 text-xs">لها نتيجة</p>
-              <p className="text-3xl font-bold text-green-400 mt-1">{computedStats.matchesWithResult}</p>
+            <div className="bg-zinc-900 rounded-3xl p-5 text-center border border-zinc-700">
+              <p className="text-white/50 text-sm font-tajawal">ماتشات مفتوحة</p>
+              <p className="text-4xl font-bold text-yellow-400 mt-1">{openMatches}</p>
             </div>
-            <div className="bg-zinc-900 p-5 rounded-3xl text-center">
-              <p className="text-white/60 text-xs">المستخدمين</p>
-              <p className="text-3xl font-bold text-white mt-1">{stats.totalUsers}</p>
-            </div>
-            <div className="bg-zinc-900 p-5 rounded-3xl text-center">
-              <p className="text-white/60 text-xs">إجمالي التوقعات</p>
-              <p className="text-3xl font-bold text-white mt-1">{stats.totalPredictions}</p>
-            </div>
-            <div className="bg-blue-900/30 p-5 rounded-3xl text-center border border-blue-500/30">
-              <p className="text-blue-400 text-xs">عدد المتوقعين</p>
-              <p className="text-3xl font-bold text-blue-400 mt-1">{stats.totalUsers}</p>
-              <p className="text-xs text-blue-400/70 mt-0.5">{stats.totalPredictions} توقع</p>
-            </div>
-            <div className="bg-amber-900/30 p-5 rounded-3xl text-center border border-amber-500/30">
-              <p className="text-amber-400 text-xs">مجموع النقاط</p>
-              <p className="text-3xl font-bold text-amber-400 mt-1">{stats.totalPoints}</p>
-              <p className="text-xs text-amber-400/70 mt-0.5">متوسط: {stats.avgPoints}</p>
+            <div className="bg-zinc-900 rounded-3xl p-5 text-center border border-zinc-700">
+              <p className="text-white/50 text-sm font-tajawal">عدد المتسابقين</p>
+              <p className="text-4xl font-bold text-red-400 mt-1">{leaderboard.length}</p>
             </div>
           </div>
 
-          <h2 className="text-3xl font-tajawal mb-8">إدارة الماتشات</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {matches.map((match) => {
-              const hasResult =
-                match.actual_home_score !== null && match.actual_home_score !== undefined &&
-                match.actual_away_score !== null && match.actual_away_score !== undefined;
-              const matchPredictors = predictionCounts[match.fixture.id] || 0;
-              return (
-                <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative pt-16">
-                  <div className="absolute top-4 left-4 right-4 flex justify-between items-center gap-2">
-                    <span className={`px-4 py-1.5 rounded-2xl text-sm font-bold whitespace-nowrap ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
-                      {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
+          {/* التابز الرئيسية */}
+          <div className="flex gap-3 mb-8 flex-wrap">
+            {(['matches', 'predictions', 'leaderboard'] as const).map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={`px-6 py-3 rounded-2xl font-tajawal text-lg font-bold transition-all ${
+                  activeTab === tab ? 'bg-red-600 text-white' : 'bg-zinc-800 text-white/60 hover:bg-zinc-700'
+                }`}>
+                {tab === 'matches' ? `🏟️ الماتشات (${matches.length})` :
+                 tab === 'predictions' ? `📋 التوقعات (${totalPredictions})` :
+                 `🏆 الصدارة (${leaderboard.length})`}
+              </button>
+            ))}
+          </div>
+
+          {/* ========== تاب الماتشات ========== */}
+          {activeTab === 'matches' && (
+            <>
+              {/* فلاتر الجولات */}
+              <div className="flex gap-3 mb-6 flex-wrap items-center">
+                {rounds.map(round => (
+                  <button key={round} onClick={() => setActiveRound(round)}
+                    className={`px-5 py-2 rounded-2xl font-tajawal font-bold transition-all ${
+                      activeRound === round ? 'bg-red-600 text-white' : 'bg-zinc-800 text-white/60 hover:bg-zinc-700'
+                    }`}>
+                    {round === 'Group Stage - 1' ? 'الجولة الأولى' :
+                     round === 'Group Stage - 2' ? 'الجولة الثانية' : 'الجولة الثالثة'}
+                    <span className="mr-2 text-sm opacity-60">
+                      ({matches.filter(m => m.league.round === round).length})
                     </span>
-                    <span className={`px-4 py-1.5 rounded-2xl text-sm font-bold whitespace-nowrap ${hasResult ? 'bg-green-500 text-white' : 'bg-zinc-500 text-white'}`}>
-                      {hasResult ? `📊 ${match.actual_home_score} - ${match.actual_away_score}` : '⏳ بدون نتيجة'}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
-                    <div className="px-8 text-xl font-light">VS</div>
-                    <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
-                  </div>
-
-                  {/* ✅ تفاصيل النتيجة الإضافية */}
-                  {hasResult && (
-                    <div className="text-center mb-3 space-y-1">
-                      {match.first_scorer && (
-                        <p className="text-yellow-400 text-sm">⚽ أول هدف: {match.first_scorer}</p>
-                      )}
-                      <p className="text-blue-400 text-sm">
-                        ⏱️ وقت إضافي: {match.went_extra_time ? 'نعم' : 'لا'}
-                      </p>
-                      {match.surprise_answer && (
-                        <p className="text-purple-400 text-sm">🎯 المفاجأة: {match.surprise_answer}</p>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="text-center mb-5">
-                    <span className="text-sm text-blue-400 bg-blue-900/30 px-4 py-1 rounded-full border border-blue-500/30">
-                      👥 {matchPredictors} متوقع
-                    </span>
-                  </div>
-
-                  <div className="flex gap-3 flex-wrap">
-                    <button
-                      onClick={() => toggleMatchStatus(match)}
-                      disabled={!match.is_open && hasResult}
-                      className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all
-                        ${!match.is_open && hasResult
-                          ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                          : match.is_open
-                          ? 'bg-red-600 hover:bg-red-700'
-                          : 'bg-green-600 hover:bg-green-700'
-                        }`}
-                    >
-                      {match.is_open ? '🚫 إغلاق التوقعات' : hasResult ? '🔒 مغلق (فيه نتيجة)' : '✅ فتح التوقعات'}
-                    </button>
-                    <button
-                      onClick={() => openEditModal(match)}
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal"
-                    >
-                      تعديل النتيجة
-                    </button>
-                    {hasResult && (
-                      <button
-                        onClick={() => clearSingleResult(match)}
-                        className="w-full py-3 rounded-3xl font-tajawal text-sm font-bold bg-orange-600/20 hover:bg-orange-600/40 text-orange-400 border border-orange-600/30 transition-all"
-                      >
-                        🗑️ مسح النتيجة لفتح التوقعات
-                      </button>
-                    )}
-                  </div>
+                  </button>
+                ))}
+                <div className="mr-auto flex gap-2">
+                  <button onClick={openAllMatches} disabled={updating}
+                    className="bg-green-800 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded-2xl font-tajawal text-sm font-bold">
+                    🟢 فتح الكل
+                  </button>
+                  <button onClick={closeAllMatches} disabled={updating}
+                    className="bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 px-4 py-2 rounded-2xl font-tajawal text-sm font-bold">
+                    🔒 غلق الكل
+                  </button>
                 </div>
-              );
-            })}
-          </div>
+              </div>
 
-          <div className="mt-12 flex justify-center">
-            <button
-              onClick={autoUpdateFromAPI}
-              className="bg-emerald-600 hover:bg-emerald-700 px-10 py-5 rounded-3xl font-tajawal text-lg font-bold"
-            >
-              🔄 تحديث أوتوماتيك من API-Football
-            </button>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {filteredMatches.map((match) => {
+                  const hasResult = match.actual_home_score !== null && match.actual_home_score !== undefined;
+                  const matchPredictions = predictions.filter(p => p.fixture_id === match.fixture.id);
+                  return (
+                    <div key={match.fixture.id}
+                      className={`bg-zinc-900 p-6 rounded-3xl border transition-all ${
+                        match.is_open ? 'border-green-500/40' : 'border-zinc-700'
+                      }`}>
+
+                      {/* اسم الماتش */}
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                          <p className="font-tajawal text-xl font-bold">
+                            {match.teams.home.name} <span className="text-white/30">×</span> {match.teams.away.name}
+                          </p>
+                          <p className="text-white/40 text-sm mt-1">
+                            {new Date(match.fixture.date).toLocaleDateString('ar-EG', {
+                              weekday: 'short', month: 'short', day: 'numeric',
+                              hour: '2-digit', minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold font-tajawal ${
+                          match.is_open ? 'bg-green-500/20 text-green-400' : 'bg-zinc-700 text-white/40'
+                        }`}>
+                          {match.is_open ? '🟢 مفتوح' : '🔒 مغلق'}
+                        </span>
+                      </div>
+
+                      {/* النتيجة الفعلية */}
+                      {hasResult && (
+                        <div className="bg-green-900/20 border border-green-500/20 rounded-2xl px-4 py-3 mb-3 space-y-1">
+                          <p className="text-green-400 font-bold text-lg text-center">
+                            النتيجة: {match.actual_home_score} - {match.actual_away_score}
+                          </p>
+                          {match.first_scorer && <p className="text-yellow-400 text-sm text-center">⚽ أول هدف: {match.first_scorer}</p>}
+                          <p className="text-blue-400 text-sm text-center">⏱️ وقت إضافي: {match.went_extra_time ? 'نعم' : 'لا'}</p>
+                          {match.surprise_question && <p className="text-purple-300 text-sm text-center">❓ السؤال: {match.surprise_question}</p>}
+                          {match.surprise_answer && <p className="text-purple-400 text-sm text-center">🎯 الإجابة: {match.surprise_answer}</p>}
+                        </div>
+                      )}
+
+                      {/* التوقعات */}
+                      {matchPredictions.length > 0 && (
+                        <p className="text-white/40 text-sm mb-3 font-tajawal">
+                          👥 {matchPredictions.length} توقع مسجّل
+                        </p>
+                      )}
+
+                      {/* الأزرار */}
+                      <div className="flex gap-2">
+                        <button onClick={() => toggleMatchOpen(match)}
+                          className={`flex-1 py-3 rounded-2xl font-bold font-tajawal text-sm transition-all ${
+                            match.is_open
+                              ? 'bg-zinc-700 hover:bg-zinc-600 text-white/70'
+                              : 'bg-green-700 hover:bg-green-600 text-white'
+                          }`}>
+                          {match.is_open ? '🔒 غلق التوقعات' : '🟢 فتح التوقعات'}
+                        </button>
+                        <button onClick={() => openResultModal(match)}
+                          className="flex-1 py-3 rounded-2xl font-bold font-tajawal text-sm bg-red-700 hover:bg-red-600 transition-all">
+                          {hasResult ? '✏️ تعديل النتيجة' : '⚽ إدخال النتيجة'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* ========== تاب التوقعات ========== */}
+          {activeTab === 'predictions' && (
+            <div className="bg-zinc-900 rounded-3xl p-6">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm font-tajawal">
+                  <thead>
+                    <tr className="border-b border-zinc-700 text-white/50">
+                      <th className="text-right py-3 px-4">المستخدم</th>
+                      <th className="text-right py-3 px-4">الماتش</th>
+                      <th className="text-center py-3 px-4">توقعي</th>
+                      <th className="text-center py-3 px-4">الفعلية</th>
+                      <th className="text-center py-3 px-4">أول هدف</th>
+                      <th className="text-center py-3 px-4">وقت إضافي</th>
+                      <th className="text-center py-3 px-4">المفاجأة</th>
+                      <th className="text-center py-3 px-4">النقاط</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {predictions.map((p) => (
+                      <tr key={p.id} className="border-b border-zinc-800 hover:bg-zinc-800/50">
+                        <td className="py-3 px-4 text-white/70">{p.user_email?.split('@')[0]}</td>
+                        <td className="py-3 px-4">{p.home_team} × {p.away_team}</td>
+                        <td className="py-3 px-4 text-center font-bold">{p.predicted_home_score} - {p.predicted_away_score}</td>
+                        <td className="py-3 px-4 text-center text-green-400">
+                          {p.actual_home_score !== null ? `${p.actual_home_score} - ${p.actual_away_score}` : '⏳'}
+                        </td>
+                        <td className="py-3 px-4 text-center text-yellow-400 text-xs">{p.predicted_first_scorer || '-'}</td>
+                        <td className="py-3 px-4 text-center text-blue-400">{p.predicted_extra_time ? 'نعم' : 'لا'}</td>
+                        <td className="py-3 px-4 text-center text-purple-400 text-xs">{p.surprise_answer || '-'}</td>
+                        <td className="py-3 px-4 text-center">
+                          <span className={`px-3 py-1 rounded-full font-bold text-sm ${
+                            p.points >= 10 ? 'bg-yellow-500/20 text-yellow-400' :
+                            p.points >= 5 ? 'bg-green-500/20 text-green-400' :
+                            p.actual_home_score !== null ? 'bg-zinc-700 text-white/50' :
+                            'bg-zinc-800 text-white/30'
+                          }`}>
+                            {p.actual_home_score !== null ? p.points || 0 : '—'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {predictions.length === 0 && (
+                  <div className="text-center py-16 text-white/40 font-tajawal text-xl">
+                    لا توجد توقعات بعد
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ========== تاب الصدارة ========== */}
+          {activeTab === 'leaderboard' && (
+            <div className="bg-zinc-900 rounded-3xl p-6 space-y-3">
+              {leaderboard.length === 0 ? (
+                <div className="text-center py-16 text-white/40 font-tajawal text-xl">لا توجد بيانات بعد</div>
+              ) : leaderboard.map((player: any, index) => {
+                const medals = ['🥇', '🥈', '🥉'];
+                const name = player.user_email?.split('@')[0] || 'مجهول';
+                return (
+                  <div key={player.user_id}
+                    className={`flex items-center gap-5 px-6 py-4 rounded-2xl border ${
+                      index < 3 ? 'border-zinc-600 bg-zinc-800' : 'border-zinc-800'
+                    }`}>
+                    <div className="w-10 text-center">
+                      {index < 3 ? <span className="text-3xl">{medals[index]}</span> :
+                        <span className="text-xl font-bold text-white/40">#{index + 1}</span>}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-tajawal font-bold text-lg">{name}</p>
+                      <p className="text-white/40 text-sm font-tajawal">
+                        {player.predictionCount} توقع · أفضل نتيجة: {player.bestPoints} نقطة
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-2xl font-bold ${
+                        index === 0 ? 'text-yellow-400' : index === 1 ? 'text-zinc-300' : index === 2 ? 'text-amber-600' : 'text-white'
+                      }`}>{player.totalPoints}</p>
+                      <p className="text-white/40 text-xs font-tajawal">نقطة</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
         </div>
       </main>
 
-      {/* Modal النتيجة */}
-      {editingMatch && (
+      {/* ========== Modal النتيجة ========== */}
+      {showResultModal && selectedMatch && (
         <div
-          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}
-          onClick={closeEditModal}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}
+          onClick={() => setShowResultModal(false)}
         >
           <div
-            className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 my-8 shadow-2xl border border-green-500/40"
+            className="bg-zinc-800 rounded-3xl p-8 w-full max-w-lg mx-4 my-8 border border-red-500/30 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ color: '#ffffff', fontWeight: '700' }} className="text-3xl text-center mb-2 font-tajawal">
-              {editingMatch.teams.home.name} × {editingMatch.teams.away.name}
+            <h2 className="text-2xl font-bold text-center mb-6 font-tajawal">
+              ⚽ {selectedMatch.teams.home.name} × {selectedMatch.teams.away.name}
             </h2>
-            {editingMatch.actual_home_score !== null && editingMatch.actual_home_score !== undefined && (
-              <p className="text-center text-green-400 mb-4 font-tajawal">
-                النتيجة الحالية: {editingMatch.actual_home_score} - {editingMatch.actual_away_score}
-              </p>
-            )}
 
-            <div className="space-y-6 mt-6">
+            <div className="space-y-5">
+
               {/* النتيجة */}
-              <div className="flex gap-12 justify-center">
-                <div className="text-center">
-                  <p style={{ color: '#ffffff', fontWeight: '600' }} className="text-xl mb-3 font-tajawal">{editingMatch.teams.home.name}</p>
-                  <input type="number" min={0} value={actualForm.homeScore}
-                    onChange={(e) => setActualForm({ ...actualForm, homeScore: Number(e.target.value) })}
-                    className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl"
-                    style={{ color: '#111111', fontWeight: '700' }}
-                  />
-                </div>
-                <div className="text-6xl font-light mt-14" style={{ color: '#22c55e' }}>–</div>
-                <div className="text-center">
-                  <p style={{ color: '#ffffff', fontWeight: '600' }} className="text-xl mb-3 font-tajawal">{editingMatch.teams.away.name}</p>
-                  <input type="number" min={0} value={actualForm.awayScore}
-                    onChange={(e) => setActualForm({ ...actualForm, awayScore: Number(e.target.value) })}
-                    className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl"
-                    style={{ color: '#111111', fontWeight: '700' }}
-                  />
+              <div>
+                <label className="block text-white/60 mb-2 font-tajawal text-sm">النتيجة الفعلية</label>
+                <div className="flex gap-4 items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-white/50 text-xs mb-1 font-tajawal">{selectedMatch.teams.home.name}</p>
+                    <input
+                      type="number" min={0}
+                      value={actualFormExtra.homeScore}
+                      onChange={(e) => setActualFormExtra({ ...actualFormExtra, homeScore: Number(e.target.value) })}
+                      className="w-20 text-center bg-white text-black text-4xl font-bold p-4 rounded-2xl"
+                    />
+                  </div>
+                  <span className="text-3xl text-red-400 font-light">–</span>
+                  <div className="text-center">
+                    <p className="text-white/50 text-xs mb-1 font-tajawal">{selectedMatch.teams.away.name}</p>
+                    <input
+                      type="number" min={0}
+                      value={actualFormExtra.awayScore}
+                      onChange={(e) => setActualFormExtra({ ...actualFormExtra, awayScore: Number(e.target.value) })}
+                      className="w-20 text-center bg-white text-black text-4xl font-bold p-4 rounded-2xl"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* ✅ أول هدف */}
+              {/* أول هدف */}
               <div>
-                <label style={{ color: '#e5e5e5', fontWeight: '600' }} className="block mb-2 font-tajawal text-lg">
-                  ⚽ أول هدف (اسم اللاعب)
-                </label>
+                <label className="block text-white/60 mb-2 font-tajawal text-sm">⚽ أول هدف (اسم اللاعب)</label>
                 <input
                   type="text"
                   value={actualFormExtra.firstScorer}
                   onChange={(e) => setActualFormExtra({ ...actualFormExtra, firstScorer: e.target.value })}
-                  className="w-full bg-white text-black px-6 py-4 rounded-3xl text-lg font-tajawal"
-                  style={{ color: '#111111', fontWeight: '600' }}
-                  placeholder="مثال: صلاح"
+                  className="w-full bg-zinc-700 text-white px-4 py-3 rounded-2xl font-tajawal border border-zinc-600 focus:border-red-500 outline-none"
+                  placeholder="مثال: محمد صلاح"
                 />
               </div>
 
-              {/* ✅ وقت إضافي */}
-              <div className="flex items-center gap-4 bg-zinc-800 px-6 py-4 rounded-3xl">
+              {/* وقت إضافي */}
+              <div className="flex items-center gap-3 bg-zinc-700/50 px-4 py-3 rounded-2xl border border-zinc-600">
                 <input
                   type="checkbox"
                   checked={actualFormExtra.wentExtraTime}
                   onChange={(e) => setActualFormExtra({ ...actualFormExtra, wentExtraTime: e.target.checked })}
-                  className="w-6 h-6 accent-green-500"
+                  className="w-5 h-5 accent-red-600"
                 />
-                <label style={{ color: '#ffffff', fontWeight: '600' }} className="font-tajawal text-lg">
-                  ⏱️ الماتش راح وقت إضافي؟
-                </label>
+                <label className="font-tajawal text-white/80">⏱️ الماتش راح لوقت إضافي؟</label>
               </div>
 
-              {/* ✅ مفاجأة الجولة */}
+              {/* سؤال المفاجأة */}
               <div>
-                <label style={{ color: '#e5e5e5', fontWeight: '600' }} className="block mb-2 font-tajawal text-lg">
-                  🎯 الإجابة الصح لمفاجأة الجولة
+                <label className="block text-white/60 mb-2 font-tajawal text-sm">
+                  ❓ سؤال المفاجأة <span className="text-white/30">(يظهر للمستخدمين عند التوقع)</span>
+                </label>
+                <input
+                  type="text"
+                  value={actualFormExtra.surpriseQuestion}
+                  onChange={(e) => setActualFormExtra({ ...actualFormExtra, surpriseQuestion: e.target.value })}
+                  className="w-full bg-zinc-700 text-white px-4 py-3 rounded-2xl font-tajawal border border-zinc-600 focus:border-purple-500 outline-none"
+                  placeholder="مثال: من هيكون أفضل لاعب في الماتش؟"
+                />
+              </div>
+
+              {/* إجابة المفاجأة الصح */}
+              <div>
+                <label className="block text-white/60 mb-2 font-tajawal text-sm">
+                  🎯 الإجابة الصحيحة للمفاجأة <span className="text-white/30">(+5 نقاط)</span>
                 </label>
                 <input
                   type="text"
                   value={actualFormExtra.surpriseAnswer}
                   onChange={(e) => setActualFormExtra({ ...actualFormExtra, surpriseAnswer: e.target.value })}
-                  className="w-full bg-white text-black px-6 py-4 rounded-3xl text-lg font-tajawal"
-                  style={{ color: '#111111', fontWeight: '600' }}
-                  placeholder="الإجابة الصح للمفاجأة"
+                  className="w-full bg-zinc-700 text-white px-4 py-3 rounded-2xl font-tajawal border border-zinc-600 focus:border-purple-500 outline-none"
+                  placeholder="الإجابة الصحيحة"
                 />
               </div>
 
               {/* نظام النقاط */}
-              <div className="bg-zinc-800 rounded-2xl p-4 text-sm font-tajawal space-y-1">
-                <p className="text-white/70 font-bold mb-2">نظام النقاط:</p>
-                <p className="text-yellow-400">🏆 نتيجة كاملة صح = 10 نقاط</p>
+              <div className="bg-zinc-900 rounded-2xl p-4 text-xs font-tajawal space-y-1 border border-zinc-700">
+                <p className="text-white/50 mb-1 font-bold">نظام النقاط:</p>
+                <p className="text-yellow-400">🏆 نتيجة كاملة = 10 نقاط</p>
                 <p className="text-green-400">✅ فايز صح = 5 نقاط</p>
-                <p className="text-blue-400">⚽ أول هدف صح = 3 نقاط</p>
-                <p className="text-purple-400">⏱️ وقت إضافي صح = 2 نقاط</p>
-                <p className="text-pink-400">🎯 مفاجأة صح = 5 نقاط</p>
-                <p className="text-white/50 mt-2">أقصى نقاط = 25 نقطة</p>
+                <p className="text-blue-400">⚽ أول هدف = 3 نقاط</p>
+                <p className="text-cyan-400">⏱️ وقت إضافي = 2 نقاط</p>
+                <p className="text-purple-400">🎯 مفاجأة = 5 نقاط</p>
+                <p className="text-white/30 mt-1">الحد الأقصى = 25 نقطة</p>
               </div>
 
-              <div className="flex gap-4">
-                <button onClick={closeEditModal} className="flex-1 py-5 rounded-3xl font-tajawal text-xl" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#ffffff' }}>إلغاء</button>
-                <button onClick={saveActualResult} className="flex-1 py-5 rounded-3xl font-bold text-xl font-tajawal" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#22c55e' }}>حفظ النتيجة ✅</button>
+              {/* أزرار */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowResultModal(false)}
+                  className="flex-1 py-4 rounded-2xl font-tajawal font-bold bg-zinc-600 hover:bg-zinc-500 transition-all"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={saveActualResult}
+                  disabled={savingResult}
+                  className="flex-1 py-4 rounded-2xl font-tajawal font-bold bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-all"
+                >
+                  {savingResult ? '⏳ جاري الحفظ...' : '💾 حفظ النتيجة'}
+                </button>
               </div>
+
             </div>
           </div>
         </div>
