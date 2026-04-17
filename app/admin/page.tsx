@@ -11,7 +11,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const ADMIN_EMAIL = 'i.g.webmaster.web@gmail.com';   // غيّره لإيميلك
+  const ADMIN_EMAIL = 'i.g.webmaster.web@gmail.com';
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -85,14 +85,9 @@ export default function Admin() {
     }
   };
 
-  // فتح/إغلاق ماتش واحد
   const toggleMatchStatus = async (match: any) => {
     const newStatus = !match.is_open;
-    const { error } = await supabase
-      .from('fixtures')
-      .update({ is_open: newStatus })
-      .eq('id', match.fixture.id);   // ← التصليح المهم
-
+    const { error } = await supabase.from('fixtures').update({ is_open: newStatus }).eq('id', match.fixture.id);
     if (error) alert('خطأ: ' + error.message);
     else {
       alert(newStatus ? '✅ التوقعات فُتحت' : '✅ التوقعات أُغلقت');
@@ -193,27 +188,30 @@ export default function Admin() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {matches.map((match) => {
-              const hasResult = match.goals?.home !== null && match.goals?.away !== null; // أو actual_home_score إذا كان موجود
+              const hasResult = match.goals?.home !== null && match.goals?.away !== null;
               return (
                 <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative">
                   {/* بادج الحالة */}
-                  <div className={`absolute top-6 left-6 px-4 py-1 rounded-2xl text-sm font-bold ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+                  <div className={`absolute top-6 left-6 px-5 py-1.5 rounded-2xl text-sm font-bold ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
                     {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
                   </div>
 
-                  {/* بادج النتيجة الجديدة */}
-                  <div className={`absolute top-6 right-6 px-4 py-1 rounded-2xl text-sm font-bold ${hasResult ? 'bg-green-500 text-white' : 'bg-zinc-500 text-white'}`}>
+                  {/* بادج النتيجة */}
+                  <div className={`absolute top-6 right-6 px-5 py-1.5 rounded-2xl text-sm font-bold ${hasResult ? 'bg-green-500 text-white' : 'bg-zinc-500 text-white'}`}>
                     {hasResult ? '📊 نتيجة مسجلة' : '⏳ بدون نتيجة'}
                   </div>
 
-                  <div className="flex justify-between items-center mb-6 pt-8">
+                  <div className="flex justify-between items-center mb-6 pt-10">
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
                     <div className="px-8 text-xl font-light">VS</div>
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
                   </div>
 
                   <div className="flex gap-4">
-                    <button onClick={() => toggleMatchStatus(match)} className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                    <button 
+                      onClick={() => toggleMatchStatus(match)} 
+                      className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
+                    >
                       {match.is_open ? '🚫 إغلاق التوقعات' : '✅ فتح التوقعات'}
                     </button>
                     <button onClick={() => openEditModal(match)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal">تعديل النتيجة</button>
@@ -229,7 +227,7 @@ export default function Admin() {
         </div>
       </main>
 
-      {/* Modal تعديل النتيجة */}
+      {/* Modal */}
       {editingMatch && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeEditModal}>
           <div style={{ position: 'relative' }} className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 shadow-2xl border border-green-500/40" onClick={(e) => e.stopPropagation()}>
