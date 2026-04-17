@@ -50,7 +50,7 @@ export default function Admin() {
 
       setMatches(merged);
     } catch (err) {
-      console.error('خطأ في تحميل الماتشات:', err);
+      console.error(err);
     }
   };
 
@@ -206,7 +206,7 @@ export default function Admin() {
             {matches.map((match) => {
               const hasResult = match.actual_home_score !== null && match.actual_away_score !== null;
               return (
-                <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative">
+                <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all relative pt-14">
                   {/* بادج الحالة - يسار */}
                   <div className={`absolute top-6 left-6 px-5 py-1.5 rounded-2xl text-sm font-bold ${match.is_open ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
                     {match.is_open ? '✅ مفتوح' : '❌ مغلق'}
@@ -217,17 +217,14 @@ export default function Admin() {
                     {hasResult ? '📊 نتيجة مسجلة' : '⏳ بدون نتيجة'}
                   </div>
 
-                  <div className="flex justify-between items-center mb-6 pt-14">
+                  <div className="flex justify-between items-center mb-6">
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
                     <div className="px-8 text-xl font-light">VS</div>
                     <div className="flex-1 text-center"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
                   </div>
 
                   <div className="flex gap-4">
-                    <button 
-                      onClick={() => toggleMatchStatus(match)} 
-                      className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
-                    >
+                    <button onClick={() => toggleMatchStatus(match)} className={`flex-1 py-5 rounded-3xl font-tajawal text-lg font-bold transition-all ${match.is_open ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
                       {match.is_open ? '🚫 إغلاق التوقعات' : '✅ فتح التوقعات'}
                     </button>
                     <button onClick={() => openEditModal(match)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-5 rounded-3xl text-lg font-tajawal">تعديل النتيجة</button>
