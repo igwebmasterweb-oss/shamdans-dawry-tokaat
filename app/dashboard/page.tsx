@@ -33,10 +33,29 @@ export default function Dashboard() {
     try {
       const res = await fetch('/api/fixtures');
       const data = await res.json();
-      if (data.response && data.response.length > 0) {
-        // ✅ كل الـ 72 ماتش بدون slice
-        setMatches(data.response);
-      }
+      const apiMatches = data.response || [];
+
+      // ✅ جيب is_open والنتائج من Supabase
+      const { data: supabaseFixtures } = await supabase
+        .from('fixtures')
+        .select('api_fixture_id, is_open, actual_home_score, actual_away_score');
+
+      const supabaseMap = new Map(
+        supabaseFixtures?.map((f: any) => [f.api_fixture_id, f]) || []
+      );
+
+      // ✅ دمج API + Supabase
+      const merged = apiMatches.map((m: any) => {
+        const sb = supabaseMap.get(m.fixture.id);
+        return {
+          ...m,
+          is_open: sb ? sb.is_open : true,
+          actual_home_score: sb?.actual_home_score ?? null,
+          actual_away_score: sb?.actual_away_score ?? null,
+        };
+      });
+
+      setMatches(merged);
     } catch (err) {
       console.error(err);
     }
@@ -79,7 +98,7 @@ export default function Dashboard() {
   const submitPrediction = async () => {
     if (!currentMatch) return;
 
-    // ✅ التحقق من توقع سابق لنفس الماتش
+    // ✅ منع التوقع المزدوج
     const alreadyPredicted = predictions.find(p => p.fixture_id === currentMatch.fixture.id);
     if (alreadyPredicted) {
       alert('⚠️ سبق وتوقعت هذا الماتش!');
@@ -90,7 +109,7 @@ export default function Dashboard() {
     const { error } = await supabase.from('predictions').insert({
       user_id: user.id,
       user_email: user.email,
-      fixture_id: currentMatch.fixture.id, // ✅ api_fixture_id الحقيقي
+      fixture_id: currentMatch.fixture.id,
       home_team: currentMatch.teams.home.name,
       away_team: currentMatch.teams.away.name,
       predicted_home_score: formData.homeScore,
@@ -98,7 +117,7 @@ export default function Dashboard() {
       predicted_first_scorer: formData.firstScorer || 'غير محدد',
       predicted_extra_time: formData.extraTime,
       surprise_answer: formData.surprise || 'لا توجد مفاجأة',
-      points: 0 // ✅ 0 مش 10 — النقاط بتتحسب بعد دخول النتيجة
+      points: 0, // ✅ النقاط بتتحسب بعد دخول النتيجة
     });
 
     if (error) alert('خطأ: ' + error.message);
@@ -111,9 +130,11 @@ export default function Dashboard() {
   };
 
   const updateAllPoints = async () => {
-    alert('✅ تم تحديث النتائج والنقاط بنجاح!');
-    loadPredictions(user.id);
-    loadLeaderboard();
+    if (user) {
+      await loadPredictions(user.id);
+      await loadLeaderboard();
+    }
+    alert('✅ تم تحديث النتائج والنقاط!');
   };
 
   const handleLogout = async () => {
@@ -129,7 +150,7 @@ export default function Dashboard() {
 
   const displayName = user?.email ? user.email.split('@')[0] : 'مستخدم';
 
-  // ✅ فلترة الماتشات حسب الجولة المختارة
+  // ✅ فلترة الماتشات حسب الجولة
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
 
   return (
@@ -139,7 +160,7 @@ export default function Dashboard() {
 
           {/* Header */}
           <div className="flex justify-between items-center mb-12 flex-wrap gap-4">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               <span className="text-6xl">🏆</span>
               <h1 className="text-5xl font-bold text-red-600 font-tajawal">الشمعدان</h1>
               <span className="text-5xl font-bold text-white">×</span>
@@ -179,35 +200,60 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* الماتشات */}
+          {/* عنوان الجولة */}
           <h2 className="text-3xl font-tajawal mb-8">
             ماتشات {activeRound === 'Group Stage - 1' ? 'الجولة الأولى' :
                      activeRound === 'Group Stage - 2' ? 'الجولة الثانية' : 'الجولة الثالثة'}
             <span className="text-white/50 text-xl mr-3">({filteredMatches.length} ماتش)</span>
           </h2>
 
+          {/* ✅ الماتشات مع التحكم الكامل في is_open */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {filteredMatches.map((match) => {
               const alreadyPredicted = predictions.find(p => p.fixture_id === match.fixture.id);
+              const hasResult =
+                match.actual_home_score !== null && match.actual_home_score !== undefined &&
+                match.actual_away_score !== null && match.actual_away_score !== undefined;
+
               return (
                 <div key={match.fixture.id} className="bg-zinc-900 p-8 rounded-3xl border border-red-600/30 hover:border-red-600 transition-all">
+
+                  {/* أسماء الفرق */}
                   <div className="flex justify-between items-center text-center mb-2">
                     <div className="flex-1"><p className="font-tajawal text-2xl">{match.teams.home.name}</p></div>
                     <div className="px-10"><span className="text-sm text-white/50">VS</span></div>
                     <div className="flex-1"><p className="font-tajawal text-2xl">{match.teams.away.name}</p></div>
                   </div>
-                  <p className="text-center text-white/40 text-sm mb-6">
-                    {new Date(match.fixture.date).toLocaleDateString('ar-EG', { weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+
+                  {/* التاريخ */}
+                  <p className="text-center text-white/40 text-sm mb-4">
+                    {new Date(match.fixture.date).toLocaleDateString('ar-EG', {
+                      weekday: 'long', month: 'long', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit'
+                    })}
                   </p>
-                  {alreadyPredicted ? (
-                    <div className="mt-2 w-full bg-zinc-700 text-white/60 font-bold py-5 rounded-3xl text-xl font-tajawal text-center">
+
+                  {/* النتيجة الفعلية لو موجودة */}
+                  {hasResult && (
+                    <p className="text-center text-green-400 font-bold text-xl mb-4">
+                      النتيجة: {match.actual_home_score} - {match.actual_away_score}
+                    </p>
+                  )}
+
+                  {/* ✅ 3 حالات للزرار */}
+                  {!match.is_open ? (
+                    <div className="mt-2 w-full bg-zinc-800 text-white/40 font-bold py-5 rounded-3xl text-xl font-tajawal text-center border border-zinc-700">
+                      🔒 التوقعات مغلقة
+                    </div>
+                  ) : alreadyPredicted ? (
+                    <div className="mt-2 w-full bg-zinc-700 text-white/70 font-bold py-5 rounded-3xl text-xl font-tajawal text-center">
                       ✅ توقعت: {alreadyPredicted.predicted_home_score} - {alreadyPredicted.predicted_away_score}
                     </div>
                   ) : (
                     <button
                       type="button"
                       onClick={() => openPredictionModal(match)}
-                      className="mt-2 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-6 rounded-3xl text-2xl font-tajawal"
+                      className="mt-2 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-6 rounded-3xl text-2xl font-tajawal transition-all"
                     >
                       توقع نتيجة الماتش 🔥
                     </button>
@@ -218,9 +264,12 @@ export default function Dashboard() {
           </div>
 
           {/* توقعاتي السابقة */}
-          <div className="flex justify-between items-center mt-16 mb-6">
+          <div className="flex justify-between items-center mt-16 mb-6 flex-wrap gap-4">
             <h2 className="text-3xl font-tajawal">توقعاتي السابقة</h2>
-            <button onClick={updateAllPoints} className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-3xl font-tajawal text-lg font-bold flex items-center gap-2">
+            <button
+              onClick={updateAllPoints}
+              className="bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-3xl font-tajawal text-lg font-bold flex items-center gap-2"
+            >
               🔄 تحديث النتائج والنقاط
             </button>
           </div>
@@ -250,7 +299,9 @@ export default function Dashboard() {
                     <div>مفاجأة: <span className="font-medium text-white">{p.surprise_answer}</span></div>
                   </div>
                   <div className="text-right">
-                    <span className="bg-green-600 text-white px-5 py-2 rounded-3xl font-bold">نقاط: {p.points || 0}</span>
+                    <span className="bg-green-600 text-white px-5 py-2 rounded-3xl font-bold text-lg">
+                      نقاط: {p.points || 0}
+                    </span>
                   </div>
                 </div>
               ))
@@ -263,7 +314,7 @@ export default function Dashboard() {
             {leaderboard.length === 0 ? (
               <p className="text-white/60 text-center py-12 font-tajawal text-xl">لا توجد بيانات بعد</p>
             ) : (
-              leaderboard.map((player, index) => {
+              leaderboard.map((player: any, index) => {
                 const playerName = player.user_email ? player.user_email.split('@')[0] : player.user_email;
                 let rankColor = '#ffffff';
                 if (index === 0) rankColor = '#facc15';
@@ -285,10 +336,17 @@ export default function Dashboard() {
         </div>
       </main>
 
-      {/* Modal */}
+      {/* Modal التوقع */}
       {showModal && currentMatch && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeModal}>
-          <div style={{ position: 'relative' }} className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 shadow-2xl border border-red-500/40" onClick={(e) => e.stopPropagation()}>
+        <div
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={closeModal}
+        >
+          <div
+            style={{ position: 'relative' }}
+            className="bg-zinc-700 rounded-3xl p-10 w-full max-w-lg mx-4 shadow-2xl border border-red-500/40"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 style={{ color: '#ffffff', fontWeight: '700' }} className="text-3xl text-center mb-8 font-tajawal">
               {currentMatch.teams.home.name} × {currentMatch.teams.away.name}
             </h2>
@@ -296,29 +354,78 @@ export default function Dashboard() {
               <div className="flex gap-12 justify-center">
                 <div className="text-center">
                   <p style={{ color: '#ffffff', fontWeight: '600' }} className="text-xl mb-3 font-tajawal">{currentMatch.teams.home.name}</p>
-                  <input type="number" min={0} value={formData.homeScore} onChange={(e) => setFormData({ ...formData, homeScore: Number(e.target.value) })} className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl border border-red-500/50 focus:border-red-500" style={{ color: '#111111', fontWeight: '700' }} />
+                  <input
+                    type="number" min={0}
+                    value={formData.homeScore}
+                    onChange={(e) => setFormData({ ...formData, homeScore: Number(e.target.value) })}
+                    className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl border border-red-500/50 focus:border-red-500"
+                    style={{ color: '#111111', fontWeight: '700' }}
+                  />
                 </div>
                 <div className="text-6xl font-light mt-14" style={{ color: '#f87171' }}>–</div>
                 <div className="text-center">
                   <p style={{ color: '#ffffff', fontWeight: '600' }} className="text-xl mb-3 font-tajawal">{currentMatch.teams.away.name}</p>
-                  <input type="number" min={0} value={formData.awayScore} onChange={(e) => setFormData({ ...formData, awayScore: Number(e.target.value) })} className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl border border-red-500/50 focus:border-red-500" style={{ color: '#111111', fontWeight: '700' }} />
+                  <input
+                    type="number" min={0}
+                    value={formData.awayScore}
+                    onChange={(e) => setFormData({ ...formData, awayScore: Number(e.target.value) })}
+                    className="w-24 text-center bg-white text-black text-6xl font-bold p-6 rounded-3xl border border-red-500/50 focus:border-red-500"
+                    style={{ color: '#111111', fontWeight: '700' }}
+                  />
                 </div>
               </div>
+
               <div>
                 <label style={{ color: '#e5e5e5', fontWeight: '600' }} className="block mb-2 font-tajawal text-lg">من هيسجل أول هدف؟</label>
-                <input type="text" value={formData.firstScorer} onChange={(e) => setFormData({ ...formData, firstScorer: e.target.value })} className="w-full bg-white text-black px-6 py-5 rounded-3xl text-lg font-tajawal" style={{ color: '#111111', fontWeight: '600' }} placeholder="مثال: صلاح" />
+                <input
+                  type="text"
+                  value={formData.firstScorer}
+                  onChange={(e) => setFormData({ ...formData, firstScorer: e.target.value })}
+                  className="w-full bg-white text-black px-6 py-5 rounded-3xl text-lg font-tajawal"
+                  style={{ color: '#111111', fontWeight: '600' }}
+                  placeholder="مثال: صلاح"
+                />
               </div>
+
               <div className="flex items-center gap-4">
-                <input type="checkbox" checked={formData.extraTime} onChange={(e) => setFormData({ ...formData, extraTime: e.target.checked })} className="w-6 h-6 accent-red-600" />
+                <input
+                  type="checkbox"
+                  checked={formData.extraTime}
+                  onChange={(e) => setFormData({ ...formData, extraTime: e.target.checked })}
+                  className="w-6 h-6 accent-red-600"
+                />
                 <label style={{ color: '#ffffff', fontWeight: '600' }} className="font-tajawal text-lg">هيروح وقت إضافي؟</label>
               </div>
+
               <div>
                 <label style={{ color: '#e5e5e5', fontWeight: '600' }} className="block mb-2 font-tajawal text-lg">مفاجأة الجولة (اختياري)</label>
-                <input type="text" value={formData.surprise} onChange={(e) => setFormData({ ...formData, surprise: e.target.value })} className="w-full bg-white text-black px-6 py-5 rounded-3xl text-lg font-tajawal" style={{ color: '#111111', fontWeight: '600' }} placeholder="اكتب مفاجأة" />
+                <input
+                  type="text"
+                  value={formData.surprise}
+                  onChange={(e) => setFormData({ ...formData, surprise: e.target.value })}
+                  className="w-full bg-white text-black px-6 py-5 rounded-3xl text-lg font-tajawal"
+                  style={{ color: '#111111', fontWeight: '600' }}
+                  placeholder="اكتب مفاجأة"
+                />
               </div>
+
               <div className="flex gap-4">
-                <button type="button" onClick={closeModal} className="flex-1 py-5 border border-zinc-400 rounded-3xl font-tajawal text-xl" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#ffffff' }}>إلغاء</button>
-                <button type="button" onClick={submitPrediction} className="flex-1 py-5 rounded-3xl font-bold text-xl font-tajawal" style={{ color: '#111111', fontWeight: '700', backgroundColor: '#f87171' }}>حفظ التوقع</button>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex-1 py-5 border border-zinc-400 rounded-3xl font-tajawal text-xl"
+                  style={{ color: '#111111', fontWeight: '700', backgroundColor: '#ffffff' }}
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  onClick={submitPrediction}
+                  className="flex-1 py-5 rounded-3xl font-bold text-xl font-tajawal"
+                  style={{ color: '#111111', fontWeight: '700', backgroundColor: '#f87171' }}
+                >
+                  حفظ التوقع
+                </button>
               </div>
             </div>
           </div>
