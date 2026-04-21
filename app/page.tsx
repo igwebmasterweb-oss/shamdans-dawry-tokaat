@@ -3,19 +3,29 @@ import Link from 'next/link';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-black text-white" dir="rtl">
+    <div className="fifa-admin" dir="rtl" style={{minHeight:'100vh'}}>
 
       {/* Nav */}
-      <nav className="fixed top-0 inset-x-0 z-50 bg-black/80 backdrop-blur border-b border-zinc-800">
-        <div className="max-w-5xl mx-auto px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🏆</span>
-            <span className="font-bold text-red-500 text-base sm:text-lg">الشمعدان</span>
-            <span className="text-zinc-600 text-base">×</span>
-            <span className="font-bold text-white text-base sm:text-lg">كأس العالم 2026</span>
+      <nav style={{
+        position:'fixed',top:0,left:0,right:0,zIndex:50,
+        background:'rgba(7,8,9,.85)',
+        backdropFilter:'blur(12px)',
+        borderBottom:'1px solid var(--fifa-line)',
+      }}>
+        <div style={{maxWidth:960,margin:'0 auto',padding:'14px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{
+              width:36,height:36,borderRadius:10,
+              background:'linear-gradient(135deg,#f0cf84,#a97b26)',
+              display:'grid',placeItems:'center',
+              fontSize:18,boxShadow:'0 4px 12px rgba(217,178,95,.25)',
+            }}>🏆</div>
+            <span style={{fontWeight:900,color:'var(--fifa-gold)',fontSize:16}}>الشمعدان</span>
+            <span style={{color:'var(--fifa-muted)'}}>×</span>
+            <span style={{fontWeight:700,color:'var(--fifa-text)',fontSize:15}}>كأس العالم 2026</span>
           </div>
           <Link href="/login">
-            <button className="bg-red-600 hover:bg-red-500 transition-colors text-white font-bold px-5 py-2 rounded-2xl text-sm">
+            <button className="fifa-btn fifa-btn-gold" style={{padding:'10px 22px',fontSize:13}}>
               سجّل دلوقتي
             </button>
           </Link>
@@ -23,62 +33,103 @@ export default function Home() {
       </nav>
 
       {/* Hero */}
-      <main className="flex flex-col items-center justify-center min-h-screen px-5 pt-16 text-center">
-        <div className="max-w-2xl mx-auto space-y-8">
+      <main style={{
+        display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+        minHeight:'100vh',padding:'80px 20px 40px',textAlign:'center',
+      }}>
+        <div style={{maxWidth:680,margin:'0 auto',display:'flex',flexDirection:'column',gap:32}}>
 
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 bg-red-600/10 border border-red-600/30 text-red-400 text-xs font-bold px-4 py-2 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
+          <div style={{display:'inline-flex',alignSelf:'center',alignItems:'center',gap:8,
+            background:'rgba(217,178,95,.10)',border:'1px solid rgba(217,178,95,.25)',
+            color:'#f2d79e',fontSize:12,fontWeight:700,padding:'8px 16px',borderRadius:999,
+          }}>
+            <span style={{width:7,height:7,borderRadius:'50%',background:'var(--fifa-gold)',
+              display:'inline-block',animation:'pulse 1.5s infinite'}}/>
             كأس العالم 2026 — المكسيك · كندا · الولايات المتحدة
           </div>
 
           {/* Title */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-center gap-3">
-              <span className="text-6xl sm:text-7xl">🏆</span>
-            </div>
-            <h1 className="text-5xl sm:text-7xl font-black text-white leading-tight">
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8}}>
+            <span style={{fontSize:72}}>🏆</span>
+            <h1 style={{fontSize:'clamp(48px,8vw,80px)',fontWeight:900,color:'var(--fifa-text)',lineHeight:1.1,margin:0}}>
               الشمعدان
             </h1>
-            <p className="text-2xl sm:text-3xl font-bold text-red-500">
+            <p style={{fontSize:'clamp(22px,4vw,32px)',fontWeight:800,color:'var(--fifa-gold)',margin:0}}>
               × كأس العالم 2026
             </p>
           </div>
 
           {/* Tagline */}
-          <p className="text-lg sm:text-xl text-zinc-400 leading-relaxed">
+          <p style={{fontSize:'clamp(16px,2.5vw,20px)',color:'var(--fifa-muted)',lineHeight:1.7,margin:0}}>
             أحلى من الماتش.. اللي بيحصل جنبيه
           </p>
 
-          {/* Points system preview */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+          {/* Points system */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
             {[
-              { icon: '🏆', label: 'نتيجة كاملة', pts: '10' },
-              { icon: '✅', label: 'الفايز صح',   pts: '5'  },
-              { icon: '⚽', label: 'أول هدف',     pts: '+3' },
-              { icon: '🎯', label: 'سؤال المفاجأة', pts: '+5' },
-            ].map((item) => (
-              <div key={item.label} className="bg-zinc-900 border border-zinc-800 rounded-2xl px-3 py-4">
-                <p className="text-2xl mb-1">{item.icon}</p>
-                <p className="text-yellow-400 font-black text-xl">{item.pts}</p>
-                <p className="text-zinc-500 text-xs mt-1">{item.label}</p>
+              {icon:'🏆',label:'نتيجة كاملة',pts:'10'},
+              {icon:'✅',label:'الفايز صح',  pts:'5' },
+              {icon:'⚽',label:'أول هدف',    pts:'+3'},
+              {icon:'🎯',label:'سؤال المفاجأة',pts:'+5'},
+            ].map(item => (
+              <div key={item.label} className="fifa-stat" style={{padding:'16px 10px'}}>
+                <p style={{fontSize:26,margin:'0 0 6px'}}>{item.icon}</p>
+                <p style={{fontSize:22,fontWeight:900,color:'var(--fifa-gold)',margin:'0 0 4px'}}>{item.pts}</p>
+                <p style={{fontSize:11,color:'var(--fifa-muted)',margin:0}}>{item.label}</p>
               </div>
             ))}
           </div>
 
+          {/* How it works */}
+          <div className="fifa-panel" style={{textAlign:'right',padding:'20px 24px'}}>
+            <p style={{fontSize:13,fontWeight:800,color:'var(--fifa-text)',marginBottom:14}}>⚡ إزاي اللعبة؟</p>
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              {[
+                {n:'١',t:'قبل الماتش تدخل توقعاتك (النتيجة، أول هدف، سؤال مفاجأة)'},
+                {n:'٢',t:'بعد الماتش بيتحسبلك النقاط أوتوماتيك'},
+                {n:'٣',t:'اللي بيعمل أعلى نقاط في آخر المونديال هو الشمعدان 🏆'},
+              ].map(s => (
+                <div key={s.n} style={{display:'flex',alignItems:'flex-start',gap:12}}>
+                  <span style={{
+                    width:24,height:24,borderRadius:'50%',background:'var(--fifa-gold-soft)',
+                    border:'1px solid rgba(217,178,95,.3)',color:'var(--fifa-gold)',
+                    fontSize:11,fontWeight:900,display:'grid',placeItems:'center',flexShrink:0,marginTop:1,
+                  }}>{s.n}</span>
+                  <p style={{fontSize:13,color:'var(--fifa-muted)',margin:0,lineHeight:1.6}}>{s.t}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* CTA */}
-          <div className="space-y-3">
-            <Link href="/login">
-              <button className="w-full sm:w-auto bg-red-600 hover:bg-red-500 transition-all text-white text-xl font-black px-12 py-5 rounded-3xl inline-flex items-center justify-center gap-3">
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
+            <Link href="/login" style={{width:'100%',maxWidth:360}}>
+              <button className="fifa-btn fifa-btn-gold" style={{
+                width:'100%',fontSize:18,fontWeight:900,
+                padding:'18px 32px',borderRadius:20,
+                display:'flex',alignItems:'center',justifyContent:'center',gap:10,
+              }}>
                 ابدأ التوقعات دلوقتي
-                <span className="text-2xl">🔥</span>
+                <span style={{fontSize:22}}>🔥</span>
               </button>
             </Link>
-            <p className="text-zinc-600 text-xs">مفيش باسورد — رابط على إيميلك وبس 🔐</p>
+            <p style={{fontSize:12,color:'var(--fifa-muted)',margin:0}}>
+              مفيش باسورد — رابط على إيميلك وبس 🔐
+            </p>
           </div>
 
         </div>
       </main>
+
+      <style>{`
+        @keyframes pulse {
+          0%,100%{opacity:1} 50%{opacity:.4}
+        }
+        @media(max-width:500px){
+          .pts-grid{grid-template-columns:1fr 1fr!important}
+        }
+      `}</style>
     </div>
   );
 }
