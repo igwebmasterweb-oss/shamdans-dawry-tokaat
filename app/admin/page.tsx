@@ -1,6 +1,6 @@
 'use client';
 import { supabase } from '../../lib/supabase';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 const ADMIN_EMAILS = ['i.g.webmaster.web@gmail.com'];
@@ -18,9 +18,10 @@ export default function AdminPage() {
   const [message, setMessage]         = useState('');
   const [msgType, setMsgType]         = useState<'success' | 'error'>('success');
 
-  const [showResultModal, setShowResultModal] = useState(false);
-  const [selectedMatch, setSelectedMatch]     = useState<any>(null);
-  const [actualForm, setActualForm] = useState({
+  // Modal state
+  const [showModal, setShowModal]       = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState<any>(null);
+  const [actualForm, setActualForm]     = useState({
     homeScore: 0, awayScore: 0, firstScorer: '',
     wentExtraTime: false, surpriseAnswer: '', surpriseQuestion: '',
   });
@@ -34,20 +35,13 @@ export default function AdminPage() {
     'Group Stage - 3': 'الجولة الثالثة',
   };
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user || !ADMIN_EMAILS.includes(data.user.email || '')) {
-        router.push('/dashboard');
-      } else {
-        setUser(data.user);
-        loadMatches();
-        loadAllPredictions();
-        loadLeaderboard();
-      }
-    });
-  }, [router]);
+  const showMsg = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setMessage(msg);
+    setMsgType(type);
+    setTimeout(() => setMessage(''), 5000);
+  }, []);
 
-  const loadMatches = async () => {
+  const loadMatches = useCallback(async () => {
     try {
       const res = await fetch('/api/fixtures');
       const data = await res.json();
@@ -70,17 +64,21 @@ export default function AdminPage() {
         };
       });
       setMatches(merged);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error('loadMatches error:', err);
+    }
     setLoading(false);
-  };
+  }, []);
 
-  const loadAllPredictions = async () => {
-    const { data } = await supabase.from('predictions').select('*').order('submitted_at', { ascending: false });
+  const loadAllPredictions = useCallback(async () => {
+    const { data } = await supabase
+      .from('predictions').select('*').order('submitted_at', { ascending: false });
     setPredictions(data || []);
-  };
+  }, []);
 
-  const loadLeaderboard = async () => {
-    const { data } = await supabase.from('predictions').select('user_id, user_email, points, fixture_id');
+  const loadLeaderboard = useCallback(async () => {
+    const { data } = await supabase
+      .from('predictions').select('user_id, user_email, points, fixture_id');
     const grouped: any = {};
     data?.forEach((row: any) => {
       if (!grouped[row.user_id]) {
@@ -88,37 +86,56 @@ export default function AdminPage() {
       }
       grouped[row.user_id].totalPoints     += row.points || 0;
       grouped[row.user_id].predictionCount += 1;
-      if ((row.points || 0) > grouped[row.user_id].bestPoints) grouped[row.user_id].bestPoints = row.points || 0;
+      if ((row.points || 0) > grouped[row.user_id].bestPoints)
+        grouped[row.user_id].bestPoints = row.points || 0;
     });
     setLeaderboard(Object.values(grouped).sort((a: any, b: any) => b.totalPoints - a.totalPoints));
-  };
+  }, []);
 
-  // ✅ FIX: استخدم maybeSingle() بدل single() عشان مايفشلش لو السجل مش موجود
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user || !ADMIN_EMAILS.includes(data.user.email || '')) {
+        router.push('/dashboard');
+      } else {
+        setUser(data.user);
+        loadMatches();
+        loadAllPredictions();
+        loadLeaderboard();
+      }
+    });
+  }, [router, loadMatches, loadAllPredictions, loadLeaderboard]);
+
+  // ── Toggle single match ──────────────────────────────────────────────────
   const toggleMatchOpen = async (match: any) => {
     const newStatus = !match.is_open;
     const fixtureId = match.fixture.id;
     try {
-      const { data: existing } = await supabase
+      const { data: existing, error: selErr } = await supabase
         .from('fixtures').select('id').eq('api_fixture_id', fixtureId).maybeSingle();
+      if (selErr) throw selErr;
+
       if (existing) {
-        await supabase.from('fixtures').update({ is_open: newStatus }).eq('api_fixture_id', fixtureId);
+        const { error } = await supabase
+          .from('fixtures').update({ is_open: newStatus }).eq('api_fixture_id', fixtureId);
+        if (error) throw error;
       } else {
-        await supabase.from('fixtures').insert({
+        const { error } = await supabase.from('fixtures').insert({
           api_fixture_id: fixtureId, is_open: newStatus,
           home_team: match.teams.home.name, away_team: match.teams.away.name,
           match_date: match.fixture.date, round: match.league.round,
         });
+        if (error) throw error;
       }
       await loadMatches();
       showMsg(newStatus ? '✅ التوقعات مفتوحة' : '🔒 التوقعات مغلقة', 'success');
-    } catch (err) {
-      console.error(err);
-      showMsg('❌ خطأ في تغيير الحالة', 'error');
+    } catch (err: any) {
+      console.error('toggleMatchOpen error:', err);
+      showMsg('❌ خطأ: ' + (err?.message || 'تأكد من الـ RLS policies'), 'error');
     }
   };
 
+  // ── Open result modal ────────────────────────────────────────────────────
   const openResultModal = (match: any) => {
-    setSelectedMatch(match);
     setActualForm({
       homeScore:        match.actual_home_score  ?? 0,
       awayScore:        match.actual_away_score  ?? 0,
@@ -127,49 +144,111 @@ export default function AdminPage() {
       surpriseAnswer:   match.surprise_answer    ?? '',
       surpriseQuestion: match.surprise_question  ?? '',
     });
-    setShowResultModal(true);
+    setSelectedMatch(match);
+    setShowModal(true);
   };
 
+  // ── Save result ──────────────────────────────────────────────────────────
   const saveActualResult = async () => {
     if (!selectedMatch) return;
     setSavingResult(true);
     const fixtureId = selectedMatch.fixture.id;
     try {
-      // ✅ FIX: maybeSingle() بدل single()
-      const { data: existing } = await supabase
+      const { data: existing, error: selErr } = await supabase
         .from('fixtures').select('id').eq('api_fixture_id', fixtureId).maybeSingle();
+      if (selErr) throw selErr;
+
       const payload = {
         actual_home_score: actualForm.homeScore,
         actual_away_score: actualForm.awayScore,
-        first_scorer:      actualForm.firstScorer     || null,
+        first_scorer:      actualForm.firstScorer      || null,
         went_extra_time:   actualForm.wentExtraTime,
-        surprise_answer:   actualForm.surpriseAnswer  || null,
+        surprise_answer:   actualForm.surpriseAnswer   || null,
         surprise_question: actualForm.surpriseQuestion || null,
       };
+
       if (existing) {
-        await supabase.from('fixtures').update(payload).eq('api_fixture_id', fixtureId);
+        const { error } = await supabase
+          .from('fixtures').update(payload).eq('api_fixture_id', fixtureId);
+        if (error) throw error;
       } else {
-        await supabase.from('fixtures').insert({
+        const { error } = await supabase.from('fixtures').insert({
           api_fixture_id: fixtureId, is_open: false,
           home_team: selectedMatch.teams.home.name, away_team: selectedMatch.teams.away.name,
           match_date: selectedMatch.fixture.date, round: selectedMatch.league.round,
           ...payload,
         });
+        if (error) throw error;
       }
-      setShowResultModal(false);
+      setShowModal(false);
       await loadMatches();
       showMsg('✅ تم حفظ النتيجة بنجاح', 'success');
-    } catch (err) {
-      console.error(err);
-      showMsg('❌ خطأ في حفظ النتيجة', 'error');
+    } catch (err: any) {
+      console.error('saveActualResult error:', err);
+      showMsg('❌ خطأ في حفظ النتيجة: ' + (err?.message || ''), 'error');
     }
     setSavingResult(false);
   };
 
+  // ── Open ALL matches in current round ────────────────────────────────────
+  const openAllMatches = async () => {
+    setUpdating(true);
+    const filtered = matches.filter((m) => m.league.round === activeRound);
+    let ok = 0, fail = 0;
+    for (const match of filtered) {
+      const fixtureId = match.fixture.id;
+      try {
+        const { data: existing, error: selErr } = await supabase
+          .from('fixtures').select('id').eq('api_fixture_id', fixtureId).maybeSingle();
+        if (selErr) throw selErr;
+
+        if (existing) {
+          const { error } = await supabase
+            .from('fixtures').update({ is_open: true }).eq('api_fixture_id', fixtureId);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('fixtures').insert({
+            api_fixture_id: fixtureId, is_open: true,
+            home_team: match.teams.home.name, away_team: match.teams.away.name,
+            match_date: match.fixture.date, round: match.league.round,
+          });
+          if (error) throw error;
+        }
+        ok++;
+      } catch (err) {
+        console.error('openAllMatches error for', fixtureId, err);
+        fail++;
+      }
+    }
+    await loadMatches();
+    setUpdating(false);
+    if (fail === 0) {
+      showMsg(`✅ تم فتح ${ok} ماتش بنجاح`, 'success');
+    } else {
+      showMsg(`⚠️ تم فتح ${ok} — فشل ${fail}`, 'error');
+    }
+  };
+
+  // ── Close ALL matches ────────────────────────────────────────────────────
+  const closeAllMatches = async () => {
+    setUpdating(true);
+    try {
+      const res  = await fetch('/api/admin-close-all');
+      const data = await res.json();
+      showMsg(data.success ? '🔒 تم غلق كل الماتشات' : '❌ ' + data.error,
+              data.success ? 'success' : 'error');
+      await loadMatches();
+    } catch {
+      showMsg('❌ خطأ في الغلق', 'error');
+    }
+    setUpdating(false);
+  };
+
+  // ── Update all points ────────────────────────────────────────────────────
   const updateAllPoints = async () => {
     setUpdating(true);
     try {
-      const res = await fetch('/api/update-results');
+      const res  = await fetch('/api/update-results');
       const data = await res.json();
       if (data.success) {
         showMsg(data.message || '✅ تم تحديث النقاط', 'success');
@@ -184,81 +263,19 @@ export default function AdminPage() {
     setUpdating(false);
   };
 
+  // ── Sync fixtures ────────────────────────────────────────────────────────
   const syncFixtures = async () => {
     setSyncing(true);
     try {
-      const res = await fetch('/api/sync-fixtures');
+      const res  = await fetch('/api/sync-fixtures');
       const data = await res.json();
-      if (data.success) {
-        showMsg(`✅ تم مزامنة ${data.count || ''} ماتش`, 'success');
-        await loadMatches();
-      } else {
-        showMsg('❌ ' + data.error, 'error');
-      }
+      showMsg(data.success ? `✅ تم مزامنة ${data.count || ''} ماتش` : '❌ ' + data.error,
+              data.success ? 'success' : 'error');
+      await loadMatches();
     } catch {
       showMsg('❌ خطأ في المزامنة', 'error');
     }
     setSyncing(false);
-  };
-
-  // ✅ FIX: openAllMatches — maybeSingle() + error handling + رسايل تأكيد
-  const openAllMatches = async () => {
-    setUpdating(true);
-    const filtered = matches.filter((m) => m.league.round === activeRound);
-    let successCount = 0;
-    let errorCount = 0;
-    for (const match of filtered) {
-      const fixtureId = match.fixture.id;
-      try {
-        const { data: existing } = await supabase
-          .from('fixtures').select('id').eq('api_fixture_id', fixtureId).maybeSingle();
-        if (existing) {
-          const { error } = await supabase.from('fixtures').update({ is_open: true }).eq('api_fixture_id', fixtureId);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from('fixtures').insert({
-            api_fixture_id: fixtureId, is_open: true,
-            home_team: match.teams.home.name, away_team: match.teams.away.name,
-            match_date: match.fixture.date, round: match.league.round,
-          });
-          if (error) throw error;
-        }
-        successCount++;
-      } catch (err) {
-        console.error('Error opening match', fixtureId, err);
-        errorCount++;
-      }
-    }
-    await loadMatches();
-    setUpdating(false);
-    if (errorCount === 0) {
-      showMsg(`✅ تم فتح ${successCount} ماتش بنجاح`, 'success');
-    } else {
-      showMsg(`⚠️ تم فتح ${successCount} ماتش — فشل ${errorCount}`, 'error');
-    }
-  };
-
-  const closeAllMatches = async () => {
-    setUpdating(true);
-    try {
-      const res = await fetch('/api/admin-close-all');
-      const data = await res.json();
-      if (data.success) {
-        showMsg('🔒 تم غلق كل الماتشات', 'success');
-      } else {
-        showMsg('❌ ' + data.error, 'error');
-      }
-      await loadMatches();
-    } catch {
-      showMsg('❌ خطأ في الغلق', 'error');
-    }
-    setUpdating(false);
-  };
-
-  const showMsg = (msg: string, type: 'success' | 'error' = 'success') => {
-    setMessage(msg);
-    setMsgType(type);
-    setTimeout(() => setMessage(''), 4000);
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
@@ -299,7 +316,7 @@ export default function AdminPage() {
                 </button>
                 <button onClick={updateAllPoints} disabled={updating}
                   className="min-h-[40px] bg-green-700 hover:bg-green-600 disabled:opacity-50 px-4 py-2 rounded-2xl text-xs font-bold transition-colors">
-                  {updating ? '⏳ تحديث...' : '⚡ تحديث النقاط'}
+                  {updating ? '⏳ جاري التحديث...' : '⚡ تحديث النقاط'}
                 </button>
                 <button onClick={handleLogout}
                   className="min-h-[40px] bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-2xl text-xs font-bold transition-colors text-zinc-300">
@@ -309,9 +326,9 @@ export default function AdminPage() {
             </div>
           </header>
 
-          {/* Message */}
+          {/* Message banner */}
           {message && (
-            <div className={`px-5 py-3 rounded-2xl text-center text-sm font-bold border ${
+            <div className={`px-5 py-3 rounded-2xl text-center text-sm font-bold border transition-all ${
               msgType === 'success'
                 ? 'bg-green-500/10 border-green-500/30 text-green-400'
                 : 'bg-red-500/10 border-red-500/30 text-red-400'
@@ -340,7 +357,9 @@ export default function AdminPage() {
             {(['matches', 'predictions', 'leaderboard'] as const).map((tab) => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className={`shrink-0 min-h-[44px] px-5 py-2 rounded-2xl text-sm font-bold transition-colors ${
-                  activeTab === tab ? 'bg-red-600 text-white' : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-zinc-800'
+                  activeTab === tab
+                    ? 'bg-red-600 text-white'
+                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-zinc-800'
                 }`}>
                 {tab === 'matches'     ? `🏟️ الماتشات (${matches.length})`
                  : tab === 'predictions' ? `📋 التوقعات (${totalPredictions})`
@@ -349,7 +368,7 @@ export default function AdminPage() {
             ))}
           </div>
 
-          {/* ===== MATCHES TAB ===== */}
+          {/* ── MATCHES TAB ── */}
           {activeTab === 'matches' && (
             <section className="bg-zinc-900 rounded-3xl border border-zinc-800 p-4 sm:p-5 space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -360,7 +379,9 @@ export default function AdminPage() {
                         activeRound === round ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                       }`}>
                       {roundLabels[round]}
-                      <span className="mr-1 text-xs opacity-40">({matches.filter((m) => m.league.round === round).length})</span>
+                      <span className="mr-1 text-xs opacity-40">
+                        ({matches.filter((m) => m.league.round === round).length})
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -385,6 +406,7 @@ export default function AdminPage() {
                       className={`bg-zinc-950 rounded-2xl border p-4 ${
                         match.is_open ? 'border-green-500/30' : 'border-zinc-800'
                       }`}>
+
                       <div className="flex justify-between items-start mb-3 gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
@@ -395,7 +417,8 @@ export default function AdminPage() {
                           </div>
                           <p className="text-zinc-600 text-xs">
                             {new Date(match.fixture.date).toLocaleDateString('ar-EG', {
-                              weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                              weekday: 'short', month: 'short', day: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
                             })}
                           </p>
                         </div>
@@ -412,24 +435,26 @@ export default function AdminPage() {
                       </div>
 
                       {hasResult && (
-                        <div className="bg-green-950/30 border border-green-500/15 rounded-xl px-3 py-2.5 mb-3 space-y-1">
-                          <p className="text-green-400 font-black text-lg text-center">
+                        <div className="bg-green-950/30 border border-green-500/15 rounded-xl px-3 py-2.5 mb-3 space-y-1 text-center">
+                          <p className="text-green-400 font-black text-lg">
                             {match.actual_home_score} — {match.actual_away_score}
                           </p>
                           {match.first_scorer && (
-                            <p className="text-yellow-400 text-xs text-center">⚽ {match.first_scorer}</p>
+                            <p className="text-yellow-400 text-xs">⚽ {match.first_scorer}</p>
                           )}
                           {match.went_extra_time && (
-                            <p className="text-blue-400 text-xs text-center">⏱️ ذهب لوقت إضافي</p>
+                            <p className="text-blue-400 text-xs">⏱️ ذهب لوقت إضافي</p>
                           )}
                           {match.surprise_question && (
-                            <p className="text-purple-400 text-xs text-center">❓ {match.surprise_question}</p>
+                            <p className="text-purple-400 text-xs">❓ {match.surprise_question}</p>
                           )}
                         </div>
                       )}
 
                       <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => toggleMatchOpen(match)}
+                        <button
+                          type="button"
+                          onClick={() => toggleMatchOpen(match)}
                           className={`min-h-[44px] rounded-xl font-bold text-xs transition-colors ${
                             match.is_open
                               ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
@@ -437,7 +462,9 @@ export default function AdminPage() {
                           }`}>
                           {match.is_open ? '🔒 غلق التوقعات' : '🟢 فتح التوقعات'}
                         </button>
-                        <button onClick={() => openResultModal(match)}
+                        <button
+                          type="button"
+                          onClick={() => openResultModal(match)}
                           className="min-h-[44px] rounded-xl font-bold text-xs bg-red-700 hover:bg-red-600 transition-colors">
                           {hasResult ? '✏️ تعديل النتيجة' : '⚽ إدخال النتيجة'}
                         </button>
@@ -449,21 +476,16 @@ export default function AdminPage() {
             </section>
           )}
 
-          {/* ===== PREDICTIONS TAB ===== */}
+          {/* ── PREDICTIONS TAB ── */}
           {activeTab === 'predictions' && (
             <section className="bg-zinc-900 rounded-3xl border border-zinc-800 p-4 sm:p-5">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs min-w-[640px]">
                   <thead>
                     <tr className="border-b border-zinc-800 text-zinc-500">
-                      <th className="text-right py-3 px-3 font-medium">المستخدم</th>
-                      <th className="text-right py-3 px-3 font-medium">الماتش</th>
-                      <th className="text-center py-3 px-3 font-medium">توقعي</th>
-                      <th className="text-center py-3 px-3 font-medium">الفعلية</th>
-                      <th className="text-center py-3 px-3 font-medium">أول هدف</th>
-                      <th className="text-center py-3 px-3 font-medium">إضافي</th>
-                      <th className="text-center py-3 px-3 font-medium">مفاجأة</th>
-                      <th className="text-center py-3 px-3 font-medium">النقاط</th>
+                      {['المستخدم','الماتش','توقعي','الفعلية','أول هدف','إضافي','مفاجأة','النقاط'].map((h, i) => (
+                        <th key={h} className={`py-3 px-3 font-medium ${i > 1 ? 'text-center' : 'text-right'}`}>{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -471,7 +493,7 @@ export default function AdminPage() {
                       <tr key={p.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/40 transition-colors">
                         <td className="py-3 px-3 text-zinc-400">{p.user_email?.split('@')[0]}</td>
                         <td className="py-3 px-3 max-w-[160px] truncate text-zinc-300">{p.home_team} × {p.away_team}</td>
-                        <td className="py-3 px-3 text-center font-black text-white">{p.predicted_home_score} - {p.predicted_away_score}</td>
+                        <td className="py-3 px-3 text-center font-black">{p.predicted_home_score} - {p.predicted_away_score}</td>
                         <td className="py-3 px-3 text-center text-green-400 font-bold">
                           {p.actual_home_score !== null ? `${p.actual_home_score} - ${p.actual_away_score}` : '⏳'}
                         </td>
@@ -485,7 +507,7 @@ export default function AdminPage() {
                             : p.actual_home_score !== null ? 'bg-zinc-800 text-zinc-400'
                             : 'bg-zinc-800/50 text-zinc-600'
                           }`}>
-                            {p.actual_home_score !== null ? p.points || 0 : '—'}
+                            {p.actual_home_score !== null ? (p.points || 0) : '—'}
                           </span>
                         </td>
                       </tr>
@@ -499,11 +521,13 @@ export default function AdminPage() {
             </section>
           )}
 
-          {/* ===== LEADERBOARD TAB ===== */}
+          {/* ── LEADERBOARD TAB ── */}
           {activeTab === 'leaderboard' && (
             <section className="space-y-2">
               {leaderboard.length === 0 ? (
-                <div className="py-20 text-center text-zinc-600 bg-zinc-900 rounded-3xl border border-zinc-800">لا توجد بيانات بعد</div>
+                <div className="py-20 text-center text-zinc-600 bg-zinc-900 rounded-3xl border border-zinc-800">
+                  لا توجد بيانات بعد
+                </div>
               ) : leaderboard.map((player: any, index) => {
                 const medals = ['🥇', '🥈', '🥉'];
                 return (
@@ -535,15 +559,21 @@ export default function AdminPage() {
         </div>
       </main>
 
-      {/* ===== RESULT MODAL ===== */}
-      {showResultModal && selectedMatch && (
-        <div className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center bg-black/90"
-          onClick={() => setShowResultModal(false)}>
-          <div className="w-full max-w-lg mx-0 sm:mx-4 rounded-t-3xl sm:rounded-3xl border border-zinc-700 bg-zinc-900 shadow-2xl max-h-[92dvh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}>
-
+      {/* ══════════════════════════════════════════════════════
+          RESULT MODAL — rendered at root level, always in DOM
+          only visible when showModal === true
+      ══════════════════════════════════════════════════════ */}
+      {showModal && selectedMatch && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center bg-black/90"
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            className="w-full max-w-lg mx-0 sm:mx-4 rounded-t-3xl sm:rounded-3xl border border-zinc-700 bg-zinc-900 shadow-2xl max-h-[92dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal header */}
-            <div className="sticky top-0 bg-zinc-900 border-b border-zinc-800 px-5 pt-5 pb-4">
+            <div className="sticky top-0 bg-zinc-900 border-b border-zinc-800 px-5 pt-5 pb-4 z-10">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-zinc-500 text-xs mb-1">إدخال نتيجة المباراة</p>
@@ -551,15 +581,16 @@ export default function AdminPage() {
                     {selectedMatch.teams.home.name} × {selectedMatch.teams.away.name}
                   </h2>
                 </div>
-                <button onClick={() => setShowResultModal(false)}
-                  className="shrink-0 w-9 h-9 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 flex items-center justify-center text-lg transition-colors">
-                  ×
-                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="shrink-0 w-9 h-9 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 flex items-center justify-center text-xl transition-colors"
+                >×</button>
               </div>
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Score inputs */}
+              {/* Score */}
               <div>
                 <p className="text-zinc-500 text-xs mb-3 font-medium">النتيجة الفعلية</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -569,9 +600,10 @@ export default function AdminPage() {
                   ].map(({ key, team }) => (
                     <div key={key} className="text-center bg-zinc-800 rounded-2xl p-3">
                       <p className="text-zinc-400 text-xs mb-3 truncate">{team}</p>
-                      <input type="number" min={0}
+                      <input
+                        type="number" min={0}
                         value={(actualForm as any)[key]}
-                        onChange={(e) => setActualForm({ ...actualForm, [key]: Number(e.target.value) })}
+                        onChange={(e) => setActualForm((f) => ({ ...f, [key]: Number(e.target.value) }))}
                         className="h-16 w-full rounded-xl bg-white text-black text-3xl font-black text-center outline-none"
                       />
                     </div>
@@ -583,7 +615,7 @@ export default function AdminPage() {
               <div>
                 <label className="block text-zinc-500 text-xs mb-2 font-medium">⚽ أول هدف</label>
                 <input type="text" value={actualForm.firstScorer}
-                  onChange={(e) => setActualForm({ ...actualForm, firstScorer: e.target.value })}
+                  onChange={(e) => setActualForm((f) => ({ ...f, firstScorer: e.target.value }))}
                   className="w-full min-h-[48px] bg-zinc-800 border border-zinc-700 focus:border-red-500 text-white px-4 py-3 rounded-2xl text-sm outline-none transition-colors placeholder:text-zinc-600"
                   placeholder="مثال: محمد صلاح" />
               </div>
@@ -591,7 +623,7 @@ export default function AdminPage() {
               {/* Extra time */}
               <label className="flex items-center gap-3 min-h-[48px] bg-zinc-800 px-4 py-3 rounded-2xl border border-zinc-700 cursor-pointer hover:bg-zinc-700/50 transition-colors">
                 <input type="checkbox" checked={actualForm.wentExtraTime}
-                  onChange={(e) => setActualForm({ ...actualForm, wentExtraTime: e.target.checked })}
+                  onChange={(e) => setActualForm((f) => ({ ...f, wentExtraTime: e.target.checked }))}
                   className="w-5 h-5 accent-red-600 shrink-0" />
                 <span className="text-zinc-300 text-sm">⏱️ الماتش راح لوقت إضافي؟</span>
               </label>
@@ -602,7 +634,7 @@ export default function AdminPage() {
                   ❓ سؤال المفاجأة <span className="text-zinc-600">(يظهر للمستخدمين)</span>
                 </label>
                 <input type="text" value={actualForm.surpriseQuestion}
-                  onChange={(e) => setActualForm({ ...actualForm, surpriseQuestion: e.target.value })}
+                  onChange={(e) => setActualForm((f) => ({ ...f, surpriseQuestion: e.target.value }))}
                   className="w-full min-h-[48px] bg-zinc-800 border border-zinc-700 focus:border-purple-500 text-white px-4 py-3 rounded-2xl text-sm outline-none transition-colors placeholder:text-zinc-600"
                   placeholder="مثال: من هيكون أفضل لاعب؟" />
               </div>
@@ -613,12 +645,12 @@ export default function AdminPage() {
                   🎯 الإجابة الصحيحة <span className="text-yellow-500/70">+5 نقاط</span>
                 </label>
                 <input type="text" value={actualForm.surpriseAnswer}
-                  onChange={(e) => setActualForm({ ...actualForm, surpriseAnswer: e.target.value })}
+                  onChange={(e) => setActualForm((f) => ({ ...f, surpriseAnswer: e.target.value }))}
                   className="w-full min-h-[48px] bg-zinc-800 border border-zinc-700 focus:border-purple-500 text-white px-4 py-3 rounded-2xl text-sm outline-none transition-colors placeholder:text-zinc-600"
                   placeholder="الإجابة الصحيحة" />
               </div>
 
-              {/* Points ref */}
+              {/* Points reference */}
               <div className="bg-zinc-950 rounded-2xl p-4 border border-zinc-800 grid grid-cols-2 gap-2 text-xs">
                 <p className="text-yellow-400">🏆 نتيجة كاملة = 10 نقاط</p>
                 <p className="text-green-400">✅ فايز صح = 5 نقاط</p>
@@ -629,11 +661,16 @@ export default function AdminPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3 pb-2">
-                <button onClick={saveActualResult} disabled={savingResult}
+                <button
+                  type="button"
+                  onClick={saveActualResult}
+                  disabled={savingResult}
                   className="min-h-[52px] rounded-2xl font-black text-sm bg-red-600 hover:bg-red-500 disabled:opacity-50 transition-colors">
                   {savingResult ? '⏳ جاري الحفظ...' : '💾 حفظ النتيجة'}
                 </button>
-                <button onClick={() => setShowResultModal(false)}
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
                   className="min-h-[52px] rounded-2xl font-bold text-sm bg-zinc-800 hover:bg-zinc-700 transition-colors text-zinc-300">
                   إلغاء
                 </button>
