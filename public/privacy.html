@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>سياسة الخصوصية — الشمعدان</title>
+  <style>
+  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+  :root {
+    --bg:        #070809;
+    --surface:   #111315;
+    --surface-2: #171a1d;
+    --surface-3: #1d2125;
+    --line:      rgba(255,255,255,.08);
+    --text:      #f4f1e8;
+    --muted:     #a8a39a;
+    --gold:      #d9b25f;
+    --gold-soft: rgba(217,178,95,.14);
+    --red:       #c93a2f;
+    --green:     #27b06e;
+    --radius:    22px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: 'Cairo', sans-serif;
+    background:
+      radial-gradient(circle at top left,  rgba(217,178,95,.10) 0%, transparent 28%),
+      radial-gradient(circle at top right, rgba(201,58,47,.10)  0%, transparent 26%),
+      linear-gradient(180deg, #070809 0%, #0b0d0f 100%);
+    color: var(--text);
+    min-height: 100vh;
+    direction: rtl;
+  }
+  a { color: var(--gold); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* nav */
+  nav {
+    position: fixed; top: 0; inset-inline: 0; z-index: 50;
+    background: rgba(7,8,9,.88);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-inner {
+    max-width: 820px; margin: 0 auto;
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .nav-icon {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg,#f0cf84,#a97b26);
+    display: grid; place-items: center; font-size: 16px;
+    box-shadow: 0 4px 12px rgba(217,178,95,.22); flex-shrink: 0;
+  }
+  .nav-title { font-weight: 900; color: var(--gold); font-size: 15px; }
+  .nav-back {
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+    text-decoration: none; transition: color .18s;
+  }
+  .nav-back:hover { color: var(--text); text-decoration: none; }
+
+  /* page wrapper */
+  .page { max-width: 820px; margin: 0 auto; padding: 90px 20px 60px; }
+
+  /* hero */
+  .hero {
+    background: linear-gradient(180deg,rgba(217,178,95,.08),transparent 18%), var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    padding: 32px 28px 24px;
+    margin-bottom: 20px;
+  }
+  .hero-icon {
+    width: 52px; height: 52px; border-radius: 16px;
+    background: linear-gradient(135deg,#f0cf84,#a97b26);
+    display: grid; place-items: center; font-size: 24px;
+    box-shadow: 0 8px 24px rgba(217,178,95,.22);
+    margin-bottom: 16px;
+  }
+  .hero h1 { font-size: clamp(22px,4vw,30px); font-weight: 900; color: var(--gold); margin-bottom: 8px; }
+  .hero-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .badge {
+    font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 999px;
+    background: var(--gold-soft); color: var(--gold);
+    border: 1px solid rgba(217,178,95,.25);
+  }
+  .badge-date { background: rgba(255,255,255,.05); color: var(--muted); border-color: var(--line); }
+
+  /* content panel */
+  .panel {
+    background: linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015));
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 26px 28px;
+    margin-bottom: 16px;
+    display: flex; flex-direction: column; gap: 22px;
+  }
+
+  /* section inside panel */
+  .section-title {
+    font-size: 14px; font-weight: 800; color: var(--gold);
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .section-title .num {
+    width: 24px; height: 24px; border-radius: 8px;
+    background: var(--gold-soft); border: 1px solid rgba(217,178,95,.25);
+    color: var(--gold); font-size: 11px; font-weight: 900;
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  p, li { font-size: 14px; color: var(--muted); line-height: 1.8; }
+  ul, ol { padding-inline-start: 20px; display: flex; flex-direction: column; gap: 6px; }
+  li::marker { color: var(--gold); }
+  strong { color: var(--text); font-weight: 700; }
+
+  /* warning / info boxes */
+  .box-warn {
+    background: rgba(201,58,47,.10); border: 1px solid rgba(201,58,47,.25);
+    border-radius: 16px; padding: 14px 18px;
+    display: flex; align-items: flex-start; gap: 12;
+    font-size: 13px; color: #ff9c91; font-weight: 600;
+  }
+  .box-info {
+    background: rgba(217,178,95,.08); border: 1px solid rgba(217,178,95,.2);
+    border-radius: 16px; padding: 14px 18px;
+    font-size: 13px; color: #f2d79e; font-weight: 600;
+  }
+
+  /* steps */
+  .step { display: flex; align-items: flex-start; gap: 14; }
+  .step-num {
+    width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+    background: var(--gold-soft); border: 1px solid rgba(217,178,95,.25);
+    color: var(--gold); font-weight: 900; font-size: 14px;
+    display: grid; place-items: center;
+  }
+  .step-text { font-size: 14px; color: var(--muted); line-height: 1.7; padding-top: 5px; }
+
+  /* contact card */
+  .contact-card {
+    background: var(--surface-3); border: 1px solid var(--line);
+    border-radius: 18px; padding: 18px 20px;
+    display: flex; align-items: center; gap: 14;
+  }
+  .contact-icon {
+    width: 42px; height: 42px; border-radius: 13px; flex-shrink: 0;
+    background: var(--gold-soft); border: 1px solid rgba(217,178,95,.2);
+    display: grid; place-items: center; font-size: 20px;
+  }
+
+  /* footer */
+  footer {
+    text-align: center; padding: 32px 20px;
+    border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 12px;
+    max-width: 820px; margin: 0 auto;
+  }
+  footer .footer-links { display: flex; justify-content: center; gap: 20px; margin-top: 10px; flex-wrap: wrap; }
+  footer a { color: var(--muted); font-size: 12px; }
+  footer a:hover { color: var(--gold); text-decoration: none; }
+
+  @media (max-width: 500px) {
+    .panel { padding: 20px 16px; }
+    .hero  { padding: 24px 18px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="/">
+      <div class="nav-icon">🏆</div>
+      <span class="nav-title">الشمعدان × كأس العالم 2026</span>
+    </a>
+    <a class="nav-back" href="/">← الرئيسية</a>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-icon">🔒</div>
+    <h1>سياسة الخصوصية</h1>
+    <p style="font-size:14px;margin-top:6px;">
+      نحن نحترم خصوصيتك ونلتزم بحماية بياناتك الشخصية على منصة <strong>الشمعدان — كأس العالم 2026</strong>.
+    </p>
+    <div class="hero-meta">
+      <span class="badge">🌐 shamdans-dawry-tokaat.vercel.app</span>
+      <span class="badge badge-date">📅 آخر تحديث: أبريل 2026</span>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="panel">
+
+    <!-- 1 -->
+    <div>
+      <div class="section-title"><span class="num">١</span> البيانات التي نجمعها</div>
+      <p>عند تسجيل الدخول عبر حسابك على Google أو Facebook أو بالإيميل، قد نجمع:</p>
+      <ul style="margin-top:10px;">
+        <li>الاسم الكامل</li>
+        <li>عنوان البريد الإلكتروني</li>
+        <li>صورة الملف الشخصي (إن وُجدت)</li>
+        <li>معرّف الحساب (User ID)</li>
+      </ul>
+    </div>
+
+    <!-- 2 -->
+    <div>
+      <div class="section-title"><span class="num">٢</span> كيف نستخدم بياناتك</div>
+      <ul>
+        <li>تسجيل الدخول والتعرف على هوية المستخدم</li>
+        <li>حفظ توقعاتك ونقاطك داخل المنصة</li>
+        <li>عرض الترتيب في لوحة الصدارة</li>
+        <li>تحسين تجربة الاستخدام بشكل عام</li>
+      </ul>
+    </div>
+
+    <!-- 3 -->
+    <div>
+      <div class="section-title"><span class="num">٣</span> مشاركة البيانات مع أطراف ثالثة</div>
+      <p>لا نبيع بياناتك الشخصية ولا نشاركها مع أي طرف ثالث إلا في الحالات التالية:</p>
+      <ul style="margin-top:10px;">
+        <li>عند الضرورة القانونية بموجب أمر قضائي أو طلب رسمي</li>
+        <li>مزودو الخدمة الذين يساعدوننا في تشغيل المنصة مثل <strong>Supabase</strong> للتخزين و<strong>Vercel</strong> للاستضافة</li>
+      </ul>
+    </div>
+
+    <!-- 4 -->
+    <div>
+      <div class="section-title"><span class="num">٤</span> تخزين البيانات وحمايتها</div>
+      <p>
+        يتم تخزين بياناتك بشكل آمن عبر منصة <strong>Supabase</strong> باستخدام تشفير SSL/TLS،
+        ونطبق معايير أمان عالية لحماية معلوماتك من الوصول غير المصرح به.
+      </p>
+    </div>
+
+    <!-- 5 -->
+    <div>
+      <div class="section-title"><span class="num">٥</span> ملفات تعريف الارتباط (Cookies)</div>
+      <p>
+        نستخدم ملفات Cookies لإدارة جلسة تسجيل الدخول والحفاظ عليها أثناء تصفح الموقع فقط،
+        ولا نستخدمها لأغراض تتبع أو إعلانية.
+      </p>
+    </div>
+
+    <!-- 6 -->
+    <div>
+      <div class="section-title"><span class="num">٦</span> حقوقك</div>
+      <p>لديك الحق الكامل في:</p>
+      <ul style="margin-top:10px;">
+        <li>الاطلاع على بياناتك الشخصية المخزنة لدينا</li>
+        <li>طلب تصحيح أي بيانات غير دقيقة</li>
+        <li>طلب حذف حسابك وجميع بياناتك نهائياً — <a href="/delete-account">صفحة حذف الحساب</a></li>
+      </ul>
+    </div>
+
+    <!-- 7 -->
+    <div>
+      <div class="section-title"><span class="num">٧</span> التواصل معنا</div>
+      <div class="contact-card">
+        <div class="contact-icon">🌐</div>
+        <div>
+          <p style="color:var(--text);font-weight:700;margin-bottom:4px;">موقع الشمعدان</p>
+          <a href="https://shamdans-dawry-tokaat.vercel.app" target="_blank" rel="noopener">
+            shamdans-dawry-tokaat.vercel.app
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  <p>© 2026 الشمعدان — كأس العالم 2026. جميع الحقوق محفوظة.</p>
+  <div class="footer-links">
+    <a href="/">الرئيسية</a>
+    <a href="/privacy">سياسة الخصوصية</a>
+    <a href="/delete-account">حذف الحساب</a>
+  </div>
+</footer>
+
+</body>
+</html>
