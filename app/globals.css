@@ -2,6 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Google Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=Cairo:wght@400;600;700;800;900&display=swap');
+
+/* ══════════════════════════════════════════
+   FIFA 2026 — Design System Variables
+   ══════════════════════════════════════════ */
+:root {
+  --fifa-bg:        #070809;
+  --fifa-surface:   #111315;
+  --fifa-surface-2: #171a1d;
+  --fifa-surface-3: #1d2125;
+  --fifa-line:      rgba(255,255,255,.08);
+  --fifa-text:      #f4f1e8;
+  --fifa-muted:     #a8a39a;
+  --fifa-gold:      #d9b25f;
+  --fifa-gold-soft: rgba(217,178,95,.14);
+  --fifa-red:       #c93a2f;
+  --fifa-green:     #27b06e;
+  --fifa-blue:      #3b82f6;
+  --fifa-radius:    22px;
+  --fifa-shadow:    0 16px 40px rgba(0,0,0,.4);
+}
+
 @layer base {
   *, *::before, *::after {
     box-sizing: border-box;
@@ -15,7 +38,7 @@
   }
 
   body {
-    font-family: 'Tajawal', sans-serif;
+    font-family: 'Tajawal', 'Cairo', sans-serif;
     min-height: 100dvh;
   }
 
@@ -40,4 +63,204 @@
       scroll-behavior: auto !important;
     }
   }
+}
+
+/* ══════════════════════════════════════════
+   FIFA Admin — Component Classes
+   ══════════════════════════════════════════ */
+
+/* Page background */
+.fifa-admin {
+  font-family: 'Cairo', 'Tajawal', sans-serif;
+  background:
+    radial-gradient(circle at top left,  rgba(217,178,95,.10) 0%, transparent 28%),
+    radial-gradient(circle at top right, rgba(201,58,47,.10)  0%, transparent 26%),
+    linear-gradient(180deg, #070809 0%, #0b0d0f 100%);
+  color: var(--fifa-text);
+  min-height: 100vh;
+}
+
+/* ── Buttons ── */
+.fifa-btn {
+  font-family: 'Cairo', 'Tajawal', sans-serif;
+  border: 1px solid var(--fifa-line);
+  background: var(--fifa-surface-2);
+  color: var(--fifa-text);
+  border-radius: 14px;
+  padding: 11px 18px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .18s;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.fifa-btn:hover            { background: var(--fifa-surface-3); border-color: rgba(255,255,255,.14); }
+.fifa-btn-gold             { background: linear-gradient(135deg,#e0bc73,#b9892d) !important; color: #211708 !important; border: none !important; }
+.fifa-btn-gold:hover       { background: linear-gradient(135deg,#eecb80,#c8992f) !important; }
+.fifa-btn-green            { background: rgba(39,176,110,.15) !important; color: #5effa8 !important; border-color: rgba(39,176,110,.25) !important; }
+.fifa-btn-green:hover      { background: rgba(39,176,110,.22) !important; }
+.fifa-btn-red              { background: rgba(201,58,47,.15) !important; color: #ff9c91 !important; border-color: rgba(201,58,47,.25) !important; }
+.fifa-btn-red:hover        { background: rgba(201,58,47,.22) !important; }
+.fifa-btn-ghost            { background: transparent !important; color: var(--fifa-muted) !important; border-color: var(--fifa-line) !important; }
+.fifa-btn-ghost:hover      { background: var(--fifa-surface-2) !important; color: var(--fifa-text) !important; }
+
+/* ── Panels & Cards ── */
+.fifa-panel {
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+  border: 1px solid var(--fifa-line);
+  border-radius: 26px;
+  padding: 22px;
+}
+.fifa-card {
+  background: var(--fifa-surface);
+  border: 1px solid var(--fifa-line);
+  border-radius: 20px;
+  padding: 16px;
+  transition: border-color .18s;
+}
+.fifa-card-open { border-color: rgba(39,176,110,.35) !important; }
+
+/* ── Status Pills ── */
+.fifa-pill-open {
+  background: rgba(39,176,110,.14);
+  color: #5effa8;
+  border: 1px solid rgba(39,176,110,.25);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.fifa-pill-closed {
+  background: rgba(255,255,255,.06);
+  color: var(--fifa-muted);
+  border: 1px solid var(--fifa-line);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ── Stat Cards ── */
+.fifa-stat {
+  background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+  border: 1px solid var(--fifa-line);
+  border-radius: var(--fifa-radius);
+  padding: 18px;
+  text-align: center;
+}
+
+/* ── Tabs ── */
+.fifa-tab {
+  background: var(--fifa-surface-2);
+  border: 1px solid var(--fifa-line);
+  color: var(--fifa-muted);
+  border-radius: 999px;
+  padding: 11px 20px;
+  font-family: 'Cairo', 'Tajawal', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .18s;
+  min-height: 44px;
+  white-space: nowrap;
+}
+.fifa-tab:hover      { background: var(--fifa-surface-3); color: var(--fifa-text); }
+.fifa-tab-active     { background: var(--fifa-red) !important; color: #fff !important; border-color: transparent !important; }
+
+/* ── Round Tabs ── */
+.fifa-round-tab {
+  background: var(--fifa-surface-3);
+  border: 1px solid var(--fifa-line);
+  color: var(--fifa-muted);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-family: 'Cairo', 'Tajawal', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .18s;
+  min-height: 40px;
+}
+.fifa-round-tab-active { background: #fff !important; color: #000 !important; border-color: #fff !important; }
+
+/* ── Result Box ── */
+.fifa-result-box {
+  background: rgba(39,176,110,.08);
+  border: 1px solid rgba(39,176,110,.16);
+  border-radius: 14px;
+  padding: 10px 14px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+/* ── Modal ── */
+.fifa-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0,0,0,.88);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+@media (min-width: 640px) {
+  .fifa-modal-overlay { align-items: center; }
+}
+.fifa-modal {
+  width: 100%;
+  max-width: 520px;
+  background: var(--fifa-surface-2);
+  border: 1px solid rgba(217,178,95,.2);
+  border-radius: 28px 28px 0 0;
+  max-height: 92dvh;
+  overflow-y: auto;
+  box-shadow: var(--fifa-shadow);
+}
+@media (min-width: 640px) {
+  .fifa-modal { border-radius: 28px; margin: 16px; }
+}
+
+/* ── Form Input ── */
+.fifa-field-input {
+  width: 100%;
+  min-height: 48px;
+  background: var(--fifa-surface-3);
+  border: 1px solid var(--fifa-line);
+  color: var(--fifa-text);
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-family: 'Cairo', 'Tajawal', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .18s;
+}
+.fifa-field-input:focus { border-color: var(--fifa-gold); }
+
+/* ── Message Banner ── */
+.fifa-msg-success {
+  background: rgba(39,176,110,.12);
+  border: 1px solid rgba(39,176,110,.25);
+  color: #5effa8;
+  padding: 14px 20px;
+  border-radius: 16px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+.fifa-msg-error {
+  background: rgba(201,58,47,.12);
+  border: 1px solid rgba(201,58,47,.25);
+  color: #ff9c91;
+  padding: 14px 20px;
+  border-radius: 16px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  .fifa-matches-grid { grid-template-columns: 1fr !important; }
+  .fifa-stats-grid   { grid-template-columns: 1fr 1fr !important; }
 }
