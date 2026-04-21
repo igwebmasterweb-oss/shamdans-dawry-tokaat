@@ -9,22 +9,22 @@ export default function Dashboard() {
   const [predictions, setPredictions] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [loading, setLoading]         = useState(true);
-  const [activeTab, setActiveTab]     = useState<'predict' | 'my' | 'leaders'>('predict');
+  const [activeTab, setActiveTab]     = useState<'predict'|'my'|'leaders'>('predict');
   const [activeRound, setActiveRound] = useState('Group Stage - 1');
-  const [predForms, setPredForms]     = useState<Record<number, any>>({});
-  const [submitting, setSubmitting]   = useState<number | null>(null);
-  const [messages, setMessages]       = useState<Record<number, string>>({});
+  const [predForms, setPredForms]     = useState<Record<number,any>>({});
+  const [submitting, setSubmitting]   = useState<number|null>(null);
+  const [messages, setMessages]       = useState<Record<number,string>>({});
 
   const router = useRouter();
-  const rounds = ['Group Stage - 1', 'Group Stage - 2', 'Group Stage - 3'];
-  const roundLabels: Record<string, string> = {
-    'Group Stage - 1': 'الجولة الأولى',
-    'Group Stage - 2': 'الجولة الثانية',
-    'Group Stage - 3': 'الجولة الثالثة',
+  const rounds = ['Group Stage - 1','Group Stage - 2','Group Stage - 3'];
+  const roundLabels: Record<string,string> = {
+    'Group Stage - 1':'الجولة الأولى',
+    'Group Stage - 2':'الجولة الثانية',
+    'Group Stage - 3':'الجولة الثالثة',
   };
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({data}) => {
       if (!data.user) { router.push('/login'); return; }
       setUser(data.user);
       loadData(data.user.id);
@@ -33,16 +33,15 @@ export default function Dashboard() {
 
   const loadData = async (userId: string) => {
     try {
-      const res = await fetch('/api/fixtures');
+      const res  = await fetch('/api/fixtures');
       const data = await res.json();
       const apiMatches = data.response || [];
 
       const { data: sbFixtures } = await supabase
         .from('fixtures')
-        .select('api_fixture_id, is_open, actual_home_score, actual_away_score, first_scorer, went_extra_time, surprise_answer, surprise_question');
+        .select('api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,surprise_answer,surprise_question');
 
       const sbMap = new Map(sbFixtures?.map((f: any) => [f.api_fixture_id, f]) || []);
-
       const merged = apiMatches.map((m: any) => {
         const sb = sbMap.get(m.fixture.id);
         return {
@@ -63,46 +62,40 @@ export default function Dashboard() {
       setPredictions(userPreds || []);
 
       const { data: allPreds } = await supabase
-        .from('predictions').select('user_id, user_email, points');
-
+        .from('predictions').select('user_id,user_email,points');
       const grouped: any = {};
       allPreds?.forEach((row: any) => {
-        if (!grouped[row.user_id]) {
-          grouped[row.user_id] = { user_id: row.user_id, user_email: row.user_email, totalPoints: 0, count: 0 };
-        }
-        grouped[row.user_id].totalPoints += row.points || 0;
+        if (!grouped[row.user_id])
+          grouped[row.user_id] = {user_id:row.user_id,user_email:row.user_email,totalPoints:0,count:0};
+        grouped[row.user_id].totalPoints += row.points||0;
         grouped[row.user_id].count += 1;
       });
-      setLeaderboard(Object.values(grouped).sort((a: any, b: any) => b.totalPoints - a.totalPoints));
+      setLeaderboard(Object.values(grouped).sort((a:any,b:any) => b.totalPoints-a.totalPoints));
     } catch (err) { console.error(err); }
     setLoading(false);
   };
 
   const getForm = (match: any) => {
     if (predForms[match.fixture.id]) return predForms[match.fixture.id];
-    const existing = predictions.find((p) => p.fixture_id === match.fixture.id);
+    const ex = predictions.find(p => p.fixture_id===match.fixture.id);
     return {
-      homeScore:      existing?.predicted_home_score   ?? 0,
-      awayScore:      existing?.predicted_away_score   ?? 0,
-      firstScorer:    existing?.predicted_first_scorer ?? '',
-      extraTime:      existing?.predicted_extra_time   ?? false,
-      surpriseAnswer: existing?.surprise_answer        ?? '',
+      homeScore:      ex?.predicted_home_score   ?? 0,
+      awayScore:      ex?.predicted_away_score   ?? 0,
+      firstScorer:    ex?.predicted_first_scorer ?? '',
+      extraTime:      ex?.predicted_extra_time   ?? false,
+      surpriseAnswer: ex?.surprise_answer        ?? '',
     };
   };
 
-  const setForm = (fixtureId: number, patch: any) => {
-    setPredForms((prev) => ({
-      ...prev,
-      [fixtureId]: { ...getForm({ fixture: { id: fixtureId } }), ...patch },
-    }));
-  };
+  const setForm = (fixtureId: number, patch: any) =>
+    setPredForms(prev => ({...prev,[fixtureId]:{...getForm({fixture:{id:fixtureId}}),...patch}}));
 
   const submitPrediction = async (match: any) => {
     if (!user) return;
     setSubmitting(match.fixture.id);
     const form = getForm(match);
     try {
-      const existing = predictions.find((p) => p.fixture_id === match.fixture.id);
+      const ex = predictions.find(p => p.fixture_id===match.fixture.id);
       const payload = {
         user_id:                user.id,
         user_email:             user.email,
@@ -111,25 +104,23 @@ export default function Dashboard() {
         away_team:              match.teams.away.name,
         predicted_home_score:   form.homeScore,
         predicted_away_score:   form.awayScore,
-        predicted_first_scorer: form.firstScorer || null,
+        predicted_first_scorer: form.firstScorer||null,
         predicted_extra_time:   form.extraTime,
-        surprise_answer:        form.surpriseAnswer || null,
+        surprise_answer:        form.surpriseAnswer||null,
         submitted_at:           new Date().toISOString(),
-        points:                 existing?.points ?? 0,
+        points:                 ex?.points ?? 0,
         actual_home_score:      null,
         actual_away_score:      null,
       };
-      if (existing) {
-        await supabase.from('predictions').update(payload).eq('id', existing.id);
-      } else {
-        await supabase.from('predictions').insert(payload);
-      }
-      const { data } = await supabase.from('predictions').select('*').eq('user_id', user.id);
-      setPredictions(data || []);
-      setMessages((m) => ({ ...m, [match.fixture.id]: '✅ تم الحفظ!' }));
-      setTimeout(() => setMessages((m) => ({ ...m, [match.fixture.id]: '' })), 3000);
+      if (ex) await supabase.from('predictions').update(payload).eq('id',ex.id);
+      else     await supabase.from('predictions').insert(payload);
+
+      const { data } = await supabase.from('predictions').select('*').eq('user_id',user.id);
+      setPredictions(data||[]);
+      setMessages(m=>({...m,[match.fixture.id]:'✅ تم الحفظ!'}));
+      setTimeout(()=>setMessages(m=>({...m,[match.fixture.id]:''})),3000);
     } catch {
-      setMessages((m) => ({ ...m, [match.fixture.id]: '❌ خطأ في الحفظ' }));
+      setMessages(m=>({...m,[match.fixture.id]:'❌ خطأ في الحفظ'}));
     }
     setSubmitting(null);
   };
@@ -137,231 +128,257 @@ export default function Dashboard() {
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
   if (loading) return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <div className="text-center space-y-3">
-        <p className="text-4xl animate-pulse">🏆</p>
-        <p className="text-zinc-400 text-sm">جاري التحميل...</p>
+    <div className="fifa-admin" style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{textAlign:'center'}}>
+        <p style={{fontSize:48,marginBottom:12,animation:'pulse 1.5s infinite'}}>🏆</p>
+        <p style={{color:'var(--fifa-muted)',fontSize:14}}>جاري التحميل...</p>
       </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
     </div>
   );
 
-  const myPoints = predictions.reduce((s, p) => s + (p.points || 0), 0);
-  const myRank   = leaderboard.findIndex((p) => p.user_id === user?.id) + 1;
-  const filteredMatches = matches.filter((m) => m.league.round === activeRound);
+  const myPoints = predictions.reduce((s,p)=>s+(p.points||0),0);
+  const myRank   = leaderboard.findIndex(p=>p.user_id===user?.id)+1;
+  const filteredMatches = matches.filter(m=>m.league.round===activeRound);
+  const medals = ['🥇','🥈','🥉'];
 
   return (
-    <main className="min-h-screen bg-black text-white" dir="rtl">
-      <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+    <main className="fifa-admin" dir="rtl" style={{minHeight:'100vh',padding:'0 0 40px'}}>
+      <div style={{maxWidth:680,margin:'0 auto',padding:'20px 16px',display:'flex',flexDirection:'column',gap:14}}>
 
-        {/* Header */}
-        <header className="bg-zinc-900 rounded-3xl border border-zinc-800 p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">🏆</span>
+        {/* ── HEADER ── */}
+        <header className="fifa-panel" style={{
+          padding:'18px 20px',
+          background:'linear-gradient(180deg,rgba(217,178,95,.08),transparent 20%),var(--fifa-surface)',
+        }}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+            <div style={{display:'flex',alignItems:'center',gap:12}}>
+              <div style={{
+                width:44,height:44,borderRadius:14,
+                background:'linear-gradient(135deg,#f0cf84,#a97b26)',
+                display:'grid',placeItems:'center',fontSize:22,
+                boxShadow:'0 8px 20px rgba(217,178,95,.22)',flexShrink:0,
+              }}>🏆</div>
               <div>
-                <h1 className="text-lg font-black text-red-500 leading-tight">الشمعدان × كأس العالم</h1>
-                <p className="text-zinc-500 text-xs mt-0.5">أهلاً {user?.email?.split('@')[0]}! 👋</p>
+                <h1 style={{fontSize:16,fontWeight:900,color:'var(--fifa-gold)',margin:0,lineHeight:1.2}}>
+                  الشمعدان × كأس العالم
+                </h1>
+                <p style={{fontSize:12,color:'var(--fifa-muted)',margin:'3px 0 0'}}>
+                  أهلاً {user?.email?.split('@')[0]}! 👋
+                </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-3 bg-zinc-800 rounded-2xl px-3 py-2">
-                <div className="text-center">
-                  <p className="text-yellow-400 font-black text-xl leading-none">{myPoints}</p>
-                  <p className="text-zinc-500 text-xs mt-0.5">نقطة</p>
+
+            <div style={{display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
+              <div style={{
+                display:'flex',alignItems:'center',gap:14,
+                background:'var(--fifa-surface-3)',
+                border:'1px solid var(--fifa-line)',
+                borderRadius:18,padding:'10px 16px',
+              }}>
+                <div style={{textAlign:'center'}}>
+                  <p style={{fontSize:22,fontWeight:900,color:'var(--fifa-gold)',lineHeight:1,margin:0}}>{myPoints}</p>
+                  <p style={{fontSize:11,color:'var(--fifa-muted)',margin:'3px 0 0'}}>نقطة</p>
                 </div>
-                {myRank > 0 && (
+                {myRank>0 && (
                   <>
-                    <div className="w-px h-8 bg-zinc-700" />
-                    <div className="text-center">
-                      <p className="text-green-400 font-black text-xl leading-none">#{myRank}</p>
-                      <p className="text-zinc-500 text-xs mt-0.5">ترتيب</p>
+                    <div style={{width:1,height:32,background:'var(--fifa-line)'}}/>
+                    <div style={{textAlign:'center'}}>
+                      <p style={{fontSize:22,fontWeight:900,color:'var(--fifa-green)',lineHeight:1,margin:0}}>#{myRank}</p>
+                      <p style={{fontSize:11,color:'var(--fifa-muted)',margin:'3px 0 0'}}>ترتيب</p>
                     </div>
                   </>
                 )}
               </div>
-              <button onClick={handleLogout}
-                className="min-h-[44px] bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-2xl text-xs font-bold transition-colors text-zinc-300">
+              <button className="fifa-btn fifa-btn-ghost" onClick={handleLogout} style={{padding:'10px 14px'}}>
                 خروج
               </button>
             </div>
           </div>
         </header>
 
-        {/* Tabs */}
-        <div className="flex gap-2">
-          {(['predict', 'my', 'leaders'] as const).map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-1 min-h-[44px] rounded-2xl text-sm font-bold transition-colors ${
-                activeTab === tab ? 'bg-red-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 border border-zinc-800'
-              }`}>
-              {tab === 'predict' ? '⚽ التوقعات' : tab === 'my' ? '📋 توقعاتي' : '🏆 الصدارة'}
+        {/* ── TABS ── */}
+        <div style={{display:'flex',gap:8}}>
+          {(['predict','my','leaders'] as const).map(tab => (
+            <button key={tab}
+              className={`fifa-tab${activeTab===tab?' fifa-tab-active':''}`}
+              style={{flex:1,borderRadius:18}}
+              onClick={()=>setActiveTab(tab)}>
+              {tab==='predict'?'⚽ التوقعات':tab==='my'?'📋 توقعاتي':'🏆 الصدارة'}
             </button>
           ))}
         </div>
 
-        {/* ===== PREDICT TAB ===== */}
-        {activeTab === 'predict' && (
-          <section className="space-y-4">
-            {/* Round selector */}
-            <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-              {rounds.map((round) => (
-                <button key={round} onClick={() => setActiveRound(round)}
-                  className={`shrink-0 min-h-[40px] px-4 py-2 rounded-2xl text-sm font-bold transition-colors ${
-                    activeRound === round
-                      ? 'bg-white text-black'
-                      : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-                  }`}>
-                  {roundLabels[round]}
-                  <span className="mr-1 text-xs opacity-40">({matches.filter((m) => m.league.round === round).length})</span>
+        {/* ════════════ PREDICT TAB ════════════ */}
+        {activeTab==='predict' && (
+          <section style={{display:'flex',flexDirection:'column',gap:12}}>
+            {/* Round tabs */}
+            <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:4}}>
+              {rounds.map(r=>(
+                <button key={r}
+                  className={`fifa-round-tab${activeRound===r?' fifa-round-tab-active':''}`}
+                  style={{flexShrink:0}}
+                  onClick={()=>setActiveRound(r)}>
+                  {roundLabels[r]}
+                  <span style={{marginRight:4,opacity:.4,fontSize:11}}>({matches.filter(m=>m.league.round===r).length})</span>
                 </button>
               ))}
             </div>
 
-            {filteredMatches.length === 0 ? (
-              <div className="py-20 text-center text-zinc-600 bg-zinc-900 rounded-3xl border border-zinc-800">
+            {filteredMatches.length===0 ? (
+              <div className="fifa-panel" style={{padding:'60px 20px',textAlign:'center',color:'var(--fifa-muted)'}}>
                 لا توجد ماتشات في هذه الجولة
               </div>
-            ) : filteredMatches.map((match) => {
-              const existing  = predictions.find((p) => p.fixture_id === match.fixture.id);
+            ) : filteredMatches.map(match=>{
+              const existing  = predictions.find(p=>p.fixture_id===match.fixture.id);
               const form      = getForm(match);
-              const hasResult = match.actual_home_score !== null && match.actual_home_score !== undefined;
+              const hasResult = match.actual_home_score!==null && match.actual_home_score!==undefined;
               const msg       = messages[match.fixture.id];
 
               return (
                 <article key={match.fixture.id}
-                  className={`bg-zinc-900 rounded-3xl border p-4 sm:p-5 space-y-4 ${
-                    !match.is_open ? 'border-zinc-800'
-                    : existing    ? 'border-green-500/40'
-                    : 'border-red-500/40'
-                  }`}>
+                  className="fifa-card"
+                  style={{
+                    borderColor: !match.is_open
+                      ? 'var(--fifa-line)'
+                      : existing
+                        ? 'rgba(39,176,110,.35)'
+                        : 'rgba(201,58,47,.35)',
+                    display:'flex',flexDirection:'column',gap:14,
+                  }}>
 
-                  {/* Match header */}
-                  <div className="flex justify-between items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${match.is_open ? 'bg-green-400' : 'bg-zinc-600'}`} />
-                        <h2 className="text-base font-black truncate">
-                          {match.teams.home.name} <span className="text-zinc-600 font-normal">×</span> {match.teams.away.name}
+                  {/* match header */}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                        <span style={{width:8,height:8,borderRadius:'50%',flexShrink:0,background:match.is_open?'var(--fifa-green)':'var(--fifa-muted)'}}/>
+                        <h2 style={{fontSize:15,fontWeight:900,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                          {match.teams.home.name} <span style={{color:'var(--fifa-muted)',fontWeight:400}}>×</span> {match.teams.away.name}
                         </h2>
                       </div>
-                      <p className="text-zinc-500 text-xs">
-                        {new Date(match.fixture.date).toLocaleDateString('ar-EG', {
-                          weekday: 'long', month: 'long', day: 'numeric',
-                          hour: '2-digit', minute: '2-digit',
-                        })}
+                      <p style={{fontSize:11,color:'var(--fifa-muted)',margin:0}}>
+                        {new Date(match.fixture.date).toLocaleDateString('ar-EG',{weekday:'long',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})}
                       </p>
                     </div>
-                    <div className="flex flex-col items-end gap-1.5 shrink-0">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                        match.is_open ? 'bg-green-500/15 text-green-400' : 'bg-zinc-800 text-zinc-500'
-                      }`}>
-                        {match.is_open ? 'مفتوح' : 'مغلق'}
+                    <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:6,flexShrink:0}}>
+                      <span className={match.is_open?'fifa-pill-open':'fifa-pill-closed'}>
+                        {match.is_open?'مفتوح':'مغلق'}
                       </span>
-                      {existing && <span className="text-xs text-green-400 font-bold">✅ محفوظ</span>}
+                      {existing && <span style={{fontSize:11,color:'var(--fifa-green)',fontWeight:700}}>✅ محفوظ</span>}
                     </div>
                   </div>
 
-                  {/* Result box */}
+                  {/* result box */}
                   {hasResult && (
-                    <div className="bg-green-950/40 border border-green-500/20 rounded-2xl px-4 py-3 text-center space-y-1.5">
-                      <p className="text-green-400 font-black text-2xl">
+                    <div className="fifa-result-box">
+                      <p style={{color:'#5effa8',fontWeight:900,fontSize:26,margin:'0 0 4px'}}>
                         {match.actual_home_score} — {match.actual_away_score}
                       </p>
-                      <p className="text-zinc-500 text-xs">النتيجة الفعلية</p>
-                      {match.first_scorer && (
-                        <p className="text-yellow-400 text-xs">⚽ أول هدف: {match.first_scorer}</p>
-                      )}
+                      <p style={{color:'var(--fifa-muted)',fontSize:11,margin:0}}>النتيجة الفعلية</p>
+                      {match.first_scorer && <p style={{color:'#facc15',fontSize:11,marginTop:6}}>⚽ أول هدف: {match.first_scorer}</p>}
                       {existing && (
-                        <div className="mt-2 pt-2 border-t border-green-500/10">
-                          <p className="text-white font-bold">
-                            نقاطك: <span className="text-yellow-400 text-xl">{existing.points || 0}</span>
+                        <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid rgba(39,176,110,.15)'}}>
+                          <p style={{margin:0,fontSize:14,color:'var(--fifa-text)'}}>
+                            نقاطك: <strong style={{color:'var(--fifa-gold)',fontSize:22}}>{existing.points||0}</strong>
                           </p>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* Form */}
+                  {/* prediction form */}
                   {match.is_open && (
-                    <div className="space-y-4">
-                      {/* Score */}
+                    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+                      {/* score */}
                       <div>
-                        <p className="text-zinc-500 text-xs mb-3 font-medium">توقع النتيجة</p>
-                        <div className="grid grid-cols-2 gap-3">
+                        <p style={{fontSize:12,color:'var(--fifa-muted)',fontWeight:700,marginBottom:10}}>توقع النتيجة</p>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
                           {[
-                            { key: 'homeScore', team: match.teams.home.name },
-                            { key: 'awayScore', team: match.teams.away.name },
-                          ].map(({ key, team }) => (
-                            <div key={key} className="text-center bg-zinc-800 rounded-2xl p-3">
-                              <p className="text-zinc-400 text-xs mb-3 truncate font-medium">{team}</p>
-                              <div className="flex items-center justify-center gap-3">
+                            {key:'homeScore',team:match.teams.home.name},
+                            {key:'awayScore',team:match.teams.away.name},
+                          ].map(({key,team})=>(
+                            <div key={key} style={{background:'var(--fifa-surface-3)',borderRadius:18,padding:'14px 12px',textAlign:'center'}}>
+                              <p style={{fontSize:11,color:'var(--fifa-muted)',marginBottom:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:600}}>{team}</p>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
                                 <button
-                                  onClick={() => setForm(match.fixture.id, { [key]: Math.max(0, (form[key] || 0) - 1) })}
-                                  className="w-9 h-9 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-lg font-bold transition-colors flex items-center justify-center">−</button>
-                                <span className="text-4xl font-black w-10 text-center tabular-nums">{form[key] || 0}</span>
+                                  onClick={()=>setForm(match.fixture.id,{[key]:Math.max(0,(form[key]||0)-1)})}
+                                  style={{width:36,height:36,borderRadius:12,background:'var(--fifa-surface-2)',border:'1px solid var(--fifa-line)',color:'var(--fifa-text)',fontSize:18,fontWeight:900,display:'grid',placeItems:'center',cursor:'pointer'}}>
+                                  −
+                                </button>
+                                <span style={{fontSize:38,fontWeight:900,width:44,textAlign:'center',fontVariantNumeric:'tabular-nums'}}>
+                                  {form[key]||0}
+                                </span>
                                 <button
-                                  onClick={() => setForm(match.fixture.id, { [key]: (form[key] || 0) + 1 })}
-                                  className="w-9 h-9 bg-red-600 hover:bg-red-500 rounded-xl text-lg font-bold transition-colors flex items-center justify-center">+</button>
+                                  onClick={()=>setForm(match.fixture.id,{[key]:(form[key]||0)+1})}
+                                  style={{width:36,height:36,borderRadius:12,background:'var(--fifa-red)',border:'none',color:'#fff',fontSize:18,fontWeight:900,display:'grid',placeItems:'center',cursor:'pointer'}}>
+                                  +
+                                </button>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      {/* First scorer */}
+                      {/* first scorer */}
                       <div>
-                        <label className="block text-zinc-500 text-xs mb-2 font-medium">⚽ أول هدف <span className="text-yellow-500">+3 نقاط</span></label>
+                        <label style={{display:'block',fontSize:12,color:'var(--fifa-muted)',fontWeight:700,marginBottom:8}}>
+                          ⚽ أول هدف <span style={{color:'#facc15'}}>+3 نقاط</span>
+                        </label>
                         <input type="text" value={form.firstScorer}
-                          onChange={(e) => setForm(match.fixture.id, { firstScorer: e.target.value })}
-                          className="w-full min-h-[48px] bg-zinc-800 border border-zinc-700 focus:border-red-500 text-white px-4 py-3 rounded-2xl text-sm outline-none transition-colors placeholder:text-zinc-600"
-                          placeholder="مثال: مبابي" />
+                          onChange={e=>setForm(match.fixture.id,{firstScorer:e.target.value})}
+                          className="fifa-field-input" placeholder="مثال: مبابي"/>
                       </div>
 
-                      {/* Extra time */}
-                      <label className="flex items-center gap-3 min-h-[48px] bg-zinc-800 px-4 py-3 rounded-2xl border border-zinc-700 cursor-pointer hover:bg-zinc-700/50 transition-colors">
-                        <input type="checkbox" checked={form.extraTime}
-                          onChange={(e) => setForm(match.fixture.id, { extraTime: e.target.checked })}
-                          className="w-5 h-5 accent-red-600 shrink-0" />
-                        <span className="text-sm text-zinc-300">⏱️ الماتش هيروح لوقت إضافي؟</span>
-                        <span className="text-yellow-500 text-xs font-bold mr-auto">+2 نقاط</span>
+                      {/* extra time */}
+                      <label style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,minHeight:52,background:'var(--fifa-surface-3)',border:'1px solid var(--fifa-line)',padding:'14px 16px',borderRadius:18,cursor:'pointer'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:10}}>
+                          <input type="checkbox" checked={form.extraTime}
+                            onChange={e=>setForm(match.fixture.id,{extraTime:e.target.checked})}
+                            style={{width:18,height:18,accentColor:'var(--fifa-red)',flexShrink:0}}/>
+                          <span style={{fontSize:13}}>⏱️ الماتش هيروح لوقت إضافي؟</span>
+                        </div>
+                        <span style={{fontSize:11,color:'#facc15',fontWeight:700,flexShrink:0}}>+2 نقاط</span>
                       </label>
 
-                      {/* Surprise question */}
+                      {/* surprise question */}
                       {match.surprise_question && (
                         <div>
-                          <label className="block text-purple-400 text-xs mb-2 font-medium">
-                            🎯 {match.surprise_question} <span className="text-purple-300">+5 نقاط</span>
+                          <label style={{display:'block',fontSize:12,fontWeight:700,marginBottom:8,color:'#c084fc'}}>
+                            🎯 {match.surprise_question} <span style={{color:'#d8b4fe'}}>+5 نقاط</span>
                           </label>
                           <input type="text" value={form.surpriseAnswer}
-                            onChange={(e) => setForm(match.fixture.id, { surpriseAnswer: e.target.value })}
-                            className="w-full min-h-[48px] bg-zinc-800 border border-purple-500/30 focus:border-purple-500 text-white px-4 py-3 rounded-2xl text-sm outline-none transition-colors placeholder:text-zinc-600"
-                            placeholder="إجابتك..." />
+                            onChange={e=>setForm(match.fixture.id,{surpriseAnswer:e.target.value})}
+                            className="fifa-field-input"
+                            style={{borderColor:'rgba(192,132,252,.25)'}}
+                            placeholder="إجابتك..."/>
                         </div>
                       )}
 
+                      {/* message */}
                       {msg && (
-                        <p className={`text-center text-sm font-bold py-2 rounded-xl ${
-                          msg.includes('✅') ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
-                        }`}>{msg}</p>
+                        <div className={msg.includes('✅')?'fifa-msg-success':'fifa-msg-error'}>
+                          {msg}
+                        </div>
                       )}
 
-                      <button onClick={() => submitPrediction(match)}
-                        disabled={submitting === match.fixture.id}
-                        className="w-full min-h-[52px] bg-red-600 hover:bg-red-500 disabled:opacity-60 rounded-2xl font-black text-base transition-colors">
-                        {submitting === match.fixture.id ? '⏳ جاري الحفظ...' : existing ? '💾 تحديث التوقع' : '⚽ حفظ التوقع'}
+                      {/* submit */}
+                      <button
+                        className="fifa-btn fifa-btn-gold"
+                        disabled={submitting===match.fixture.id}
+                        style={{width:'100%',minHeight:54,fontSize:16,fontWeight:900,borderRadius:18,opacity:submitting===match.fixture.id?.7:1}}
+                        onClick={()=>submitPrediction(match)}>
+                        {submitting===match.fixture.id ? '⏳ جاري الحفظ...' : existing ? '💾 تحديث التوقع' : '⚽ حفظ التوقع'}
                       </button>
                     </div>
                   )}
 
-                  {/* Closed with existing prediction */}
+                  {/* closed with saved prediction */}
                   {!match.is_open && !hasResult && existing && (
-                    <div className="bg-zinc-800/60 rounded-2xl px-4 py-3 space-y-1">
-                      <p className="text-zinc-500 text-xs font-medium">توقعك المسجّل</p>
-                      <p className="text-white font-black text-xl">
-                        {existing.predicted_home_score} — {existing.predicted_away_score}
-                      </p>
+                    <div style={{background:'var(--fifa-surface-3)',border:'1px solid var(--fifa-line)',borderRadius:16,padding:'12px 16px'}}>
+                      <p style={{fontSize:11,color:'var(--fifa-muted)',margin:'0 0 6px',fontWeight:600}}>توقعك المسجّل</p>
+                      <p style={{fontSize:22,fontWeight:900,margin:'0 0 4px'}}>{existing.predicted_home_score} — {existing.predicted_away_score}</p>
                       {existing.predicted_first_scorer && (
-                        <p className="text-yellow-400/70 text-xs">⚽ {existing.predicted_first_scorer}</p>
+                        <p style={{fontSize:11,color:'#facc15',margin:0}}>⚽ {existing.predicted_first_scorer}</p>
                       )}
                     </div>
                   )}
@@ -371,50 +388,43 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* ===== MY PREDICTIONS TAB ===== */}
-        {activeTab === 'my' && (
-          <section className="space-y-3">
-            <div className="bg-zinc-900 rounded-3xl border border-zinc-800 p-4 flex items-center justify-between">
-              <h2 className="font-black text-lg">توقعاتي</h2>
-              <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 font-black px-4 py-2 rounded-2xl text-sm">
+        {/* ════════════ MY PREDICTIONS TAB ════════════ */}
+        {activeTab==='my' && (
+          <section style={{display:'flex',flexDirection:'column',gap:10}}>
+            <div className="fifa-panel" style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px'}}>
+              <h2 style={{fontSize:18,fontWeight:900,margin:0}}>توقعاتي</h2>
+              <div style={{background:'rgba(217,178,95,.10)',border:'1px solid rgba(217,178,95,.22)',color:'var(--fifa-gold)',fontWeight:900,padding:'8px 16px',borderRadius:999,fontSize:14}}>
                 🏆 {myPoints} نقطة
               </div>
             </div>
 
-            {predictions.length === 0 ? (
-              <div className="py-20 text-center text-zinc-600 bg-zinc-900 rounded-3xl border border-zinc-800">
+            {predictions.length===0 ? (
+              <div className="fifa-panel" style={{padding:'60px 20px',textAlign:'center',color:'var(--fifa-muted)'}}>
                 لم تقدم أي توقعات بعد
               </div>
-            ) : predictions.map((p) => {
-              const hasResult = p.actual_home_score !== null;
+            ) : predictions.map(p=>{
+              const hasResult = p.actual_home_score!==null;
               return (
-                <div key={p.id} className={`rounded-3xl border p-4 ${
-                  hasResult && p.points >= 10
-                    ? 'bg-yellow-950/20 border-yellow-500/20'
-                    : 'bg-zinc-900 border-zinc-800'
-                }`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <p className="font-bold text-sm truncate">{p.home_team} × {p.away_team}</p>
-                      <p className="text-zinc-500 text-xs">
-                        توقعك: <span className="text-white font-black">{p.predicted_home_score} — {p.predicted_away_score}</span>
-                        {p.predicted_first_scorer && (
-                          <span className="text-yellow-400 mr-2">⚽ {p.predicted_first_scorer}</span>
-                        )}
+                <div key={p.id} className="fifa-card" style={hasResult&&p.points>=10?{borderColor:'rgba(217,178,95,.25)',background:'linear-gradient(90deg,rgba(217,178,95,.07),rgba(255,255,255,.015))'}:{}}>
+                  <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
+                    <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:4}}>
+                      <p style={{fontSize:14,fontWeight:800,margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.home_team} × {p.away_team}</p>
+                      <p style={{fontSize:12,color:'var(--fifa-muted)',margin:0}}>
+                        توقعك: <strong style={{color:'var(--fifa-text)'}}>{p.predicted_home_score} — {p.predicted_away_score}</strong>
+                        {p.predicted_first_scorer && <span style={{color:'#facc15',marginRight:8}}> ⚽ {p.predicted_first_scorer}</span>}
                       </p>
                       {hasResult && (
-                        <p className="text-zinc-500 text-xs">
-                          الفعلية: <span className="text-green-400 font-black">{p.actual_home_score} — {p.actual_away_score}</span>
+                        <p style={{fontSize:12,color:'var(--fifa-muted)',margin:0}}>
+                          الفعلية: <strong style={{color:'#5effa8'}}>{p.actual_home_score} — {p.actual_away_score}</strong>
                         </p>
                       )}
                     </div>
-                    <span className={`shrink-0 font-black text-lg px-3 py-1.5 rounded-2xl ${
-                      !hasResult      ? 'text-zinc-600 bg-zinc-800'
-                      : p.points >= 10 ? 'text-yellow-400 bg-yellow-500/10'
-                      : p.points >= 5  ? 'text-green-400 bg-green-500/10'
-                      : 'text-zinc-400 bg-zinc-800'
-                    }`}>
-                      {hasResult ? `${p.points || 0}` : '⏳'}
+                    <span style={{
+                      flexShrink:0,fontWeight:900,fontSize:18,padding:'6px 14px',borderRadius:14,
+                      background: !hasResult?'var(--fifa-surface-3)':p.points>=10?'rgba(217,178,95,.12)':p.points>=5?'rgba(39,176,110,.12)':'var(--fifa-surface-3)',
+                      color: !hasResult?'var(--fifa-muted)':p.points>=10?'#ffe3a6':p.points>=5?'#5effa8':'var(--fifa-muted)',
+                    }}>
+                      {hasResult?`${p.points||0}`:'⏳'}
                     </span>
                   </div>
                 </div>
@@ -423,45 +433,41 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* ===== LEADERBOARD TAB ===== */}
-        {activeTab === 'leaders' && (
-          <section className="space-y-2">
-            <div className="bg-zinc-900 rounded-3xl border border-zinc-800 p-4 mb-3">
-              <h2 className="font-black text-lg">🏆 ترتيب المتسابقين</h2>
+        {/* ════════════ LEADERBOARD TAB ════════════ */}
+        {activeTab==='leaders' && (
+          <section style={{display:'flex',flexDirection:'column',gap:8}}>
+            <div className="fifa-panel" style={{padding:'16px 20px'}}>
+              <h2 style={{fontSize:18,fontWeight:900,margin:0}}>🏆 ترتيب المتسابقين</h2>
             </div>
 
-            {leaderboard.length === 0 ? (
-              <div className="py-20 text-center text-zinc-600 bg-zinc-900 rounded-3xl border border-zinc-800">لا توجد نتائج بعد</div>
-            ) : leaderboard.map((player: any, index) => {
-              const medals = ['🥇', '🥈', '🥉'];
-              const isMe   = player.user_id === user?.id;
+            {leaderboard.length===0 ? (
+              <div className="fifa-panel" style={{padding:'60px 20px',textAlign:'center',color:'var(--fifa-muted)'}}>لا توجد نتائج بعد</div>
+            ) : leaderboard.map((player:any,i)=>{
+              const isMe = player.user_id===user?.id;
               return (
-                <div key={player.user_id}
-                  className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl border ${
-                    isMe      ? 'border-red-500/40 bg-red-950/20'
-                    : index < 3 ? 'border-zinc-700 bg-zinc-900'
-                    : 'border-zinc-800 bg-zinc-900/50'
-                  }`}>
-                  <div className="w-8 text-center shrink-0">
-                    {index < 3
-                      ? <span className="text-xl">{medals[index]}</span>
-                      : <span className="text-sm font-bold text-zinc-500">#{index + 1}</span>}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`font-bold text-sm truncate ${isMe ? 'text-red-400' : ''}`}>
-                      {player.user_email?.split('@')[0]}
-                      {isMe && <span className="text-xs text-red-500/70 mr-1">(أنت)</span>}
-                    </p>
-                    <p className="text-zinc-600 text-xs">{player.count} توقع</p>
-                  </div>
-                  <div className="shrink-0 text-left">
-                    <p className={`text-xl font-black ${
-                      index === 0 ? 'text-yellow-400'
-                      : index === 1 ? 'text-zinc-300'
-                      : index === 2 ? 'text-amber-600'
-                      : 'text-white'
-                    }`}>{player.totalPoints}</p>
-                    <p className="text-zinc-600 text-xs">نقطة</p>
+                <div key={player.user_id} className="fifa-card"
+                  style={isMe
+                    ? {borderColor:'rgba(201,58,47,.4)',background:'linear-gradient(90deg,rgba(201,58,47,.08),rgba(255,255,255,.015))'}
+                    : i<3
+                      ? {borderColor:'rgba(217,178,95,.2)',background:'linear-gradient(90deg,rgba(217,178,95,.05),rgba(255,255,255,.01))'}
+                      : {}}>
+                  <div style={{display:'grid',gridTemplateColumns:'40px 1fr auto',alignItems:'center',gap:12}}>
+                    <div style={{width:40,height:40,borderRadius:12,background:'rgba(217,178,95,.08)',border:'1px solid rgba(217,178,95,.12)',display:'grid',placeItems:'center',fontSize:i<3?20:13,fontWeight:900,color:'var(--fifa-muted)'}}>
+                      {i<3?medals[i]:`#${i+1}`}
+                    </div>
+                    <div>
+                      <p style={{fontSize:14,fontWeight:800,margin:0,color:isMe?'#ff9c91':'var(--fifa-text)'}}>
+                        {player.user_email?.split('@')[0]}
+                        {isMe&&<span style={{fontSize:11,color:'rgba(201,58,47,.7)',marginRight:6}}>(أنت)</span>}
+                      </p>
+                      <p style={{fontSize:11,color:'var(--fifa-muted)',margin:'2px 0 0'}}>{player.count} توقع</p>
+                    </div>
+                    <div style={{textAlign:'left'}}>
+                      <strong style={{display:'block',fontSize:24,fontWeight:900,color:i===0?'var(--fifa-gold)':i===1?'#d1d5db':i===2?'#b45309':'var(--fifa-text)'}}>
+                        {player.totalPoints}
+                      </strong>
+                      <span style={{fontSize:11,color:'var(--fifa-muted)'}}>نقطة</span>
+                    </div>
                   </div>
                 </div>
               );
