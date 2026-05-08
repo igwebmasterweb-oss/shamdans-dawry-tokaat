@@ -91,31 +91,20 @@ export default function Dashboard() {
         .from('predictions').select('*').eq('user_id', userId);
       setPredictions(userPreds || []);
 
-      const { data: allPreds } = await supabase
-        .from('predictions').select('user_id,user_email,points');
+      // قراءة الصدارة من user_points مباشرة (أسرع بكتير)
+      const { data: userPointsData } = await supabase
+        .from('user_points')
+        .select('*')
+        .order('total_points', { ascending: false });
 
-      // Join with profiles for display_name
-      const { data: allProfiles } = await supabase
-        .from('profiles').select('id,full_name,profile_completed');
-      const profileMap = new Map(allProfiles?.map((p: any) => [p.id, p]) || []);
-
-      const grouped: any = {};
-      allPreds?.forEach((row: any) => {
-        if (!grouped[row.user_id]) {
-          const prof = profileMap.get(row.user_id) as any;
-          grouped[row.user_id] = {
-            user_id: row.user_id,
-            user_email: row.user_email,
-            display_name: prof?.full_name || null,
-            profile_completed: prof?.profile_completed || false,
-            totalPoints: 0,
-            count: 0,
-          };
-        }
-        grouped[row.user_id].totalPoints += row.points || 0;
-        grouped[row.user_id].count += 1;
-      });
-      setLeaderboard(Object.values(grouped).sort((a: any, b: any) => b.totalPoints - a.totalPoints));
+      setLeaderboard((userPointsData || []).map((row: any) => ({
+        user_id: row.user_id,
+        user_email: row.user_email,
+        display_name: row.full_name || null,
+        profile_completed: row.profile_completed || false,
+        totalPoints: row.total_points || 0,
+        count: row.predictions_count || 0,
+      })));
     } catch (err) {
       console.error(err);
     }
@@ -164,8 +153,8 @@ export default function Dashboard() {
         setShowProfileModal(false);
         setProfileMsg('');
       }, 2000);
-    }     catch (err: any) {
-      setProfileMsg('❌ ' + (err?.message || JSON.stringify(err)));
+    } catch {
+      setProfileMsg('❌ خطأ في الحفظ، حاول مجدداً');
     }
     setProfileSaving(false);
   };
