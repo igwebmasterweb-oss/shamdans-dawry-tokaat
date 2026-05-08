@@ -7,7 +7,6 @@ const supabase = createClient(
 );
 
 export async function GET(request: Request) {
-  // Verify cron secret
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -15,7 +14,6 @@ export async function GET(request: Request) {
 
   const now = new Date().toISOString();
 
-  // جيب كل الماتشات المفتوحة اللي وقتها فات
   const { data: fixtures, error } = await supabase
     .from('fixtures')
     .select('api_fixture_id, match_date')
