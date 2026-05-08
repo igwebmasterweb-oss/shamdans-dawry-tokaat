@@ -164,8 +164,8 @@ export default function Dashboard() {
         setShowProfileModal(false);
         setProfileMsg('');
       }, 2000);
-    } catch {
-      setProfileMsg('❌ خطأ في الحفظ، حاول مجدداً');
+    }     catch (err: any) {
+      setProfileMsg('❌ ' + (err?.message || JSON.stringify(err)));
     }
     setProfileSaving(false);
   };
