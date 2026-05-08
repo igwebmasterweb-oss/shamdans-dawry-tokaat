@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 interface Profile {
   id: string;
-  display_name: string | null;
+  full_name: string | null;
   phone: string | null;
   profile_completed: boolean;
   bonus_points_awarded: boolean;
@@ -58,7 +58,7 @@ export default function Dashboard() {
       if (profileData) {
         setProfile(profileData);
         setProfileForm({
-          display_name: profileData.display_name || '',
+          display_name: profileData.full_name || '',
           phone: profileData.phone || '',
         });
       }
@@ -96,7 +96,7 @@ export default function Dashboard() {
 
       // Join with profiles for display_name
       const { data: allProfiles } = await supabase
-        .from('profiles').select('id,display_name,profile_completed');
+        .from('profiles').select('id,full_name,profile_completed');
       const profileMap = new Map(allProfiles?.map((p: any) => [p.id, p]) || []);
 
       const grouped: any = {};
@@ -106,7 +106,7 @@ export default function Dashboard() {
           grouped[row.user_id] = {
             user_id: row.user_id,
             user_email: row.user_email,
-            display_name: prof?.display_name || null,
+            display_name: prof?.full_name || null,
             profile_completed: prof?.profile_completed || false,
             totalPoints: 0,
             count: 0,
@@ -136,7 +136,7 @@ export default function Dashboard() {
         profileForm.phone.trim();
 
       const updates: any = {
-        display_name: profileForm.display_name.trim(),
+        full_name: profileForm.display_name.trim(),
         phone: profileForm.phone.trim() || null,
         profile_completed: !!(profileForm.display_name.trim() && profileForm.phone.trim()),
         updated_at: new Date().toISOString(),
@@ -238,7 +238,7 @@ export default function Dashboard() {
   const myRank = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
   const medals = ['🥇', '🥈', '🥉'];
-  const displayName = profile?.display_name || user?.email?.split('@')[0];
+  const displayName = profile?.full_name || user?.email?.split('@')[0];
   const profileIncomplete = !profile?.profile_completed;
 
   return (
