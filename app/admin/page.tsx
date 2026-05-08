@@ -342,7 +342,7 @@ export default function AdminPage() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
               {rounds.map(r => (
                 <button key={r} className={`round-btn${activeRound === r ? ' active' : ''}`} onClick={() => setActiveRound(r)}>
-                  {roundLabels[r]} &nbsp;({matches.filter(m => m.league.round === r).length})
+                  {roundLabels[r]}  ({matches.filter(m => m.league.round === r).length})
                 </button>
               ))}
               <div style={{ marginRight: 'auto', display: 'flex', gap: 8 }}>
