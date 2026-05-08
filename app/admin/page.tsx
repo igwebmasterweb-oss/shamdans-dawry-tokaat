@@ -67,8 +67,19 @@ export default function AdminPage() {
   }, []);
 
   const loadPredictions = useCallback(async () => {
-    const { data } = await supabase.from('predictions').select('*').order('submitted_at',{ascending:false});
-    setPredictions(data || []);
+    const { data: preds } = await supabase
+      .from('predictions')
+      .select('*')
+      .not('fixture_id', 'is', null)
+      .order('submitted_at', { ascending: false });
+
+    const { data: pts } = await supabase.from('user_points').select('user_id,full_name,user_email');
+    const nameMap = new Map(pts?.map((p: any) => [p.user_id, p.full_name || p.user_email?.split('@')[0]]) || []);
+
+    setPredictions((preds || []).map((p: any) => ({
+      ...p,
+      user_name: nameMap.get(p.user_id) || p.user_email?.split('@')[0],
+    })));
   }, []);
 
   // ✅ يقرأ من user_points مباشرة بدل predictions
@@ -396,9 +407,9 @@ export default function AdminPage() {
                   <tr>{['المستخدم', 'الماتش', 'توقعي', 'الفعلية', 'أول هدف', 'إضافي', 'النقاط'].map(h => <th key={h}>{h}</th>)}</tr>
                 </thead>
                 <tbody>
-                  {predictions.map(p => (
+                  {predictions.filter(p => p.fixture_id && p.home_team !== 'BONUS' && p.user_email).map(p => (
                     <tr key={p.id} style={{ background: p.points >= 10 ? 'rgba(217,178,95,.08)' : p.points >= 5 ? 'rgba(39,176,110,.06)' : 'transparent' }}>
-                      <td style={{ fontWeight: 700 }}>{p.user_email?.split('@')[0]}</td>
+                      <td style={{ fontWeight: 700 }}>{p.user_name || p.user_email?.split('@')[0] || '—'}</td>
                       <td style={{ fontSize: 12 }}>{p.home_team} × {p.away_team}</td>
                       <td style={{ fontVariantNumeric: 'tabular-nums' }}>{p.predicted_home_score} - {p.predicted_away_score}</td>
                       <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--fifa-muted)' }}>{p.actual_home_score !== null ? `${p.actual_home_score} - ${p.actual_away_score}` : '⏳'}</td>
@@ -423,7 +434,7 @@ export default function AdminPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {leaderboard.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 60, color: 'var(--fifa-muted)' }}>لا توجد بيانات بعد</div>
-            ) : leaderboard.map((p: any, i) => (
+            ) : leaderboard.filter((p: any) => p.user_email || p.full_name).map((p: any, i) => (
               <div key={p.user_id} style={{ background: 'var(--fifa-surface)', border: '1px solid var(--fifa-line)', borderRadius: 14, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{ minWidth: 44, textAlign: 'center', fontSize: i < 3 ? 24 : 15, fontWeight: 900, color: i === 0 ? 'var(--fifa-gold)' : 'var(--fifa-muted)' }}>
                   {i < 3 ? medals[i] : `#${i + 1}`}
