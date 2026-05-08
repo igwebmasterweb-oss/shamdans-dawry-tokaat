@@ -19,6 +19,7 @@ export async function GET() {
     }
 
     let totalUpdated = 0;
+    const affectedUsers = new Set<string>();
 
     for (const fixture of fixtures) {
       const { data: preds } = await supabaseAdmin
@@ -30,9 +31,8 @@ export async function GET() {
 
       for (const pred of preds) {
         let points = 0;
-
         const actualHome = fixture.actual_home_score;
-        const actualAway = fixture.actual_away_score;
+        const actualAway  = fixture.actual_away_score;
         const predHome   = pred.predicted_home_score;
         const predAway   = pred.predicted_away_score;
 
@@ -42,7 +42,7 @@ export async function GET() {
         } else {
           // +5 الفايز صح
           const actualWinner = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw';
-          const predWinner   = predHome   > predAway   ? 'home' : predAway   > predHome   ? 'away' : 'draw';
+          const predWinner   = predHome  > predAway   ? 'home' : predAway  > predHome   ? 'away' : 'draw';
           if (actualWinner === predWinner) points += 5;
         }
 
@@ -56,9 +56,7 @@ export async function GET() {
         }
 
         // +2 وقت إضافي
-        if (fixture.went_extra_time === pred.predicted_extra_time) {
-          points += 2;
-        }
+        if (fixture.went_extra_time === pred.predicted_extra_time) points += 2;
 
         // +5 سؤال المفاجأة
         if (fixture.surprise_answer && pred.surprise_answer) {
@@ -71,20 +69,22 @@ export async function GET() {
 
         await supabaseAdmin
           .from('predictions')
-          .update({
-            points,
-            actual_home_score: actualHome,
-            actual_away_score: actualAway,
-          })
+          .update({ points, actual_home_score: actualHome, actual_away_score: actualAway })
           .eq('id', pred.id);
 
+        affectedUsers.add(pred.user_id);
         totalUpdated++;
       }
     }
 
+    // ✅ حدّث user_points لكل المستخدمين المتأثرين
+    for (const userId of affectedUsers) {
+      await supabaseAdmin.rpc('refresh_user_points', { p_user_id: userId });
+    }
+
     return NextResponse.json({
       success: true,
-      message: `✅ تم تحديث ${totalUpdated} توقع`,
+      message: `✅ تم تحديث ${totalUpdated} توقع لـ ${affectedUsers.size} مستخدم`,
       updated: totalUpdated,
     });
   } catch (error: any) {
