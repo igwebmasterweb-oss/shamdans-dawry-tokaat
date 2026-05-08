@@ -9,6 +9,7 @@ interface Profile {
   phone: string | null;
   profile_completed: boolean;
   bonus_points_awarded: boolean;
+  bonus_points?: number;
 }
 
 export default function Dashboard() {
@@ -141,24 +142,10 @@ export default function Dashboard() {
         updated_at: new Date().toISOString(),
       };
 
-      // Award bonus points only once
+      // Award bonus points only once — saved in profiles directly
       if (isCompleting && !profile?.bonus_points_awarded) {
         updates.bonus_points_awarded = true;
-
-        // Insert a bonus prediction row for the points
-        await supabase.from('predictions').insert({
-          user_id: user.id,
-          user_email: user.email,
-          fixture_id: 0, // special id for bonus
-          home_team: 'BONUS',
-          away_team: 'PROFILE',
-          predicted_home_score: 0,
-          predicted_away_score: 0,
-          points: 5,
-          submitted_at: new Date().toISOString(),
-          actual_home_score: 0,
-          actual_away_score: 0,
-        });
+        updates.bonus_points = 5;
       }
 
       const { error } = await supabase
@@ -247,7 +234,7 @@ export default function Dashboard() {
     </div>
   );
 
-  const myPoints = predictions.reduce((s, p) => s + (p.points || 0), 0);
+  const myPoints = predictions.reduce((s, p) => s + (p.points || 0), 0) + (profile?.bonus_points || 0);
   const myRank = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
   const medals = ['🥇', '🥈', '🥉'];
@@ -553,9 +540,9 @@ export default function Dashboard() {
               <div style={{ color: 'var(--fifa-muted)', fontSize: 14 }}>🏆 {myPoints} نقطة</div>
             </div>
 
-            {predictions.filter(p => p.fixture_id !== 0).length === 0 ? (
+            {predictions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 40, color: 'var(--fifa-muted)' }}>لم تقدم أي توقعات بعد</div>
-            ) : predictions.filter(p => p.fixture_id !== 0).map(p => {
+            ) : predictions.map(p => {
               const hasResult = p.actual_home_score !== null;
               return (
                 <div key={p.id} style={{
