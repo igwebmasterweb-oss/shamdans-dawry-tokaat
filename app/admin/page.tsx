@@ -257,10 +257,14 @@ export default function AdminPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap');
         :root {
-          --fifa-bg:#080c14; --fifa-surface:#0d1117; --fifa-surface-2:#111827;
-          --fifa-surface-3:#1a2236; --fifa-line:rgba(255,255,255,0.07);
-          --fifa-text:#e2e8f0; --fifa-muted:#64748b; --fifa-red:#e8002d;
-          --fifa-gold:#d9b25f; --fifa-green:#27b06e; --fifa-blue:#3671C6;
+  --fifa-bg:#070809;
+--fifa-surface:#111315;
+--fifa-surface-2:#171a1d;
+--fifa-surface-3:#1d2125;
+--fifa-red:#c93a2f;
+--fifa-gold:#d9b25f;
+--fifa-green:#27b06e;
+--fifa-blue:#3b82f6;
         }
         *{box-sizing:border-box;margin:0;padding:0}
         body{background:var(--fifa-bg);color:var(--fifa-text);font-family:Tajawal,sans-serif;direction:rtl}
