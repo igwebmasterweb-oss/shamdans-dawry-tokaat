@@ -6,18 +6,20 @@ import Link from 'next/link';
 import { sendNotification } from '../../../../lib/useNotifications';
 
 export default function ManageLeaguePage() {
-  const [user, setUser]         = useState<any>(null);
-  const [userName, setUserName] = useState('');
-  const [league, setLeague]     = useState<any>(null);
-  const [members, setMembers]   = useState<any[]>([]);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [user, setUser]             = useState<any>(null);
+  const [userName, setUserName]     = useState('');
+  const [league, setLeague]         = useState<any>(null);
+  const [members, setMembers]       = useState<any[]>([]);
+  const [allUsers, setAllUsers]     = useState<any[]>([]);
   const [pendingInvites, setPendingInvites] = useState<any[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [message, setMessage]   = useState('');
-  const [msgType, setMsgType]   = useState<'success'|'error'>('success');
+  const [loading, setLoading]       = useState(true);
+  const [message, setMessage]       = useState('');
+  const [msgType, setMsgType]       = useState<'success'|'error'>('success');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [inviteSearch, setInviteSearch] = useState('');
-  const [inviting, setInviting] = useState('');
+  const [inviting, setInviting]     = useState('');
+  const [cancelingInvite, setCancelingInvite] = useState('');
+  const [copyFeedback, setCopyFeedback] = useState(false);
   const router = useRouter();
   const params = useParams();
   const code = params?.code as string;
@@ -32,16 +34,15 @@ export default function ManageLeaguePage() {
       .from('mini_leagues').select('*').eq('code', code).maybeSingle();
     if (!lg || lg.created_by !== uid) { router.push('/my-leagues'); return; }
     setLeague(lg);
-
     const [{ data: mems }, { data: invites }, { data: users }] = await Promise.all([
       supabase.from('mini_league_standings').select('*').eq('league_id', lg.id).order('rank'),
-      supabase.from('mini_league_invitations').select('*, invited_user_profile:user_points!invited_user(full_name,user_email)').eq('league_id', lg.id).eq('status', 'pending'),
+      supabase.from('mini_league_invitations')
+        .select('*, invited_user_profile:user_points!mini_league_invitations_invited_user_fkey(full_name,user_email)')
+        .eq('league_id', lg.id).eq('status', 'pending'),
       supabase.from('user_points').select('user_id, full_name, user_email').order('full_name'),
     ]);
-
     setMembers(mems || []);
     setPendingInvites(invites || []);
-    // استثني الأعضاء الحاليين + الـ pending invitations من قائمة الدعوة
     const memberIds = new Set((mems||[]).map((m: any) => m.user_id));
     const invitedIds = new Set((invites||[]).map((i: any) => i.invited_user));
     setAllUsers((users||[]).filter(u => !memberIds.has(u.user_id) && !invitedIds.has(u.user_id)));
@@ -58,12 +59,17 @@ export default function ManageLeaguePage() {
     });
   }, [router, loadAll]);
 
-  // دعوة يوزر
+  // ── دعوة يوزر ──────────────────────────────────────────────
   const inviteUser = async (target: any) => {
     if (!league || !user) return;
     if (members.length >= 25) { showMsg('الليج وصل الحد الأقصى (25 عضو)', 'error'); return; }
     setInviting(target.user_id);
     try {
+      // تحقق من وجود دعوة مكررة
+      const { data: existing } = await supabase.from('mini_league_invitations')
+        .select('id').eq('league_id', league.id).eq('invited_user', target.user_id).maybeSingle();
+      if (existing) { showMsg('تم إرسال دعوة لهذا اللاعب مسبقاً', 'error'); setInviting(''); return; }
+
       const { error } = await supabase.from('mini_league_invitations').insert({
         league_id: league.id, invited_by: user.id, invited_user: target.user_id,
       });
@@ -75,27 +81,32 @@ export default function ManageLeaguePage() {
       showMsg(`✅ تم إرسال الدعوة لـ ${target.full_name || target.user_email}`);
       setInviteSearch('');
       await loadAll(user.id);
-    } catch (err: any) {
-      showMsg('❌ ' + (err.message || 'خطأ'), 'error');
-    }
+    } catch (err: any) { showMsg('❌ ' + (err.message || 'خطأ'), 'error'); }
     setInviting('');
   };
 
-  // طرد عضو
+  // ── إلغاء دعوة معلقة ───────────────────────────────────────
+  const cancelInvite = async (invite: any) => {
+    setCancelingInvite(invite.id);
+    await supabase.from('mini_league_invitations').delete().eq('id', invite.id);
+    showMsg('تم إلغاء الدعوة');
+    await loadAll(user.id);
+    setCancelingInvite('');
+  };
+
+  // ── طرد عضو ────────────────────────────────────────────────
   const kickMember = async (memberId: string, memberName: string) => {
     if (!league) return;
     if (!confirm(`هل تريد طرد "${memberName}" من الليج؟`)) return;
-    await supabase.from('mini_league_members').delete()
-      .eq('league_id', league.id).eq('user_id', memberId);
+    await supabase.from('mini_league_members').delete().eq('league_id', league.id).eq('user_id', memberId);
     await sendNotification(memberId, 'kicked', { league_id: league.id, league_name: league.name });
     showMsg(`تم طرد ${memberName}`);
     await loadAll(user.id);
   };
 
-  // حذف الليج
+  // ── حذف الليج ──────────────────────────────────────────────
   const deleteLeague = async () => {
     if (!league) return;
-    // إشعار كل الأعضاء
     const otherMembers = members.filter(m => m.user_id !== user?.id);
     await Promise.all(otherMembers.map(m =>
       sendNotification(m.user_id, 'league_deleted', { league_name: league.name })
@@ -103,6 +114,18 @@ export default function ManageLeaguePage() {
     await supabase.from('mini_leagues').update({ is_active: false }).eq('id', league.id);
     router.push('/my-leagues');
   };
+
+  // ── نسخ كود + رسالة واتساب ─────────────────────────────────
+  const copyCode = () => {
+    if (!league) return;
+    const txt = `🏆 انضم لليج "${league.name}" في الشمعدان × كأس العالم 2026!\nالكود: ${league.code}\nافتح التطبيق وروح ليجاتي ← إدخال الكود`;
+    navigator.clipboard.writeText(txt).then(() => {
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
+    });
+  };
+
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
   const filteredUsers = allUsers.filter(u => {
     const q = inviteSearch.toLowerCase();
@@ -129,11 +152,14 @@ export default function ManageLeaguePage() {
         .field-input { width:100%; padding:11px 16px; border-radius:14px; background:var(--surface-3); border:1px solid var(--line); color:var(--text); font-family:'Cairo',sans-serif; font-size:14px; outline:none; transition:border-color .2s; }
         .field-input:focus { border-color:rgba(217,178,95,.4); }
         .field-input::placeholder { color:var(--muted); }
-        .nav-pill { padding:9px 20px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); font-weight:700; text-decoration:none; font-size:13px; font-family:'Cairo',sans-serif; transition:all .2s; }
+        .nav-pill { padding:9px 20px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); font-weight:700; text-decoration:none; font-size:13px; font-family:'Cairo',sans-serif; transition:all .2s; display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
         .nav-pill:hover { border-color:rgba(217,178,95,.25); color:#f2d79e; }
-        .member-row { display:flex; align-items:center; gap:12; padding:12px 16px; border-radius:16px; background:rgba(255,255,255,.025); border:1px solid var(--line); margin-bottom:8px; }
-        .user-row { display:flex; align-items:center; gap:12; padding:11px 14px; border-radius:14px; background:rgba(255,255,255,.02); border:1px solid var(--line); margin-bottom:7px; cursor:pointer; transition:border-color .18s; }
-        .user-row:hover { border-color:rgba(217,178,95,.2); }
+        .nav-pill.gold { background:linear-gradient(135deg,#e0bc73,#b9892d); color:#211708; border:none; }
+        .nav-pill.danger { border-color:rgba(201,58,47,.25); color:#ff9c91; }
+        .nav-pill.danger:hover { background:rgba(201,58,47,.1); }
+        .member-row { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:16px; background:rgba(255,255,255,.025); border:1px solid var(--line); margin-bottom:8px; }
+        .user-row { display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:14px; background:rgba(255,255,255,.02); border:1px solid var(--line); margin-bottom:7px; cursor:pointer; transition:border-color .18s; }
+        .user-row:hover { border-color:rgba(217,178,95,.2); background:rgba(217,178,95,.04); }
       `}</style>
 
       {/* HEADER */}
@@ -142,12 +168,16 @@ export default function ManageLeaguePage() {
           <div style={{ width:42, height:42, borderRadius:13, background:'linear-gradient(135deg,#f0cf84,#a97b26)', display:'grid', placeItems:'center', fontSize:20 }}>⚙️</div>
           <div>
             <div style={{ fontWeight:800, fontSize:15 }}>إدارة: {league?.name}</div>
-            <div style={{ fontSize:11, color:'var(--muted)' }}>🔑 {league?.code} · {members.length}/25 عضو</div>
+            <div style={{ fontSize:11, color:'var(--muted)' }}>🔑 {league?.code} · {members.length}/25 عضو · أُنشئ {new Date(league?.created_at).toLocaleDateString('ar-EG',{year:'numeric',month:'short',day:'numeric'})}</div>
           </div>
         </div>
-        <div style={{ display:'flex', gap:10 }}>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          <button onClick={copyCode} className="nav-pill" style={{ borderColor:copyFeedback?'rgba(39,176,110,.3)':'', color:copyFeedback?'#5effa8':'' }}>
+            {copyFeedback ? '✅ تم النسخ' : '📋 مشاركة الكود'}
+          </button>
           <Link href={`/mini-league/${code}`} className="nav-pill">👁️ الصدارة</Link>
           <Link href="/my-leagues" className="nav-pill">← ليجاتي</Link>
+          <button onClick={handleLogout} className="nav-pill danger">خروج</button>
         </div>
       </header>
 
@@ -160,21 +190,20 @@ export default function ManageLeaguePage() {
 
       <div style={{ maxWidth:800, margin:'0 auto', padding:'28px 20px 80px', display:'flex', flexDirection:'column', gap:24 }}>
 
-        {/* League Code Card */}
+        {/* League Stats */}
         <div className="card" style={{ borderColor:'rgba(217,178,95,.2)', background:'linear-gradient(135deg,rgba(217,178,95,.07),rgba(255,255,255,.02))' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
-            <div>
-              <p style={{ fontSize:12, color:'var(--muted)', marginBottom:6 }}>كود الليج</p>
-              <div style={{ fontSize:32, fontWeight:900, letterSpacing:'.2em', color:'var(--gold)', fontVariantNumeric:'tabular-nums' }}>{league?.code}</div>
-            </div>
-            <div style={{ textAlign:'center' }}>
-              <p style={{ fontSize:12, color:'var(--muted)', marginBottom:6 }}>الأعضاء</p>
-              <div style={{ fontSize:32, fontWeight:900, color:'var(--text)' }}>{members.length}<span style={{ fontSize:16, color:'var(--muted)', fontWeight:400 }}>/25</span></div>
-            </div>
-            <div style={{ textAlign:'center' }}>
-              <p style={{ fontSize:12, color:'var(--muted)', marginBottom:6 }}>دعوات معلقة</p>
-              <div style={{ fontSize:32, fontWeight:900, color:'var(--text)' }}>{pendingInvites.length}</div>
-            </div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:16 }}>
+            {[
+              { label:'كود الليج', value:league?.code, big:true },
+              { label:'الأعضاء', value:`${members.length}/25` },
+              { label:'دعوات معلقة', value:pendingInvites.length },
+              { label:'تاريخ الإنشاء', value:new Date(league?.created_at).toLocaleDateString('ar-EG',{month:'short',day:'numeric',year:'numeric'}) },
+            ].map(item => (
+              <div key={item.label} style={{ textAlign:'center' }}>
+                <p style={{ fontSize:12, color:'var(--muted)', marginBottom:6 }}>{item.label}</p>
+                <div style={{ fontSize:item.big?28:24, fontWeight:900, color:item.big?'var(--gold)':'var(--text)', letterSpacing:item.big?'.15em':'0', fontVariantNumeric:'tabular-nums' }}>{item.value}</div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -182,11 +211,11 @@ export default function ManageLeaguePage() {
         <div className="card">
           <h2 style={{ fontSize:16, fontWeight:800, marginBottom:16 }}>🙋 دعوة لاعبين</h2>
           <input className="field-input" placeholder="ابحث بالاسم أو الإيميل..." value={inviteSearch} onChange={e=>setInviteSearch(e.target.value)} style={{ marginBottom:14 }} />
-          <div style={{ maxHeight:280, overflowY:'auto', paddingLeft:2 }}>
+          <div style={{ maxHeight:280, overflowY:'auto' }}>
             {filteredUsers.length === 0
               ? <p style={{ color:'var(--muted)', fontSize:13, textAlign:'center', padding:'20px 0' }}>{inviteSearch ? 'لا نتائج' : 'كل اللاعبين مدعوون أو أعضاء بالفعل'}</p>
               : filteredUsers.slice(0,20).map(u => (
-                <div key={u.user_id} className="user-row" onClick={()=>inviteUser(u)}>
+                <div key={u.user_id} className="user-row" onClick={()=>!inviting&&inviteUser(u)}>
                   <div style={{ width:36, height:36, borderRadius:'50%', background:'linear-gradient(135deg,rgba(217,178,95,.3),rgba(217,178,95,.1))', display:'grid', placeItems:'center', fontWeight:800, fontSize:13, color:'var(--gold)', flexShrink:0 }}>
                     {(u.full_name||u.user_email||'?').slice(0,2)}
                   </div>
@@ -218,6 +247,10 @@ export default function ManageLeaguePage() {
                   <div style={{ fontSize:11, color:'var(--muted)' }}>{inv.invited_user_profile?.user_email}</div>
                 </div>
                 <span style={{ fontSize:11, padding:'4px 12px', borderRadius:999, background:'rgba(217,178,95,.12)', color:'var(--gold)', border:'1px solid rgba(217,178,95,.22)', fontWeight:700 }}>⏳ منتظر</span>
+                <button className="action-btn" style={{ background:'rgba(201,58,47,.12)', color:'#ff9c91', border:'1px solid rgba(201,58,47,.2)', opacity:cancelingInvite===inv.id?.5:1 }}
+                  onClick={()=>cancelInvite(inv)} disabled={cancelingInvite===inv.id}>
+                  {cancelingInvite===inv.id ? '⏳' : '✕ إلغاء'}
+                </button>
               </div>
             ))}
           </div>
@@ -245,9 +278,7 @@ export default function ManageLeaguePage() {
                 </div>
                 {!isOwner && (
                   <button className="action-btn" style={{ background:'rgba(201,58,47,.15)', color:'#ff9c91', border:'1px solid rgba(201,58,47,.25)' }}
-                    onClick={()=>kickMember(m.user_id, name)}>
-                    طرد
-                  </button>
+                    onClick={()=>kickMember(m.user_id, name)}>طرد</button>
                 )}
               </div>
             );
@@ -259,17 +290,11 @@ export default function ManageLeaguePage() {
           <h2 style={{ fontSize:16, fontWeight:800, marginBottom:8, color:'#ff9c91' }}>⚠️ منطقة الخطر</h2>
           <p style={{ fontSize:13, color:'var(--muted)', marginBottom:16 }}>حذف الليج نهائي — سيتم إشعار جميع الأعضاء</p>
           {!showDeleteConfirm
-            ? <button className="action-btn" style={{ background:'rgba(201,58,47,.15)', color:'#ff9c91', border:'1px solid rgba(201,58,47,.25)', padding:'10px 24px' }} onClick={()=>setShowDeleteConfirm(true)}>
-                🗑️ حذف الليج نهائياً
-              </button>
+            ? <button className="action-btn" style={{ background:'rgba(201,58,47,.15)', color:'#ff9c91', border:'1px solid rgba(201,58,47,.25)', padding:'10px 24px' }} onClick={()=>setShowDeleteConfirm(true)}>🗑️ حذف الليج نهائياً</button>
             : (
               <div className="slide-down" style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-                <button className="action-btn" style={{ background:'var(--red)', color:'#fff', padding:'10px 24px' }} onClick={deleteLeague}>
-                  نعم، احذف الليج
-                </button>
-                <button className="action-btn" style={{ background:'var(--surface-3)', color:'var(--muted)', border:'1px solid var(--line)', padding:'10px 24px' }} onClick={()=>setShowDeleteConfirm(false)}>
-                  إلغاء
-                </button>
+                <button className="action-btn" style={{ background:'var(--red)', color:'#fff', padding:'10px 24px' }} onClick={deleteLeague}>نعم، احذف الليج</button>
+                <button className="action-btn" style={{ background:'var(--surface-3)', color:'var(--muted)', border:'1px solid var(--line)', padding:'10px 24px' }} onClick={()=>setShowDeleteConfirm(false)}>إلغاء</button>
               </div>
             )
           }
