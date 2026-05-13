@@ -405,7 +405,16 @@ export default function Dashboard() {
         }}>
           {profileIncomplete ? '🎁 أكمل ملفك +5 نقاط' : `✏️ ${displayName}`}
         </button>
+        
 
+        <a href="/my-leagues" style={{
+          padding: '9px 16px', borderRadius: 12, border: '1px solid var(--line)',
+          background: 'var(--surface-2)', color: 'var(--muted)', cursor: 'pointer',
+          fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif',
+          textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
+        }}>🏆 ليجاتي</a>
+
+       
         <button onClick={handleLogout} style={{
           padding: '9px 16px', borderRadius: 12, border: '1px solid var(--line)',
           background: 'var(--surface-2)', color: 'var(--muted)', cursor: 'pointer',
