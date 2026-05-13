@@ -6,17 +6,18 @@ import Link from 'next/link';
 import { useNotifications, sendNotification, getNotificationText } from '../../lib/useNotifications';
 
 export default function MyLeaguesPage() {
-  const [user, setUser]           = useState<any>(null);
-  const [userName, setUserName]   = useState('');
-  const [leagues, setLeagues]     = useState<any[]>([]);
-  const [allUsers, setAllUsers]   = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [showCreate, setShowCreate]     = useState(false);
-  const [showNotif, setShowNotif]       = useState(false);
+  const [user, setUser]               = useState<any>(null);
+  const [userName, setUserName]       = useState('');
+  const [leagues, setLeagues]         = useState<any[]>([]);
+  const [allUsers, setAllUsers]       = useState<any[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [showCreate, setShowCreate]   = useState(false);
+  const [showNotif, setShowNotif]     = useState(false);
   const [newLeagueName, setNewLeagueName] = useState('');
-  const [creating, setCreating]   = useState(false);
-  const [message, setMessage]     = useState('');
-  const [msgType, setMsgType]     = useState<'success'|'error'>('success');
+  const [creating, setCreating]       = useState(false);
+  const [message, setMessage]         = useState('');
+  const [msgType, setMsgType]         = useState<'success'|'error'>('success');
+  const [copyFeedback, setCopyFeedback] = useState('');
   const router = useRouter();
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
 
@@ -26,44 +27,26 @@ export default function MyLeaguesPage() {
   };
 
   const loadData = useCallback(async (uid: string) => {
-    // جلب الليجات اللي اليوزر فيها
     const { data: memberRows } = await supabase
-      .from('mini_league_members')
-      .select('league_id, role')
-      .eq('user_id', uid);
-
+      .from('mini_league_members').select('league_id, role').eq('user_id', uid);
     if (!memberRows || memberRows.length === 0) { setLeagues([]); setLoading(false); return; }
-
     const leagueIds = memberRows.map((r: any) => r.league_id);
     const roleMap = new Map(memberRows.map((r: any) => [r.league_id, r.role]));
-
     const { data: leagueRows } = await supabase
-      .from('mini_leagues')
-      .select('*')
-      .in('id', leagueIds)
-      .eq('is_active', true);
-
-    // جلب عدد الأعضاء + ترتيب اليوزر في كل ليج
+      .from('mini_leagues').select('*').in('id', leagueIds).eq('is_active', true);
     const enriched = await Promise.all((leagueRows || []).map(async (lg: any) => {
       const { data: members } = await supabase
-        .from('mini_league_standings')
-        .select('*')
-        .eq('league_id', lg.id)
-        .order('rank', { ascending: true });
-
+        .from('mini_league_standings').select('*').eq('league_id', lg.id).order('rank', { ascending: true });
       const myRank = members?.find((m: any) => m.user_id === uid)?.rank ?? '—';
       return { ...lg, role: roleMap.get(lg.id), memberCount: members?.length || 0, myRank, members: members || [] };
     }));
-
     setLeagues(enriched);
     setLoading(false);
   }, []);
 
   const loadAllUsers = useCallback(async () => {
     const { data } = await supabase
-      .from('user_points')
-      .select('user_id, full_name, user_email')
-      .order('full_name', { ascending: true });
+      .from('user_points').select('user_id, full_name, user_email').order('full_name', { ascending: true });
     setAllUsers(data || []);
   }, []);
 
@@ -78,95 +61,90 @@ export default function MyLeaguesPage() {
     });
   }, [router, loadData, loadAllUsers]);
 
-  // إنشاء ليج جديد
+  // ── إنشاء ليج ──────────────────────────────────────────────
   const createLeague = async () => {
     if (!newLeagueName.trim() || !user) return;
-    // حد أقصى 5 ليجات
     const ownedCount = leagues.filter(l => l.role === 'owner').length;
-    if (ownedCount >= 5) { showMsg('وصلت للحد الأقصى (5 ليجات)', 'error'); return; }
-
+    if (ownedCount >= 5) { showMsg('وصلت للحد الأقصى (5 ليجات كمنشئ)', 'error'); return; }
     setCreating(true);
     try {
-      // توليد كود فريد
       const { data: codeRow } = await supabase.rpc('generate_league_code');
       const code = codeRow as string;
-
       const { data: lg, error } = await supabase
-        .from('mini_leagues')
-        .insert({ name: newLeagueName.trim(), code, created_by: user.id })
-        .select().single();
+        .from('mini_leagues').insert({ name: newLeagueName.trim(), code, created_by: user.id }).select().single();
       if (error) throw error;
-
-      // إضافة المنشئ كـ owner
       await supabase.from('mini_league_members').insert({ league_id: lg.id, user_id: user.id, role: 'owner' });
-
-      setNewLeagueName('');
-      setShowCreate(false);
+      setNewLeagueName(''); setShowCreate(false);
       showMsg(`✅ تم إنشاء "${lg.name}" — كود: ${lg.code}`);
       await loadData(user.id);
-    } catch (err: any) {
-      showMsg('❌ ' + (err.message || 'خطأ في الإنشاء'), 'error');
-    }
+    } catch (err: any) { showMsg('❌ ' + (err.message || 'خطأ في الإنشاء'), 'error'); }
     setCreating(false);
   };
 
-  // الرد على دعوة
+  // ── الرد على دعوة ──────────────────────────────────────────
   const respondToInvite = async (notif: any, accept: boolean) => {
-    const { league_id, league_name, from_user_id, from_name } = notif.data;
+    const { league_id, league_name, from_user_id } = notif.data;
     try {
-      // تحديث الدعوة
       await supabase.from('mini_league_invitations')
         .update({ status: accept ? 'accepted' : 'declined' })
         .eq('league_id', league_id).eq('invited_user', user.id);
-
       if (accept) {
-        // إضافة كعضو
-        await supabase.from('mini_league_members')
-          .insert({ league_id, user_id: user.id, role: 'member' });
-        // إشعار للداعي
-        await sendNotification(from_user_id, 'invite_accepted', {
-          league_id, league_name, invited_user_name: userName,
-        });
+        await supabase.from('mini_league_members').insert({ league_id, user_id: user.id, role: 'member' });
+        await sendNotification(from_user_id, 'invite_accepted', { league_id, league_name, invited_user_name: userName });
         showMsg(`✅ انضممت لـ "${league_name}"`);
         await loadData(user.id);
       } else {
-        await sendNotification(from_user_id, 'invite_declined', {
-          league_id, league_name, invited_user_name: userName,
-        });
-        showMsg(`تم رفض الدعوة`);
+        await sendNotification(from_user_id, 'invite_declined', { league_id, league_name, invited_user_name: userName });
+        showMsg('تم رفض الدعوة');
       }
       await markRead(notif.id);
-    } catch (err: any) {
-      showMsg('❌ ' + err.message, 'error');
-    }
+    } catch (err: any) { showMsg('❌ ' + err.message, 'error'); }
   };
 
+  // ── مغادرة الليج ───────────────────────────────────────────
+  const leaveLeague = async (lg: any) => {
+    if (!confirm(`هل تريد مغادرة "${lg.name}"؟`)) return;
+    await supabase.from('mini_league_members').delete().eq('league_id', lg.id).eq('user_id', user.id);
+    showMsg(`غادرت "${lg.name}"`);
+    await loadData(user.id);
+  };
+
+  // ── نسخ كود + رسالة واتساب ─────────────────────────────────
+  const copyCode = (lg: any) => {
+    const txt = `🏆 انضم لليج "${lg.name}" في الشمعدان × كأس العالم 2026!\nالكود: ${lg.code}\nافتح التطبيق وروح ليجاتي ← إدخال الكود`;
+    navigator.clipboard.writeText(txt).then(() => {
+      setCopyFeedback(lg.id);
+      setTimeout(() => setCopyFeedback(''), 2000);
+    });
+  };
+
+  // ── تسجيل خروج ─────────────────────────────────────────────
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
+
   const medals = ['🥇','🥈','🥉'];
+  const ownedLeagues = leagues.filter(l => l.role === 'owner').length;
 
   return (
-    <div style={{ minHeight:'100vh', background:`radial-gradient(circle at top left,rgba(217,178,95,.10),transparent 28%),radial-gradient(circle at bottom right,rgba(201,58,47,.08),transparent 26%),#070809`, color:'#f4f1e8', fontFamily:"'Cairo',sans-serif", direction:'rtl' }}>
+    <div style={{ minHeight:'100vh', background:`radial-gradient(circle at top left,rgba(217,178,95,.12),transparent 28%),radial-gradient(circle at bottom right,rgba(201,58,47,.10),transparent 26%),#070809`, color:'#f4f1e8', fontFamily:"'Cairo',sans-serif", direction:'rtl' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-        :root {
-          --bg:#070809; --surface:#111315; --surface-2:#171a1d; --surface-3:#1d2125;
-          --line:rgba(255,255,255,.08); --text:#f4f1e8; --muted:#a8a39a;
-          --gold:#d9b25f; --red:#c93a2f; --green:#27b06e;
-        }
+        :root { --bg:#070809; --surface:#111315; --surface-2:#171a1d; --surface-3:#1d2125; --line:rgba(255,255,255,.08); --text:#f4f1e8; --muted:#a8a39a; --gold:#d9b25f; --red:#c93a2f; --green:#27b06e; }
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
         @keyframes slideDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes rowIn { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:translateX(0)} }
-        .slide-down { animation: slideDown .25s ease forwards; }
-        .row-in { animation: rowIn .35s cubic-bezier(.16,1,.3,1) forwards; opacity:0; }
-        .nav-pill { padding:9px 20px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); font-weight:700; text-decoration:none; font-size:13px; font-family:'Cairo',sans-serif; transition:all .2s; cursor:pointer; }
+        .slide-down { animation:slideDown .25s ease forwards; }
+        .row-in { animation:rowIn .35s cubic-bezier(.16,1,.3,1) forwards; opacity:0; }
+        .nav-pill { padding:9px 20px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); font-weight:700; text-decoration:none; font-size:13px; font-family:'Cairo',sans-serif; transition:all .2s; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
         .nav-pill:hover { border-color:rgba(217,178,95,.25); color:#f2d79e; }
         .nav-pill.gold { background:linear-gradient(135deg,#e0bc73,#b9892d); color:#211708; border:none; box-shadow:0 4px 14px rgba(217,178,95,.25); }
+        .nav-pill.danger { border-color:rgba(201,58,47,.25); color:#ff9c91; }
+        .nav-pill.danger:hover { background:rgba(201,58,47,.1); }
         .card { background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01)); border:1px solid var(--line); border-radius:20px; padding:20px; transition:border-color .2s; }
         .card:hover { border-color:rgba(217,178,95,.2); }
         .action-btn { padding:9px 18px; border-radius:12px; border:none; color:#fff; cursor:pointer; font-family:'Cairo',sans-serif; font-size:13px; font-weight:700; transition:opacity .18s; }
         .action-btn:hover { opacity:.85; }
         .field-input { width:100%; padding:12px 16px; border-radius:14px; background:var(--surface-3); border:1px solid var(--line); color:var(--text); font-family:'Cairo',sans-serif; font-size:15px; outline:none; transition:border-color .2s; }
         .field-input:focus { border-color:rgba(217,178,95,.4); }
-        .notif-dot { position:absolute; top:-4px; right:-4px; width:18px; height:18px; border-radius:50%; background:var(--red); font-size:10px; font-weight:800; display:grid; place-items:center; border:2px solid var(--bg); }
         .notif-item { padding:14px 16px; border-radius:14px; background:rgba(255,255,255,.025); border:1px solid var(--line); margin-bottom:8px; }
         .notif-item.unread { background:rgba(217,178,95,.06); border-color:rgba(217,178,95,.18); }
       `}</style>
@@ -182,37 +160,30 @@ export default function MyLeaguesPage() {
         </div>
         <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
 
-          {/* Notifications bell */}
+          {/* Notifications */}
           <div style={{ position:'relative' }}>
-            <button className="nav-pill" onClick={()=>setShowNotif(!showNotif)} style={{ display:'flex', alignItems:'center', gap:6 }}>
-              🔔 <span>الإشعارات</span>
+            <button className="nav-pill" onClick={()=>setShowNotif(!showNotif)}>
+              🔔 الإشعارات
               {unreadCount > 0 && <span style={{ background:'var(--red)', color:'#fff', borderRadius:999, padding:'1px 7px', fontSize:11, fontWeight:800 }}>{unreadCount}</span>}
             </button>
-
-            {/* Notifications Dropdown */}
             {showNotif && (
               <div className="slide-down" style={{ position:'absolute', top:'calc(100% + 10px)', left:0, width:340, background:'#1c1f23', border:'1px solid var(--line)', borderRadius:18, padding:16, zIndex:200, maxHeight:420, overflowY:'auto', boxShadow:'0 16px 40px rgba(0,0,0,.4)' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
                   <span style={{ fontWeight:800, fontSize:14 }}>الإشعارات</span>
                   {unreadCount > 0 && <button onClick={markAllRead} style={{ fontSize:11, color:'var(--gold)', background:'none', border:'none', cursor:'pointer', fontFamily:"'Cairo',sans-serif", fontWeight:700 }}>قراءة الكل</button>}
                 </div>
-
                 {notifications.length === 0
                   ? <div style={{ textAlign:'center', padding:'30px 0', color:'var(--muted)', fontSize:13 }}>لا توجد إشعارات</div>
                   : notifications.map(n => (
                     <div key={n.id} className={`notif-item${!n.is_read?' unread':''}`} onClick={()=>!n.is_read&&markRead(n.id)}>
-                      <p style={{ fontSize:13, color:'var(--text)', marginBottom: n.type==='invite'?10:0, lineHeight:1.5 }}>
-                        {getNotificationText(n)}
-                      </p>
+                      <p style={{ fontSize:13, color:'var(--text)', lineHeight:1.5, marginBottom:n.type==='invite'&&!n.is_read?10:0 }}>{getNotificationText(n)}</p>
                       {n.type === 'invite' && !n.is_read && (
                         <div style={{ display:'flex', gap:8, marginTop:8 }}>
                           <button className="action-btn" style={{ background:'var(--green)', flex:1, padding:'8px 0' }} onClick={e=>{e.stopPropagation();respondToInvite(n,true)}}>✅ قبول</button>
                           <button className="action-btn" style={{ background:'rgba(201,58,47,.6)', flex:1, padding:'8px 0' }} onClick={e=>{e.stopPropagation();respondToInvite(n,false)}}>❌ رفض</button>
                         </div>
                       )}
-                      <p style={{ fontSize:11, color:'var(--muted)', marginTop:6 }}>
-                        {new Date(n.created_at).toLocaleDateString('ar-EG',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
-                      </p>
+                      <p style={{ fontSize:11, color:'var(--muted)', marginTop:6 }}>{new Date(n.created_at).toLocaleDateString('ar-EG',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</p>
                     </div>
                   ))
                 }
@@ -222,6 +193,7 @@ export default function MyLeaguesPage() {
 
           <Link href="/dashboard" className="nav-pill">⚽ توقعاتي</Link>
           <Link href="/leaderboard" className="nav-pill">🏁 الصدارة</Link>
+          <button onClick={handleLogout} className="nav-pill danger">خروج</button>
         </div>
       </header>
 
@@ -239,12 +211,14 @@ export default function MyLeaguesPage() {
           <div>
             <h1 style={{ fontSize:'clamp(1.5rem,4vw,2.2rem)', fontWeight:800, margin:0 }}>🏆 ليجاتي</h1>
             <p style={{ fontSize:13, color:'var(--muted)', marginTop:4 }}>
-              {leagues.length} ليج / حد أقصى 5 كمنشئ
+              {leagues.length} ليج · منشئ {ownedLeagues}/5
             </p>
           </div>
-          <button className="nav-pill gold" onClick={()=>setShowCreate(!showCreate)}>
-            {showCreate ? '✕ إلغاء' : '+ إنشاء ليج جديد'}
-          </button>
+          {ownedLeagues < 5 && (
+            <button className="nav-pill gold" onClick={()=>setShowCreate(!showCreate)}>
+              {showCreate ? '✕ إلغاء' : '+ إنشاء ليج جديد'}
+            </button>
+          )}
         </div>
 
         {/* Create League Form */}
@@ -257,16 +231,14 @@ export default function MyLeaguesPage() {
                 {creating ? '⏳' : 'إنشاء'}
               </button>
             </div>
-            <p style={{ fontSize:12, color:'var(--muted)', marginTop:10 }}>سيتم توليد كود دعوة تلقائياً — تقدر تدعو اللاعبين من صفحة إدارة الليج</p>
+            <p style={{ fontSize:12, color:'var(--muted)', marginTop:10 }}>سيتم توليد كود تلقائياً — تقدر تدعو اللاعبين من صفحة الإدارة</p>
           </div>
         )}
 
         {/* Leagues List */}
         {loading ? (
           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-            {[1,2,3].map(i => (
-              <div key={i} style={{ height:96, borderRadius:20, background:'rgba(255,255,255,.03)', animation:'rowIn .4s ease forwards', animationDelay:`${i*.08}s`, opacity:0 }} />
-            ))}
+            {[1,2,3].map(i => <div key={i} style={{ height:96, borderRadius:20, background:'rgba(255,255,255,.03)' }} />)}
           </div>
         ) : leagues.length === 0 ? (
           <div style={{ textAlign:'center', padding:'60px 0' }}>
@@ -280,39 +252,44 @@ export default function MyLeaguesPage() {
               <div key={lg.id} className="card row-in" style={{ animationDelay:`${i*.07}s`, borderColor:lg.role==='owner'?'rgba(217,178,95,.22)':'var(--line)' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
 
-                  {/* League icon */}
                   <div style={{ width:50, height:50, borderRadius:16, background:lg.role==='owner'?'linear-gradient(135deg,#f0cf84,#a97b26)':'rgba(217,178,95,.12)', border:'1px solid rgba(217,178,95,.2)', display:'grid', placeItems:'center', fontSize:22, flexShrink:0 }}>
                     {lg.role==='owner'?'👑':'🏆'}
                   </div>
 
-                  {/* Info */}
                   <div style={{ flex:1, minWidth:150 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                       <span style={{ fontWeight:800, fontSize:16 }}>{lg.name}</span>
                       {lg.role==='owner' && <span style={{ fontSize:10, padding:'2px 10px', borderRadius:999, background:'rgba(217,178,95,.14)', color:'var(--gold)', border:'1px solid rgba(217,178,95,.25)', fontWeight:700 }}>منشئ</span>}
                     </div>
-                    <div style={{ fontSize:12, color:'var(--muted)', marginTop:4 }}>
-                      🔑 {lg.code} &nbsp;·&nbsp; 👥 {lg.memberCount} عضو &nbsp;·&nbsp;
+                    <div style={{ fontSize:12, color:'var(--muted)', marginTop:4, display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+                      <span>🔑 {lg.code}</span>
+                      <span>👥 {lg.memberCount}/25</span>
                       <span style={{ color:lg.myRank<=3?'var(--gold)':'var(--muted)' }}>
                         {lg.myRank<=3&&medals[lg.myRank-1]} أنت #{lg.myRank}
+                      </span>
+                      <span style={{ color:'rgba(255,255,255,.3)', fontSize:10 }}>
+                        {new Date(lg.created_at).toLocaleDateString('ar-EG',{year:'numeric',month:'short',day:'numeric'})}
                       </span>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+                  <div style={{ display:'flex', gap:8, flexShrink:0, flexWrap:'wrap' }}>
+                    {/* Share / Copy */}
+                    <button onClick={()=>copyCode(lg)} className="action-btn" style={{ background:copyFeedback===lg.id?'rgba(39,176,110,.2)':'rgba(255,255,255,.06)', border:'1px solid var(--line)', color:copyFeedback===lg.id?'#5effa8':'var(--muted)' }}>
+                      {copyFeedback===lg.id ? '✅ تم النسخ' : '📋 مشاركة'}
+                    </button>
                     <Link href={`/mini-league/${lg.code}`} className="action-btn" style={{ background:'rgba(217,178,95,.14)', border:'1px solid rgba(217,178,95,.25)', color:'var(--gold)', textDecoration:'none', display:'inline-flex', alignItems:'center' }}>
                       👁️ الصدارة
                     </Link>
-                    {lg.role==='owner' && (
-                      <Link href={`/mini-league/${lg.code}/manage`} className="action-btn" style={{ background:'var(--surface-3)', border:'1px solid var(--line)', color:'var(--muted)', textDecoration:'none', display:'inline-flex', alignItems:'center' }}>
-                        ⚙️ إدارة
-                      </Link>
-                    )}
+                    {lg.role==='owner'
+                      ? <Link href={`/mini-league/${lg.code}/manage`} className="action-btn" style={{ background:'var(--surface-3)', border:'1px solid var(--line)', color:'var(--muted)', textDecoration:'none', display:'inline-flex', alignItems:'center' }}>⚙️ إدارة</Link>
+                      : <button onClick={()=>leaveLeague(lg)} className="action-btn" style={{ background:'rgba(201,58,47,.1)', border:'1px solid rgba(201,58,47,.2)', color:'#ff9c91' }}>🚪 مغادرة</button>
+                    }
                   </div>
                 </div>
 
-                {/* Mini standings preview — top 3 */}
+                {/* Mini standings preview */}
                 {lg.members.length > 0 && (
                   <div style={{ marginTop:14, paddingTop:14, borderTop:'1px solid var(--line)', display:'flex', gap:10, flexWrap:'wrap' }}>
                     {lg.members.slice(0,3).map((m: any) => (
