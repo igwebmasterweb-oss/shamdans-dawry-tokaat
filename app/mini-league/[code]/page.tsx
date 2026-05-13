@@ -1,6 +1,6 @@
 'use client';
 import { supabase } from '../../../lib/supabase';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -11,6 +11,8 @@ export default function MiniLeaguePage() {
   const [myRole, setMyRole]     = useState<'owner'|'member'|null>(null);
   const [loading, setLoading]   = useState(true);
   const [animated, setAnimated] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
+  const channelRef = useRef<any>(null);
   const router = useRouter();
   const params = useParams();
   const code = params?.code as string;
@@ -18,34 +20,52 @@ export default function MiniLeaguePage() {
   const loadLeague = useCallback(async (uid: string) => {
     const { data: lg } = await supabase
       .from('mini_leagues').select('*').eq('code', code).eq('is_active', true).maybeSingle();
-
     if (!lg) { router.push('/my-leagues'); return; }
     setLeague(lg);
-
-    // تحقق أن اليوزر عضو
     const { data: mem } = await supabase
       .from('mini_league_members').select('role').eq('league_id', lg.id).eq('user_id', uid).maybeSingle();
-
     if (!mem) { router.push('/my-leagues'); return; }
     setMyRole(mem.role as 'owner'|'member');
-
-    // الصدارة
     const { data: standings } = await supabase
-      .from('mini_league_standings')
-      .select('*').eq('league_id', lg.id).order('rank', { ascending: true });
-
+      .from('mini_league_standings').select('*').eq('league_id', lg.id).order('rank', { ascending: true });
     setMembers(standings || []);
     setLoading(false);
     setTimeout(() => setAnimated(true), 100);
+    return lg;
   }, [code, router]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.push('/login'); return; }
       setUser(data.user);
-      loadLeague(data.user.id);
+      const lg = await loadLeague(data.user.id);
+      if (!lg) return;
+
+      // ── Realtime: تحديث الصدارة تلقائياً ──────────────────
+      channelRef.current = supabase
+        .channel(`league-${lg.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'mini_league_members', filter: `league_id=eq.${lg.id}` },
+          async () => {
+            const { data: standings } = await supabase
+              .from('mini_league_standings').select('*').eq('league_id', lg.id).order('rank', { ascending: true });
+            setMembers(standings || []);
+          }
+        )
+        .subscribe();
     });
+    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
   }, [router, loadLeague]);
+
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
+
+  const copyCode = () => {
+    if (!league) return;
+    const txt = `🏆 انضم لليج "${league.name}" في الشمعدان × كأس العالم 2026!\nالكود: ${league.code}\nافتح التطبيق وروح ليجاتي ← إدخال الكود`;
+    navigator.clipboard.writeText(txt).then(() => {
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
+    });
+  };
 
   const medals = ['🥇','🥈','🥉'];
   const maxPts = members.length > 0 ? Math.max(...members.map(m => m.total_points || 0), 1) : 1;
@@ -69,11 +89,15 @@ export default function MiniLeaguePage() {
         @keyframes barGrow { from{width:0%!important} }
         @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
         .player-row { opacity:0; animation:rowIn .4s cubic-bezier(.16,1,.3,1) forwards; }
-        .bar-fill { width:0%; animation:barGrow 1s cubic-bezier(.16,1,.3,1) forwards; }
+        .bar-fill { animation:barGrow 1s cubic-bezier(.16,1,.3,1) forwards; }
         .top-float { animation:float 3.5s ease-in-out infinite; }
-        .nav-pill { padding:9px 20px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); font-weight:700; text-decoration:none; font-size:13px; font-family:'Cairo',sans-serif; transition:all .2s; }
+        .nav-pill { padding:9px 20px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); font-weight:700; text-decoration:none; font-size:13px; font-family:'Cairo',sans-serif; transition:all .2s; display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
         .nav-pill:hover { border-color:rgba(217,178,95,.25); color:#f2d79e; }
         .nav-pill.gold { background:linear-gradient(135deg,#e0bc73,#b9892d); color:#211708; border:none; }
+        .nav-pill.danger { border-color:rgba(201,58,47,.25); color:#ff9c91; }
+        .nav-pill.danger:hover { background:rgba(201,58,47,.1); }
+        .realtime-dot { width:7px; height:7px; border-radius:50%; background:#27b06e; box-shadow:0 0 6px #27b06e; animation:pulse 2s ease-in-out infinite; display:inline-block; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
       `}</style>
 
       {/* HEADER */}
@@ -81,27 +105,31 @@ export default function MiniLeaguePage() {
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ width:42, height:42, borderRadius:13, background:'linear-gradient(135deg,#f0cf84,#a97b26)', display:'grid', placeItems:'center', fontSize:20, boxShadow:'0 4px 16px rgba(217,178,95,.25)' }}>🏆</div>
           <div>
-            <div style={{ fontWeight:800, fontSize:15 }}>{league?.name}</div>
-            <div style={{ fontSize:11, color:'var(--muted)' }}>🔑 {league?.code} · {members.length} عضو</div>
+            <div style={{ fontWeight:800, fontSize:15, display:'flex', alignItems:'center', gap:8 }}>
+              {league?.name}
+              <span className="realtime-dot" title="مباشر" />
+            </div>
+            <div style={{ fontSize:11, color:'var(--muted)' }}>🔑 {league?.code} · {members.length}/25 عضو · {new Date(league?.created_at).toLocaleDateString('ar-EG',{year:'numeric',month:'short',day:'numeric'})}</div>
           </div>
         </div>
         <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          {myRole==='owner' && (
-            <Link href={`/mini-league/${code}/manage`} className="nav-pill gold">⚙️ إدارة الليج</Link>
-          )}
+          <button onClick={copyCode} className="nav-pill" style={{ borderColor:copyFeedback?'rgba(39,176,110,.3)':'', color:copyFeedback?'#5effa8':'' }}>
+            {copyFeedback ? '✅ تم النسخ' : '📋 مشاركة'}
+          </button>
+          {myRole==='owner' && <Link href={`/mini-league/${code}/manage`} className="nav-pill gold">⚙️ إدارة الليج</Link>}
           <Link href="/my-leagues" className="nav-pill">← ليجاتي</Link>
+          <button onClick={handleLogout} className="nav-pill danger">خروج</button>
         </div>
       </header>
 
-      {/* PODIUM — TOP 3 */}
+      {/* PODIUM */}
       {members.length >= 3 && (
         <div style={{ maxWidth:680, margin:'40px auto 0', padding:'0 20px' }}>
           <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'center', gap:14 }}>
             {[1,0,2].map(rank => {
               const m = members[rank];
               const isFirst = rank===0;
-              const heights = {0:190, 1:150, 2:120};
-              const h = heights[rank as 0|1|2];
+              const heights: Record<number,number> = {0:190, 1:150, 2:120};
               const podiumColors = [
                 { bg:'rgba(217,178,95,.9)', glow:'rgba(217,178,95,.35)', text:'#211708' },
                 { bg:'rgba(180,180,190,.7)', glow:'rgba(200,200,210,.25)', text:'#111' },
@@ -111,14 +139,14 @@ export default function MiniLeaguePage() {
               const name = m.full_name || m.user_email?.split('@')[0] || '?';
               return (
                 <div key={m.user_id} className={isFirst?'top-float':''} style={{ flex:1, maxWidth:200, display:'flex', flexDirection:'column', alignItems:'center' }}>
-                  <div style={{ width:isFirst?70:54, height:isFirst?70:54, borderRadius:'50%', background:col.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:isFirst?20:16, fontWeight:800, color:col.text, boxShadow:`0 0 ${isFirst?28:14}px ${col.glow}`, marginBottom:8, border:`2px solid ${col.bg}` }}>
+                  <div style={{ width:isFirst?70:54, height:isFirst?70:54, borderRadius:'50%', background:col.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:isFirst?20:16, fontWeight:800, color:col.text, boxShadow:`0 0 ${isFirst?28:14}px ${col.glow}`, marginBottom:8 }}>
                     {name.slice(0,2)}
                   </div>
                   <div style={{ fontWeight:800, fontSize:isFirst?15:13, textAlign:'center', marginBottom:4, maxWidth:'90%', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</div>
                   <div style={{ fontSize:isFirst?20:16, fontWeight:800, color:'var(--gold)', marginBottom:10, fontVariantNumeric:'tabular-nums' }}>
                     {m.total_points||0} <span style={{ fontSize:11, color:'var(--muted)', fontWeight:400 }}>نقطة</span>
                   </div>
-                  <div style={{ width:'100%', height:h, background:`linear-gradient(180deg,${col.bg}22,${col.bg}0a)`, border:`1px solid ${col.bg}44`, borderBottom:'none', borderRadius:'12px 12px 0 0', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32 }}>
+                  <div style={{ width:'100%', height:heights[rank], background:`linear-gradient(180deg,${col.bg}22,${col.bg}0a)`, border:`1px solid ${col.bg}44`, borderBottom:'none', borderRadius:'12px 12px 0 0', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32 }}>
                     {medals[rank]}
                   </div>
                 </div>
@@ -136,7 +164,6 @@ export default function MiniLeaguePage() {
           <span style={{ fontSize:11, color:'var(--muted)', letterSpacing:'.15em', textTransform:'uppercase', fontWeight:700 }}>الترتيب الكامل</span>
           <div style={{ height:1, flex:1, background:'var(--line)' }} />
         </div>
-
         {members.map((m, index) => {
           const isMe = m.user_id === user?.id;
           const pct = maxPts > 0 ? ((m.total_points||0) / maxPts) * 100 : 0;
