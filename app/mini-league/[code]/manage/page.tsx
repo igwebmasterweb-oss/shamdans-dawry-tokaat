@@ -37,14 +37,30 @@ export default function ManageLeaguePage() {
     const [{ data: mems }, { data: invites }, { data: users }] = await Promise.all([
       supabase.from('mini_league_standings').select('*').eq('league_id', lg.id).order('rank'),
       supabase.from('mini_league_invitations')
-       .select('*, invited_user_profile:user_points!invited_user(full_name,user_email)')
+        .select('id, invited_user, status, created_at')
         .eq('league_id', lg.id).eq('status', 'pending'),
       supabase.from('user_points').select('user_id, full_name, user_email').order('full_name'),
     ]);
     setMembers(mems || []);
-    setPendingInvites(invites || []);
+    // جيب بيانات المدعوين بشكل منفصل لتجنب مشاكل foreign key join
+    const invitesList = invites || [];
+    if (invitesList.length > 0) {
+      const invitedUserIds = invitesList.map((i: any) => i.invited_user);
+      const { data: invitedProfiles } = await supabase
+        .from('user_points')
+        .select('user_id, full_name, user_email')
+        .in('user_id', invitedUserIds);
+      const profileMap = new Map((invitedProfiles||[]).map((p: any) => [p.user_id, p]));
+      const enrichedInvites = invitesList.map((inv: any) => ({
+        ...inv,
+        invited_user_profile: profileMap.get(inv.invited_user) || null,
+      }));
+      setPendingInvites(enrichedInvites);
+    } else {
+      setPendingInvites([]);
+    }
     const memberIds = new Set((mems||[]).map((m: any) => m.user_id));
-    const invitedIds = new Set((invites||[]).map((i: any) => i.invited_user));
+    const invitedIds = new Set(invitesList.map((i: any) => i.invited_user));
     setAllUsers((users||[]).filter(u => !memberIds.has(u.user_id) && !invitedIds.has(u.user_id)));
     setLoading(false);
   }, [code, router]);
