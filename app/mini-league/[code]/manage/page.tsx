@@ -37,7 +37,7 @@ export default function ManageLeaguePage() {
     const [{ data: mems }, { data: invites }, { data: users }] = await Promise.all([
       supabase.from('mini_league_standings').select('*').eq('league_id', lg.id).order('rank'),
       supabase.from('mini_league_invitations')
-        .select('*, invited_user_profile:user_points!mini_league_invitations_invited_user_fkey(full_name,user_email)')
+       .select('*, invited_user_profile:user_points!invited_user(full_name,user_email)')
         .eq('league_id', lg.id).eq('status', 'pending'),
       supabase.from('user_points').select('user_id, full_name, user_email').order('full_name'),
     ]);
