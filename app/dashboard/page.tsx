@@ -54,10 +54,11 @@ export default function Dashboard() {
       if (profileData) {
         setProfile(profileData);
         // auto-fill facebook from OAuth metadata if available
-        const fbMeta = data?.session?.user?.user_metadata?.avatar_url
-          ? null
-          : data?.session?.user?.app_metadata?.provider === 'facebook'
-          ? `https://facebook.com/${data?.session?.user?.user_metadata?.name || ''}`
+        const { data: sessionData } = await supabase.auth.getSession();
+        const provider = sessionData?.session?.user?.app_metadata?.provider;
+        const fbName = sessionData?.session?.user?.user_metadata?.name || '';
+        const fbMeta = provider === 'facebook'
+          ? `https://facebook.com/${fbName}`
           : null;
         setProfileForm({
           display_name: profileData.full_name || '',
