@@ -10,6 +10,8 @@ interface Profile {
   profile_completed: boolean;
   bonus_points_awarded: boolean;
   bonus_points?: number;
+  facebook_url?: string | null;
+  facebook_bonus_awarded?: boolean;
 }
 
 export default function Dashboard() {
@@ -25,7 +27,7 @@ export default function Dashboard() {
   const [submitting, setSubmitting] = useState<number | null>(null);
   const [messages, setMessages] = useState<Record<number, string>>({});
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [profileForm, setProfileForm] = useState({ display_name: '', phone: '' });
+  const [profileForm, setProfileForm] = useState({ display_name: '', phone: '', facebook_url: '' });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
 
@@ -51,7 +53,17 @@ export default function Dashboard() {
         .from('profiles').select('*').eq('id', userId).single();
       if (profileData) {
         setProfile(profileData);
-        setProfileForm({ display_name: profileData.full_name || '', phone: profileData.phone || '' });
+        // auto-fill facebook from OAuth metadata if available
+        const fbMeta = data?.session?.user?.user_metadata?.avatar_url
+          ? null
+          : data?.session?.user?.app_metadata?.provider === 'facebook'
+          ? `https://facebook.com/${data?.session?.user?.user_metadata?.name || ''}`
+          : null;
+        setProfileForm({
+          display_name: profileData.full_name || '',
+          phone: profileData.phone || '',
+          facebook_url: profileData.facebook_url || fbMeta || '',
+        });
       }
       const res = await fetch('/api/fixtures');
       const data = await res.json();
@@ -81,18 +93,38 @@ export default function Dashboard() {
     if (!profileForm.display_name.trim()) { setProfileMsg('❌ الاسم مطلوب'); return; }
     setProfileSaving(true);
     try {
-      const isCompleting = !profile?.profile_completed && profileForm.display_name.trim() && profileForm.phone.trim();
+      const fbUrl = profileForm.facebook_url.trim();
+      const fbValid = fbUrl && (fbUrl.includes('facebook.com') || fbUrl.includes('fb.com'));
+
+      // النقاط تُعطى مرة واحدة فقط لما يكمل الثلاثة: اسم + تليفون + فيسبوك
+      const hasAll = profileForm.display_name.trim() && profileForm.phone.trim() && fbValid;
+      const isCompleting = !profile?.bonus_points_awarded && hasAll;
+
       const updates: any = {
-        full_name: profileForm.display_name.trim(), phone: profileForm.phone.trim() || null,
+        full_name: profileForm.display_name.trim(),
+        phone: profileForm.phone.trim() || null,
+        facebook_url: fbValid ? fbUrl : null,
         profile_completed: !!(profileForm.display_name.trim() && profileForm.phone.trim()),
         updated_at: new Date().toISOString(),
       };
-      if (isCompleting && !profile?.bonus_points_awarded) { updates.bonus_points_awarded = true; updates.bonus_points = 5; }
+      if (isCompleting) { updates.bonus_points_awarded = true; updates.bonus_points = 5; }
+
       const { error } = await supabase.from('profiles').upsert({ id: user.id, ...updates });
       if (error) throw error;
-      setProfileMsg(isCompleting && !profile?.bonus_points_awarded ? '✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉' : '✅ تم الحفظ!');
+
+      if (isCompleting) {
+        setProfileMsg('✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉');
+      } else if (!hasAll && !profile?.bonus_points_awarded) {
+        const missing = [];
+        if (!profileForm.phone.trim()) missing.push('التليفون');
+        if (!fbValid) missing.push('فيسبوك');
+        setProfileMsg(`💾 تم الحفظ — أكمل ${missing.join(' + ')} للحصول على 5 نقاط 🎁`);
+      } else {
+        setProfileMsg('✅ تم الحفظ!');
+      }
+
       await loadData(user.id);
-      setTimeout(() => { setShowProfileModal(false); setProfileMsg(''); }, 2000);
+      setTimeout(() => { setShowProfileModal(false); setProfileMsg(''); }, 2500);
     } catch { setProfileMsg('❌ خطأ في الحفظ، حاول مجدداً'); }
     setProfileSaving(false);
   };
@@ -450,7 +482,18 @@ export default function Dashboard() {
             </div>
             {!profile?.bonus_points_awarded && (
               <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.22)', borderRadius: 14, padding: '10px 14px', marginBottom: 20, fontSize: 13, color: '#f2d79e', textAlign: 'center', fontWeight: 700 }}>
-                🎁 أكمل اسمك ورقمك واحصل على 5 نقاط مكافأة!
+                🎁 أكمل <strong>الاسم + التليفون + فيسبوك</strong> واحصل على 5 نقاط!
+                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', gap: 16, fontSize: 12 }}>
+                  <span style={{ color: profileForm.display_name.trim() ? '#5effa8' : 'var(--muted)' }}>
+                    {profileForm.display_name.trim() ? '✅' : '○'} الاسم
+                  </span>
+                  <span style={{ color: profileForm.phone.trim() ? '#5effa8' : 'var(--muted)' }}>
+                    {profileForm.phone.trim() ? '✅' : '○'} التليفون
+                  </span>
+                  <span style={{ color: profileForm.facebook_url.trim() ? '#5effa8' : 'var(--muted)' }}>
+                    {profileForm.facebook_url.trim() ? '✅' : '○'} فيسبوك
+                  </span>
+                </div>
               </div>
             )}
             <label style={{ display: 'block', fontSize: 13, color: 'var(--muted)', marginBottom: 6, fontWeight: 700 }}>
@@ -466,9 +509,27 @@ export default function Dashboard() {
             <input type="tel" value={profileForm.phone}
               onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
               placeholder="01012345678"
-              className="modal-input" style={{ marginBottom: 20, direction: 'ltr', textAlign: 'right' }} />
+              className="modal-input" style={{ marginBottom: 14, direction: 'ltr', textAlign: 'right' }} />
+            <label style={{ display: 'block', fontSize: 13, color: 'var(--muted)', marginBottom: 6, fontWeight: 700 }}>
+              رابط فيسبوك
+              {profile?.facebook_bonus_awarded
+                ? <span style={{ color: '#5effa8', marginRight: 8 }}>✅ مضاف</span>
+                : <span style={{ fontSize: 11, color: 'var(--gold)', marginRight: 8 }}>+5 نقاط عند إكمال الثلاثة</span>
+              }
+            </label>
+            <input
+              type="url"
+              value={profileForm.facebook_url}
+              onChange={e => setProfileForm(f => ({ ...f, facebook_url: e.target.value }))}
+              placeholder="https://facebook.com/username"
+              className="modal-input"
+              style={{ marginBottom: 20, direction: 'ltr', textAlign: 'right' }}
+              readOnly={!!(profile?.facebook_url && profileForm.facebook_url)}
+            />
             {profileMsg && (
-              <div style={{ textAlign: 'center', marginBottom: 14, fontSize: 14, fontWeight: 700, color: profileMsg.startsWith('✅') ? 'var(--green)' : 'var(--red)' }}>{profileMsg}</div>
+              <div style={{ textAlign: 'center', marginBottom: 14, fontSize: 14, fontWeight: 700,
+                color: profileMsg.startsWith('✅') ? 'var(--green)' : profileMsg.startsWith('💾') ? '#f2d79e' : 'var(--red)'
+              }}>{profileMsg}</div>
             )}
             <button onClick={saveProfile} disabled={profileSaving} className="save-btn">
               {profileSaving ? '⏳ جاري الحفظ...' : '💾 حفظ البيانات'}
