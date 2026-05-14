@@ -1,14 +1,21 @@
 'use client';
 import { supabase } from '../../lib/supabase';
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
-export default function Login() {
+function LoginInner() {
   const [email, setEmail]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [socialLoading, setSocialLoading] = useState<'google'|'facebook'|null>(null);
   const [sent, setSent]         = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const searchParams = useSearchParams();
+  const refCode = searchParams?.get('ref') || '';
+
+  useEffect(() => {
+    if (refCode) sessionStorage.setItem('pendingRef', refCode);
+  }, [refCode]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,5 +178,13 @@ export default function Login() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
   );
 }
