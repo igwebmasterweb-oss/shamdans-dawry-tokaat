@@ -18,6 +18,7 @@ export default function MyLeaguesPage() {
   const [message, setMessage]         = useState('');
   const [msgType, setMsgType]         = useState<'success'|'error'>('success');
   const [copyFeedback, setCopyFeedback] = useState('');
+  const [shareLeague, setShareLeague] = useState<any>(null);
   const router = useRouter();
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
 
@@ -116,6 +117,33 @@ export default function MyLeaguesPage() {
       setCopyFeedback(lg.id);
       setTimeout(() => setCopyFeedback(''), 2000);
     });
+  };
+
+  // ── مشاركة الليج ─────────────────────────────────────────────
+  const getLeagueShareText = (lg: any) =>
+    `🏆 انضم لليج "${lg.name}" في الشمعدان × كأس العالم 2026!\nالكود: ${lg.code}\nسجّل من هنا: https://worldcup.shamaadan.com/login`;
+
+  const shareLeagueWhatsApp = (lg: any) => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(getLeagueShareText(lg))}`, '_blank');
+  };
+
+  const shareLeagueFacebook = (lg: any) => {
+    const url = encodeURIComponent('https://worldcup.shamaadan.com/login');
+    const quote = encodeURIComponent(`🏆 انضم لليج "${lg.name}" في الشمعدان! الكود: ${lg.code}`);
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${quote}`, '_blank', 'width=600,height=400');
+  };
+
+  const shareLeagueMessenger = (lg: any) => {
+    const url = encodeURIComponent('https://worldcup.shamaadan.com/login');
+    window.open(`https://www.facebook.com/dialog/send?link=${url}&app_id=1302682795390354&redirect_uri=${url}`, '_blank');
+  };
+
+  const openShareModal = (lg: any) => {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      navigator.share({ title: `ليج ${lg.name}`, text: getLeagueShareText(lg), url: 'https://worldcup.shamaadan.com/login' });
+    } else {
+      setShareLeague(lg);
+    }
   };
 
   // ── تسجيل خروج ─────────────────────────────────────────────
@@ -276,8 +304,11 @@ export default function MyLeaguesPage() {
                   {/* Actions */}
                   <div style={{ display:'flex', gap:8, flexShrink:0, flexWrap:'wrap' }}>
                     {/* Share / Copy */}
+                    <button onClick={()=>openShareModal(lg)} className="action-btn" style={{ background:'rgba(24,119,242,.1)', border:'1px solid rgba(24,119,242,.25)', color:'#7db1ff' }}>
+                      📤 مشاركة
+                    </button>
                     <button onClick={()=>copyCode(lg)} className="action-btn" style={{ background:copyFeedback===lg.id?'rgba(39,176,110,.2)':'rgba(255,255,255,.06)', border:'1px solid var(--line)', color:copyFeedback===lg.id?'#5effa8':'var(--muted)' }}>
-                      {copyFeedback===lg.id ? '✅ تم النسخ' : '📋 مشاركة'}
+                      {copyFeedback===lg.id ? '✅ تم النسخ' : '📋 كود'}
                     </button>
                     <Link href={`/mini-league/${lg.code}`} className="action-btn" style={{ background:'rgba(217,178,95,.14)', border:'1px solid rgba(217,178,95,.25)', color:'var(--gold)', textDecoration:'none', display:'inline-flex', alignItems:'center' }}>
                       👁️ الصدارة
@@ -306,6 +337,39 @@ export default function MyLeaguesPage() {
           </div>
         )}
       </div>
+
+      {/* ══ SHARE LEAGUE MODAL ══ */}
+      {shareLeague && (
+        <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',display:'grid',placeItems:'center',zIndex:1000,padding:20 }}
+          onClick={() => setShareLeague(null)}>
+          <div style={{ background:'linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015)),var(--surface)',border:'1px solid rgba(217,178,95,.2)',borderRadius:28,padding:28,width:'100%',maxWidth:420,boxShadow:'0 24px 64px rgba(0,0,0,.6)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20 }}>
+              <h3 style={{ fontSize:18,fontWeight:800 }}>📤 شارك الليج</h3>
+              <button onClick={() => setShareLeague(null)} style={{ background:'var(--surface-3)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center' }}>✕</button>
+            </div>
+            <div style={{ background:'rgba(217,178,95,.08)',border:'1px solid rgba(217,178,95,.2)',borderRadius:16,padding:'14px 18px',marginBottom:20,textAlign:'center' }}>
+              <div style={{ fontSize:16,fontWeight:800,color:'var(--gold)',marginBottom:6 }}>{shareLeague.name}</div>
+              <div style={{ fontSize:24,fontWeight:800,letterSpacing:4,color:'var(--text)',fontFamily:'monospace' }}>{shareLeague.code}</div>
+              <div style={{ fontSize:12,color:'var(--muted)',marginTop:4 }}>كود الانضمام</div>
+            </div>
+            <button onClick={() => copyCode(shareLeague)} style={{ width:'100%',padding:'11px 16px',borderRadius:14,border:'1px solid var(--line)',background:copyFeedback===shareLeague.id?'rgba(39,176,110,.15)':'var(--surface-3)',color:copyFeedback===shareLeague.id?'#5effa8':'var(--muted)',fontWeight:700,fontSize:14,cursor:'pointer',fontFamily:'Cairo,sans-serif',marginBottom:16,transition:'all .2s' }}>
+              {copyFeedback===shareLeague.id ? '✅ تم نسخ الرسالة' : '📋 نسخ الرسالة كاملة'}
+            </button>
+            <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10 }}>
+              <button onClick={() => shareLeagueWhatsApp(shareLeague)} style={{ padding:'12px 8px',borderRadius:14,border:'1px solid rgba(37,211,102,.25)',background:'rgba(37,211,102,.08)',color:'#5effa8',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'Cairo,sans-serif',display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
+                <span style={{ fontSize:22 }}>💬</span>واتساب
+              </button>
+              <button onClick={() => shareLeagueFacebook(shareLeague)} style={{ padding:'12px 8px',borderRadius:14,border:'1px solid rgba(24,119,242,.25)',background:'rgba(24,119,242,.08)',color:'#7db1ff',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'Cairo,sans-serif',display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
+                <span style={{ fontSize:22 }}>📘</span>فيسبوك
+              </button>
+              <button onClick={() => shareLeagueMessenger(shareLeague)} style={{ padding:'12px 8px',borderRadius:14,border:'1px solid rgba(0,132,255,.25)',background:'rgba(0,132,255,.08)',color:'#7db1ff',fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'Cairo,sans-serif',display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
+                <span style={{ fontSize:22 }}>⚡</span>ماسنجر
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
