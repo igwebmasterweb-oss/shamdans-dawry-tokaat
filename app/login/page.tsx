@@ -9,26 +9,95 @@ export default function Login() {
   const [socialLoading, setSocialLoading] = useState<'google'|'facebook'|null>(null);
   const [sent, setSent] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [profileSynced, setProfileSynced] = useState(false);
 
-  // ── إضافة جديدة: إنشاء/تحديث profile تلقائياً عند أول نجاح ──
+  // ── دمج الـ metadata من فيسبوك/جوجل في الـ profile مع احترام البيانات القديمة ──
   const upsertProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // لو الـ sync حصل قبل كدة، ما تعملش حاجة
+    setProfileSynced(true);
+
     const meta = user.user_metadata || {};
+    const isSocial = user.app_metadata?.provider !== 'email';
+    const provider = user.app_metadata?.provider || 'email';
+
+    // اسم المستخدم: فيسبوك بيبعت name، جوجل بيبعت full_name + name
     const metaName = meta.full_name || meta.name || '';
-    const update = {
-      id: user.id,
-      full_name: metaName || user.email?.split('@')[0] || '',
-      avatar_url: meta.avatar_url || meta.picture || null,
-      profile_completed: !!metaName,
-      bonus_points_awarded: !!metaName,
-      bonus_points: metaName ? 5 : 0,
-    };
-    const { data: existing } = await supabase.from('profiles').select('id').eq('id', user.id).single();
-    if (existing) {
-      await supabase.from('profiles').update(update).eq('id', user.id);
+
+    //url الصورة: جوجل picture، فيسبوك picture.data.url أو avatar
+    const metaAvatar = meta.picture || meta.avatar_url || (meta.picture?.data?.url) || null;
+    const facebookUrl = provider === 'facebook' ? `https://facebook.com/${meta.id}` : null;
+
+    // ── قراءة الـ profile الحالي عشان ما نمسحش بيانات ──
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url, profile_completed, bonus_points, bonus_points_awarded, facebook_id, facebook_url, facebook_bonus_awarded, google_id, google_bonus_awarded, referral_code')
+      .eq('id', user.id)
+      .single();
+
+    const hasName = !!metaName;
+    const alreadyCompleted = existingProfile?.profile_completed === true;
+    const alreadyHasPoints = existingProfile?.bonus_points_awarded === true;
+    const alreadyHasReferral = !!(existingProfile?.referral_code && existingProfile.referral_code.trim());
+
+    // نبني الـ update: نديفأي الفيلدات الفاضية وبس
+    const update: Record<string, any> = {};
+
+    // الاسم والصورة: لو فاضيين نملأهم
+    if (!existingProfile?.full_name || existingProfile.full_name === '') {
+      update.full_name = hasName ? metaName : (user.email?.split('@')[0] || '');
+    }
+    if (!existingProfile?.avatar_url || existingProfile.avatar_url === '') {
+      update.avatar_url = metaAvatar;
+    }
+
+    // profile_completed: لو عندك اسم وهتكمل لأول مرة
+    if (!alreadyCompleted && hasName) {
+      update.profile_completed = true;
+    }
+
+    // bonus_points: 5 نقاط مرة واحدة لما تكمل البروفايل
+    if (hasName && !alreadyHasPoints) {
+      update.bonus_points = 5;
+      update.bonus_points_awarded = true;
+    }
+
+    // referral_code:Generate مرة واحدة
+    if (!alreadyHasReferral) {
+      update.referral_code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    }
+
+    // ── فيسبوك ──
+    if (provider === 'facebook') {
+      if (!existingProfile?.facebook_id) {
+        update.facebook_id = meta.sub || meta.id;
+      }
+      if (!existingProfile?.facebook_url) {
+        update.facebook_url = facebookUrl;
+      }
+      if (!existingProfile?.facebook_bonus_awarded && hasName && !alreadyHasPoints) {
+        update.facebook_bonus_awarded = true;
+      }
+    }
+
+    // ── جوجل ──
+    if (provider === 'google') {
+      if (!existingProfile?.google_id) {
+        update.google_id = meta.sub || meta.id;
+      }
+      if (!existingProfile?.google_bonus_awarded && hasName && !alreadyHasPoints) {
+        update.google_bonus_awarded = true;
+      }
+    }
+
+    if (existingProfile) {
+      if (Object.keys(update).length > 0) {
+        await supabase.from('profiles').update(update).eq('id', user.id);
+      }
     } else {
-      await supabase.from('profiles').insert(update);
+      await supabase.from('profiles').insert({ id: user.id, ...update });
     }
   };
 
@@ -43,6 +112,7 @@ export default function Login() {
     });
     if (error) setErrorMsg('خطأ: ' + error.message);
     else setSent(true);
+    setProfileSynced(false);
     setLoading(false);
   };
 
@@ -53,109 +123,119 @@ export default function Login() {
       provider,
       options: { redirectTo: `${window.location.origin}/dashboard` },
     });
-    if (error) { setErrorMsg('خطأ: ' + error.message); setSocialLoading(null); }
+    if (error) {
+      setErrorMsg('خطأ: ' + error.message);
+      setSocialLoading(null);
+    }
   };
 
-  // ── بعد redirect: استخدم profile تلقائيًا ──
-  useEffect(() => { upsertProfile(); }, []);
+  // ── الاستماع لحدوث الـ login والعمل بعد ما المستخدم يتسجل ──
+  useEffect(() => {
+    if (profileSynced) return; // لمنع التكرار
+
+    const checkUser = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.user) {
+        await upsertProfile();
+      }
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        upsertProfile();
+      }
+    });
+
+    checkUser();
+    return () => subscription.unsubscribe();
+  }, [profileSynced]);
 
   return (
-    <div dir="rtl" style={{
-      minHeight: '100vh',
-      background: `
-        radial-gradient(circle at top left, rgba(217,178,95,.12), transparent 28%),
-        radial-gradient(circle at bottom right, rgba(201,58,47,.10), transparent 26%),
-        #070809
-      `,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '24px 16px', fontFamily: "'Cairo', sans-serif",
-    }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-        :root {
-          --bg:#070809; --surface:#111315; --surface-2:#171a1d; --surface-3:#1d2125;
-          --line:rgba(255,255,255,.08); --text:#f4f1e8; --muted:#a8a39a;
-          --gold:#d9b25f; --red:#c93a2f; --green:#27b06e;
-        }
-        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        .panel{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid var(--line);border-radius:24px;padding:32px 28px}
-        .social-btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:52px;border-radius:18px;background:var(--surface-3);border:1px solid var(--line);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif;transition:all .2s}
-        .social-btn:hover:not(:disabled){border-color:rgba(217,178,95,.25);background:rgba(217,178,95,.05)}
-        .social-btn:disabled{opacity:.5;cursor:not-allowed}
-        .field-input{width:100%;padding:14px 16px;border-radius:14px;background:var(--surface-3);border:1px solid var(--line);color:var(--text);font-family:'Cairo',sans-serif;font-size:15px;outline:none;transition:border-color .2s}
-        .field-input:focus{border-color:rgba(217,178,95,.4)}
-        .field-input::placeholder{color:var(--muted)}
-        .btn-gold{width:100%;min-height:52px;border-radius:18px;border:none;background:linear-gradient(135deg,#e0bc73,#b9892d);color:#211708;font-size:16px;font-weight:800;cursor:pointer;font-family:'Cairo',sans-serif;box-shadow:0 8px 24px rgba(217,178,95,.22);transition:opacity .2s}
-        .btn-gold:hover:not(:disabled){opacity:.88}
-        .btn-gold:disabled{opacity:.6;cursor:not-allowed}
-        .msg-error{padding:12px 16px;border-radius:14px;background:rgba(201,58,47,.12);border:1px solid rgba(201,58,47,.28);color:#ff9c91;font-size:13px;font-weight:700}
-      `}</style>
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+      :root { --bg:#070809; --surface:#111315; --surface-2:#171a1d; --surface-3:#1d2125; --line:rgba(255,255,255,.08); --text:#f4f1e8; --muted:#a8a39a; --gold:#d9b25f; --red:#c93a2f; --green:#27b06e; }
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      .panel{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid var(--line);border-radius:24px;padding:32px 28px}
+      .social-btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:52px;border-radius:18px;background:var(--surface-3);border:1px solid var(--line);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif;transition:all .2s}
+      .social-btn:hover:not(:disabled){border-color:rgba(217,178,95,.25);background:rgba(217,178,95,.05)}
+      .social-btn:disabled{opacity:.5;cursor:not-allowed}
+      .field-input{width:100%;padding:14px 16px;border-radius:14px;background:var(--surface-3);border:1px solid var(--line);color:var(--text);font-family:'Cairo',sans-serif;font-size:15px;outline:none;transition:border-color .2s}
+      .field-input:focus{border-color:rgba(217,178,95,.4)}
+      .field-input::placeholder{color:var(--muted)}
+      .btn-gold{width:100%;min-height:52px;border-radius:18px;border:none;background:linear-gradient(135deg,#e0bc73,#b9892d);color:#211708;font-size:16px;font-weight:800;cursor:pointer;font-family:'Cairo',sans-serif;box-shadow:0 8px 24px rgba(217,178,95,.22);transition:opacity .2s}
+      .btn-gold:hover:not(:disabled){opacity:.88}
+      .btn-gold:disabled{opacity:.6;cursor:not-allowed}
+      .msg-error{padding:12px 16px;border-radius:14px;background:rgba(201,58,47,.12);border:1px solid rgba(201,58,47,.28);color:#ff9c91;font-size:13px;font-weight:700}
+    `}</style>
+    <div dir="rtl" style={{minHeight:'100vh',background:'radial-gradient(ellipse 80% 50% at 50% 30%,hsla(45,50%,20%,.15),var(--bg))',color:'var(--text)',fontFamily:'"Cairo",sans-serif',padding:'min(10vh,60px) 20px 40px',position:'relative',overflow:'hidden',userSelect:'none'}}>      
+      <a href="/" dir="rtl" style={{position:'absolute',top:24,left:24,display:'inline-flex',alignItems:'center',gap:6,color:'var(--muted)',textDecoration:'none',fontSize:14,fontWeight:700}}>
+        ←&nbsp;الرئيسية
+      </a>
 
-      <div style={{ width: '100%', maxWidth: 460, display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-        <Link href="/" style={{ color: 'var(--muted)', fontSize: 13, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6, width: 'fit-content' }}>
-          <span style={{ fontSize: 16 }}>←</span> الرئيسية
-        </Link>
-
-        <div className="panel">
-          <div style={{ textAlign: 'center', marginBottom: 28 }}>
-            <div style={{ width:74, height:74, margin:'0 auto 16px', borderRadius:22, background:'linear-gradient(135deg,#f0cf84,#a97b26)', display:'grid', placeItems:'center', fontSize:36, boxShadow:'0 12px 32px rgba(217,178,95,.28)' }}>🏆</div>
-            <h1 style={{ fontSize:28, fontWeight:800, color:'#d9b25f', margin:'0 0 6px' }}>الشمعدان</h1>
-            <p style={{ fontSize:17, fontWeight:700, color:'#f4f1e8', margin:'0 0 8px' }}>× كأس العالم 2026</p>
-            <p style={{ fontSize:13, color:'#a8a39a', margin:0 }}>أحلى من الماتش.. اللي بيحصل جنبيه</p>
-          </div>
-
-          {sent ? (
-            <div style={{ textAlign:'center', display:'flex', flexDirection:'column', gap:16 }}>
-              <div style={{ width:66, height:66, margin:'0 auto', borderRadius:20, background:'rgba(217,178,95,.10)', border:'1px solid rgba(217,178,95,.22)', display:'grid', placeItems:'center', fontSize:32 }}>📧</div>
-              <h2 style={{ fontSize:22, fontWeight:800, margin:0, color:'#f4f1e8' }}>تم إرسال الرابط!</h2>
-              <p style={{ fontSize:14, lineHeight:1.8, color:'#a8a39a', margin:0 }}>افتح إيميلك واضغط على الرابط<br/>هتدخل مباشرة على الداشبورد</p>
-              <button className="btn-gold" onClick={()=>setSent(false)} style={{marginTop:16,background:'transparent',border:'1px solid var(--line)', color:'var(--muted)'}}>إرسال مرة تانية</button>
-            </div>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
-
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                <button className="social-btn" onClick={()=>handleSocial('google')} disabled={!!socialLoading||loading}>
-                  <svg width="20" height="20" viewBox="0 0 48 48">
-                    <path fill="#4285F4" d="M47.5 24.6c0-1.6-.1-3.1-.4-4.6H24v8.7h13.2c-.6 3-2.4 5.5-5 7.2v6h8c4.7-4.3 7.3-10.7 7.3-17.3z"/>
-                    <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-8-6c-2.1 1.4-4.8 2.2-7.9 2.2-6 0-11.1-4-12.9-9.5H3v6.2C6.9 42.8 15 48 24 48z"/>
-                    <path fill="#FBBC05" d="M11.1 28.9c-.5-1.4-.7-2.9-.7-4.4s.3-3 .7-4.4V14H3A23.9 23.9 0 0 0 0 24c0 3.9.9 7.6 3 10.8l8.1-5.9z"/>
-                    <path fill="#EA4335" d="M24 9.5c3.4 0 6.4 1.2 8.8 3.4l6.5-6.5C35.9 2.5 30.5 0 24 0 15 0 6.9 5.2 3 14l8.1 6.2C12.9 14.5 18 9.5 24 9.5z"/>
-                  </svg>
-                  الدخول بـ Google
-                </button>
-                <button className="social-btn" onClick={()=>handleSocial('facebook')} disabled={!!socialLoading||loading}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2">
-                    <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
-                  </svg>
-                  الدخول بـ Facebook
-                </button>
-              </div>
-
-              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                <div style={{ flex:1, height:1, background:'var(--line)' }}/>
-                <span style={{ color:'var(--muted)', fontSize:12 }}>أو عن طريق الإيميل</span>
-                <div style={{ flex:1, height:1, background:'var(--line)' }}/>
-              </div>
-
-              {errorMsg && <div className="msg-error">{errorMsg}</div>}
-
-              <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:14 }}>
-                <div>
-                  abel style={{ display:'block', color:'var(--muted)', marginBottom:8, fontSize:13, fontWeight:700 }}>الإيميل</label>
-                  <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
-                    className="field-input" placeholder="example@gmail.com"
-                    required style={{ minHeight:52 }} />
-                </div>
-                <button type="submit" className="btn-gold" disabled={loading||!!socialLoading}>
-                  {loading ? '⏳ جاري الإرسال...' : '🔥 إرسال رابط الدخول'}
-                </button>
-              </form>
-
-            </div>
-          )}
+      <div className="panel" style={{maxWidth:380,width:'100%',margin:'auto',position:'relative',zIndex:2,
+        background:`
+          radial-gradient(circle at 10% 10%,rgba(217,178,95,.08),transparent 40%),
+          radial-gradient(circle at 90% 20%,rgba(217,178,95,.05),transparent 35%),
+          linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01))
+        `,boxShadow:'0 20px 60px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06)'}>
+        <div style={{textAlign:'center',marginBottom:28}}>
+          <div style={{fontSize:42,marginBottom:4}}>🏆</div>
+          <div style={{fontSize:26,fontWeight:800,background:'linear-gradient(135deg,#f7d880,#b9892d)',backgroundClip:'text',color:'transparent',letterSpacing:'.5px'}}>الشمعدان</div>
+          <div style={{fontSize:13,fontWeight:600,color:'var(--muted)',marginTop:6,background:'linear-gradient(135deg,rgba(217,178,95,.5),rgba(217,178,95,.2))',display:'inline-block',borderRadius:999,padding:'4px 14px',letterSpacing:'.5px'}}>× كأس العالم 2026</div>
         </div>
+
+        <p style={{textAlign:'center',fontSize:13,color:'var(--muted)',fontWeight:600,margin:'0 0 20px'}}>أحلى من الماتش.. اللي بيحصل جنبيه</p>
+
+        {sent ? (
+          <div dir="rtl" style={{padding:22,borderRadius:18,background:'rgba(39,176,110,.08)',border:'1px solid rgba(39,176,110,.22)',textAlign:'center'}}>
+            <div style={{fontSize:26,marginBottom:8}}>✉</div>
+            <div style={{fontSize:15,fontWeight:800,color:'var(--green)',marginBottom:8}}>تم إرسال الرابط!</div>
+            <p style={{fontSize:12,color:'var(--muted)',lineHeight:1.6}}>افتح إيميلك واضغط على الرابط<br/>هتدخل مباشرة على الداشبورد</p>
+            <button type="button" onClick={()=>setSent(false)} style={{marginTop:16,background:'transparent',border:'1px solid var(--line)',color:'var(--muted)',fontSize:12,fontWeight:700,padding:'10px 20px',borderRadius:10,fontFamily:'"Cairo",sans-serif',cursor:'pointer'}}>إرسال مرة تانية</button>
+          </div>
+        ) : (
+          <>
+            <button type="button" className="social-btn"
+              onClick={()=>handleSocial('google')}
+              disabled={!!socialLoading||loading}>
+              <span aria-hidden>🔵</span> الدخول بـ Google
+            </button>
+            <div style={{height:10}}/>
+            <button type="button" className="social-btn"
+              onClick={()=>handleSocial('facebook')}
+              disabled={!!socialLoading||loading}>
+              <span aria-hidden>♟</span> الدخول بـ Facebook
+            </button>
+            <div style={{height:14,display:'flex',alignItems:'center',gap:10}}>
+              <div style={{flex:1,height:1,background:'var(--line)'}}/>
+              <span style={{color:'var(--muted)',fontSize:12,fontWeight:700}}>أو عن طريق الإيميل</span>
+              <div style={{flex:1,height:1,background:'var(--line)'}}/>
+            </div>
+
+            {errorMsg && <div className="msg-error">{errorMsg}</div>}
+
+            <form onSubmit={handleLogin} style={{marginTop:14,display:'flex',flexDirection:'column',gap:12}}>
+              <label style={{ display:'block', color:'var(--muted)', marginBottom:8, fontSize:13, fontWeight:700 }}>الإيميل
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e=>setEmail(e.target.value)}
+                  className="field-input"
+                  placeholder="example@gmail.com"
+                  required
+                  style={{ minHeight:52 }}
+                />
+              </label>
+              <button
+                type="submit"
+                className="btn-gold"
+                disabled={loading}
+              >
+                {loading ? '⏳ جاري الإرسال...' : '🔥 إرسال رابط الدخول'}
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );
