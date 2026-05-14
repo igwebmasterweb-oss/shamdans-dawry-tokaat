@@ -30,6 +30,10 @@ export default function Dashboard() {
   const [profileForm, setProfileForm] = useState({ display_name: '', phone: '', facebook_url: '' });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [referralCount, setReferralCount] = useState(0);
+  const [showReferral, setShowReferral] = useState(false);
+  const [referralCopied, setReferralCopied] = useState(false);
 
   const router = useRouter();
   const rounds = ['Group Stage - 1', 'Group Stage - 2', 'Group Stage - 3'];
@@ -80,6 +84,15 @@ export default function Dashboard() {
       setMatches(merged);
       const { data: userPreds } = await supabase.from('predictions').select('*').eq('user_id', userId);
       setPredictions(userPreds || []);
+      const { data: myPointsRow } = await supabase.from('user_points').select('referral_code, referral_count').eq('user_id', userId).maybeSingle();
+      if (myPointsRow) { setReferralCode(myPointsRow.referral_code || ''); setReferralCount(myPointsRow.referral_count || 0); }
+
+      // معالجة الـ referral لو جه من رابط دعوة
+      const pendingRef = sessionStorage.getItem('pendingRef');
+      if (pendingRef) {
+        sessionStorage.removeItem('pendingRef');
+        await supabase.rpc('process_referral', { p_referred_id: userId, p_referral_code: pendingRef });
+      }
       const { data: userPointsData } = await supabase.from('user_points').select('*').order('total_points', { ascending: false });
       setLeaderboard((userPointsData || []).map((row: any) => ({
         user_id: row.user_id, user_email: row.user_email, display_name: row.full_name || null,
@@ -164,6 +177,30 @@ export default function Dashboard() {
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
+
+  const getReferralLink = () => `${window.location.origin}/login?ref=${referralCode}`;
+
+  const copyReferralLink = () => {
+    navigator.clipboard.writeText(getReferralLink()).then(() => {
+      setReferralCopied(true);
+      setTimeout(() => setReferralCopied(false), 2500);
+    });
+  };
+
+  const shareOnWhatsApp = () => {
+    const txt = encodeURIComponent(`🏆 انضم لمنافسة الشمعدان × كأس العالم 2026!\nسجّل عن طريق رابطي واحصل على نقاط إضافية:\n${getReferralLink()}`);
+    window.open(`https://wa.me/?text=${txt}`, '_blank');
+  };
+
+  const shareOnFacebook = () => {
+    const url = encodeURIComponent(getReferralLink());
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=600,height=400');
+  };
+
+  const shareOnMessenger = () => {
+    const url = encodeURIComponent(getReferralLink());
+    window.open(`https://www.facebook.com/dialog/send?link=${url}&app_id=1302682795390354&redirect_uri=${url}`, '_blank');
+  };
 
   // ── LOADING ──
   if (loading) return (
@@ -447,6 +484,15 @@ export default function Dashboard() {
           textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
         }}>🏆 ليجاتي</a>
 
+        <button onClick={() => setShowReferral(true)} style={{
+          padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(39,176,110,.3)',
+          background: 'rgba(39,176,110,.08)', color: '#5effa8', cursor: 'pointer',
+          fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif',
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+        }}>
+          🎁 ادعُ صديق {referralCount > 0 && <span style={{ background: 'rgba(39,176,110,.25)', borderRadius: 999, padding: '1px 7px', fontSize: 11 }}>{referralCount}</span>}
+        </button>
+
        
         <button onClick={handleLogout} style={{
           padding: '9px 16px', borderRadius: 12, border: '1px solid var(--line)',
@@ -535,6 +581,61 @@ export default function Dashboard() {
             <button onClick={saveProfile} disabled={profileSaving} className="save-btn">
               {profileSaving ? '⏳ جاري الحفظ...' : '💾 حفظ البيانات'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════ REFERRAL MODAL ══════════════════ */}
+      {showReferral && (
+        <div className="modal-overlay" onClick={() => setShowReferral(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 800 }}>🎁 ادعُ أصدقاءك</h3>
+              <button onClick={() => setShowReferral(false)} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center' }}>✕</button>
+            </div>
+
+            {/* Stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+              <div style={{ background: 'rgba(39,176,110,.08)', border: '1px solid rgba(39,176,110,.2)', borderRadius: 16, padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: '#5effa8' }}>{referralCount}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>أصدقاء انضموا</div>
+              </div>
+              <div style={{ background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 16, padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--gold)' }}>{referralCount * 5}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>نقاط من الدعوات</div>
+              </div>
+            </div>
+
+            {/* كيف يعمل */}
+            <div style={{ background: 'rgba(255,255,255,.03)', border: '1px solid var(--line)', borderRadius: 14, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
+              <div style={{ color: 'var(--text)', fontWeight: 700, marginBottom: 6 }}>⚡ كيف يعمل؟</div>
+              <div>١. شارك رابطك مع أصدقاءك</div>
+              <div>٢. لما يسجلوا عن طريق رابطك → <span style={{ color: 'var(--gold)', fontWeight: 700 }}>+5 نقاط لك</span></div>
+              <div>٣. مفيش حد أقصى للدعوات 🚀</div>
+            </div>
+
+            {/* الرابط */}
+            <div style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 14, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ flex: 1, fontSize: 13, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'ltr', textAlign: 'left' }}>
+                {typeof window !== 'undefined' ? getReferralLink() : '...'}
+              </span>
+              <button onClick={copyReferralLink} style={{ padding: '7px 14px', borderRadius: 10, border: 'none', background: referralCopied ? 'rgba(39,176,110,.3)' : 'rgba(217,178,95,.2)', color: referralCopied ? '#5effa8' : 'var(--gold)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'Cairo, sans-serif', whiteSpace: 'nowrap', transition: 'all .2s' }}>
+                {referralCopied ? '✅ تم النسخ' : '📋 نسخ'}
+              </button>
+            </div>
+
+            {/* أزرار المشاركة */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <button onClick={shareOnWhatsApp} style={{ padding: '12px 8px', borderRadius: 14, border: '1px solid rgba(37,211,102,.25)', background: 'rgba(37,211,102,.08)', color: '#5effa8', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'Cairo, sans-serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'opacity .2s' }}>
+                <span style={{ fontSize: 22 }}>💬</span> واتساب
+              </button>
+              <button onClick={shareOnFacebook} style={{ padding: '12px 8px', borderRadius: 14, border: '1px solid rgba(24,119,242,.25)', background: 'rgba(24,119,242,.08)', color: '#7db1ff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'Cairo, sans-serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'opacity .2s' }}>
+                <span style={{ fontSize: 22 }}>📘</span> فيسبوك
+              </button>
+              <button onClick={shareOnMessenger} style={{ padding: '12px 8px', borderRadius: 14, border: '1px solid rgba(0,132,255,.25)', background: 'rgba(0,132,255,.08)', color: '#7db1ff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'Cairo, sans-serif', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, transition: 'opacity .2s' }}>
+                <span style={{ fontSize: 22 }}>⚡</span> ماسنجر
+              </button>
+            </div>
           </div>
         </div>
       )}
