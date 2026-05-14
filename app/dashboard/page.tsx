@@ -21,7 +21,7 @@ export default function Dashboard() {
   const [predictions, setPredictions] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'predict' | 'my' | 'leaders'>('predict');
+  const [activeTab, setActiveTab] = useState<'predict' | 'my' | 'leaders' | 'feed' | 'history'>('predict');
   const [activeRound, setActiveRound] = useState('Group Stage - 1');
   const [predForms, setPredForms] = useState<Record<number, any>>({});
   const [submitting, setSubmitting] = useState<number | null>(null);
@@ -34,6 +34,10 @@ export default function Dashboard() {
   const [referralCount, setReferralCount] = useState(0);
   const [showReferral, setShowReferral] = useState(false);
   const [referralCopied, setReferralCopied] = useState(false);
+  const [socialFeed, setSocialFeed] = useState<any[]>([]);
+  const [historyRankings, setHistoryRankings] = useState<any[]>([]);
+  const [historyDates, setHistoryDates] = useState<string[]>([]);
+  const [activeHistoryDate, setActiveHistoryDate] = useState('');
 
   const router = useRouter();
   const rounds = ['Group Stage - 1', 'Group Stage - 2', 'Group Stage - 3'];
@@ -88,6 +92,27 @@ export default function Dashboard() {
       if (myPointsRow) { setReferralCode(myPointsRow.referral_code || ''); setReferralCount(myPointsRow.referral_count || 0); }
 
       // معالجة الـ referral لو جه من رابط دعوة
+      // Social Feed
+      const { data: feedData } = await supabase
+        .from('social_feed')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      setSocialFeed(feedData || []);
+
+      // Historical Rankings
+      const { data: histData } = await supabase
+        .from('historical_rankings')
+        .select('*')
+        .order('snapshot_date', { ascending: false })
+        .order('rank', { ascending: true });
+      if (histData && histData.length > 0) {
+        const dates = [...new Set(histData.map((r: any) => r.snapshot_date))] as string[];
+        setHistoryDates(dates);
+        setActiveHistoryDate(dates[0]);
+        setHistoryRankings(histData);
+      }
+
       const pendingRef = sessionStorage.getItem('pendingRef');
       if (pendingRef) {
         sessionStorage.removeItem('pendingRef');
@@ -177,6 +202,26 @@ export default function Dashboard() {
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
+
+  const feedEventLabel = (event: string, meta: any) => {
+    switch (event) {
+      case 'prediction_submitted': return `⚽ توقّع نتيجة ${meta?.home || ''} × ${meta?.away || ''}`;
+      case 'referral_bonus': return '🎉 دعا صديقاً جديداً وربح 5 نقاط!';
+      case 'profile_completed': return '✅ أكمل بياناته الشخصية وربح 5 نقاط!';
+      case 'points_earned': return `🏅 كسب ${meta?.points || ''} نقطة`;
+      default: return '🔔 نشاط جديد';
+    }
+  };
+
+  const timeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'الآن';
+    if (mins < 60) return `منذ ${mins} دقيقة`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `منذ ${hrs} ساعة`;
+    return `منذ ${Math.floor(hrs / 24)} يوم`;
+  };
 
   const getReferralLink = () => `${window.location.origin}/login?ref=${referralCode}`;
 
@@ -661,9 +706,15 @@ export default function Dashboard() {
 
         {/* ── TABS ── */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 26, flexWrap: 'wrap' }}>
-          {(['predict', 'my', 'leaders'] as const).map(tab => (
-            <button key={tab} className={`tab-btn${activeTab === tab ? ' active' : ''}`} onClick={() => setActiveTab(tab)}>
-              {tab === 'predict' ? '⚽ التوقعات' : tab === 'my' ? '📋 توقعاتي' : '🏆 الصدارة'}
+          {([
+            { id: 'predict', label: '⚽ التوقعات' },
+            { id: 'my',      label: '📋 توقعاتي' },
+            { id: 'leaders', label: '🏆 الصدارة' },
+            { id: 'history', label: '📈 السجل التاريخي' },
+            { id: 'feed',    label: '🌍 نشاط اللاعبين' },
+          ] as const).map(({ id, label }) => (
+            <button key={id} className={`tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)}>
+              {label}
             </button>
           ))}
         </div>
@@ -899,6 +950,108 @@ export default function Dashboard() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ════════════════ HISTORY TAB ════════════════ */}
+        {activeTab === 'history' && (
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>📈 السجل التاريخي للترتيب</h2>
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>لقطات يومية للترتيب منذ بداية البطولة</p>
+
+            {historyDates.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '50px 0', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
+                لا يوجد سجل تاريخي بعد
+              </div>
+            ) : (
+              <>
+                {/* Date chips */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap', overflowX: 'auto', paddingBottom: 4 }}>
+                  {historyDates.map(date => (
+                    <button key={date} onClick={() => setActiveHistoryDate(date)}
+                      className={`round-btn${activeHistoryDate === date ? ' active' : ''}`}>
+                      {new Date(date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Rankings for selected date */}
+                {historyRankings
+                  .filter((r: any) => r.snapshot_date === activeHistoryDate)
+                  .map((player: any, i: number) => {
+                    const isMe = player.user_id === user?.id;
+                    return (
+                      <div key={player.user_id} className={`rank-item${isMe ? ' me' : ''}`}>
+                        <div className="medal-box">
+                          {i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{player.rank}</span>}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 15, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {player.user_name || '—'}
+                            {isMe && <span style={{ fontSize: 11, background: 'rgba(201,58,47,.15)', color: '#ff9c91', borderRadius: 999, padding: '2px 10px', fontWeight: 700 }}>أنت</span>}
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
+                            {new Date(player.snapshot_date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                          </div>
+                        </div>
+                        <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 14, padding: '8px 16px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.total_points}</div>
+                          <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>نقطة</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ════════════════ FEED TAB ════════════════ */}
+        {activeTab === 'feed' && (
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>🌍 نشاط اللاعبين</h2>
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>آخر الأحداث في المنافسة</p>
+
+            {socialFeed.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '50px 0', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+                لا يوجد نشاط بعد — كن أول من يسجّل!
+              </div>
+            ) : socialFeed.map((item: any) => (
+              <div key={item.id} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 14,
+                background: 'linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.01))',
+                border: '1px solid var(--line)', borderRadius: 18, padding: '14px 18px', marginBottom: 10,
+              }}>
+                {/* Avatar */}
+                <div style={{
+                  width: 42, height: 42, borderRadius: 14, flexShrink: 0,
+                  background: 'linear-gradient(135deg, rgba(217,178,95,.3), rgba(217,178,95,.1))',
+                  display: 'grid', placeItems: 'center', fontSize: 18,
+                }}>
+                  {item.event_type === 'referral_bonus' ? '🎉' :
+                   item.event_type === 'profile_completed' ? '✅' :
+                   item.event_type === 'points_earned' ? '🏅' : '⚽'}
+                </div>
+                {/* Content */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                    {item.user_name || 'لاعب'}
+                    {item.user_id === user?.id && (
+                      <span style={{ fontSize: 11, background: 'rgba(201,58,47,.15)', color: '#ff9c91', borderRadius: 999, padding: '2px 8px', fontWeight: 700, marginRight: 8 }}>أنت</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                    {feedEventLabel(item.event_type, item.meta)}
+                  </div>
+                </div>
+                {/* Time */}
+                <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', marginTop: 2 }}>
+                  {timeAgo(item.created_at)}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </main>
