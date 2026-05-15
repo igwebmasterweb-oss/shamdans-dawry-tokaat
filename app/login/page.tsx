@@ -1,6 +1,7 @@
 'use client';
 import { supabase } from '../../lib/supabase';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -9,6 +10,10 @@ export default function Login() {
   const [sent, setSent] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [profileSynced, setProfileSynced] = useState(false);
+  const searchParams = useSearchParams();
+  // ✅ ref= للـ referral، league= لكود الليج — مستقلان
+  const refParam = searchParams.get('ref') || '';
+  const leagueParam = searchParams.get('league') || '';
 
   const upsertProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -71,6 +76,24 @@ export default function Login() {
     } else {
       await supabase.from('profiles').insert({ id: user.id, ...update });
     }
+
+    // ✅ حفظ ref و league في sessionStorage بشكل مستقل
+    if (typeof window !== 'undefined') {
+      if (refParam && !window.sessionStorage.getItem('pendingRef')) {
+        window.sessionStorage.setItem('pendingRef', refParam);
+      }
+      if (leagueParam && !window.sessionStorage.getItem('pendingLeague')) {
+        window.sessionStorage.setItem('pendingLeague', leagueParam);
+      }
+    }
+  };
+
+  const buildRedirectUrl = () => {
+    const base = `${window.location.origin}/dashboard`;
+    const params = new URLSearchParams();
+    if (refParam) params.set('ref', refParam);
+    if (leagueParam) params.set('league', leagueParam);
+    return params.toString() ? `${base}?${params.toString()}` : base;
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -80,7 +103,7 @@ export default function Login() {
     setErrorMsg('');
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+      options: { emailRedirectTo: buildRedirectUrl() },
     });
     if (error) setErrorMsg('خطأ: ' + error.message);
     else setSent(true);
@@ -93,7 +116,7 @@ export default function Login() {
     setErrorMsg('');
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/dashboard` },
+      options: { redirectTo: buildRedirectUrl() },
     });
     if (error) {
       setErrorMsg('خطأ: ' + error.message);
@@ -163,6 +186,16 @@ export default function Login() {
       </a>
 
       <div style={{ width: '100%', maxWidth: 420 }}>
+
+        {/* ✅ بانر الليج — يظهر لو جاي من رابط دعوة */}
+        {leagueParam && (
+          <div style={{ marginBottom: 20, padding: '14px 20px', borderRadius: 18, background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.25)', textAlign: 'center', color: '#ffe3a6', fontSize: 14, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>
+            🏆 تم دعوتك للانضمام لليج
+            <br />
+            <span style={{ fontSize: 12, color: '#a8a39a', display: 'block', marginTop: 4 }}>بعد تسجيل الدخول ستنضم تلقائياً</span>
+          </div>
+        )}
+
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ fontSize: 52, marginBottom: 12 }}>🏆</div>
