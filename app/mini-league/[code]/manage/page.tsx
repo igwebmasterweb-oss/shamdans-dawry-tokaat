@@ -114,27 +114,39 @@ export default function ManageLeaguePage() {
   const kickMember = async (memberId: string, memberName: string) => {
     if (!league) return;
     if (!confirm(`هل تريد طرد "${memberName}" من الليج؟`)) return;
-    await supabase.from('mini_league_members').delete().eq('league_id', league.id).eq('user_id', memberId);
+    // ✅ FIX: حذف من members فقط — standings هي view/computed تتحدث تلقائياً
+    const { error } = await supabase
+      .from('mini_league_members')
+      .delete()
+      .eq('league_id', league.id)
+      .eq('user_id', memberId);
+    if (error) { showMsg('❌ خطأ في الطرد: ' + error.message, 'error'); return; }
     await sendNotification(memberId, 'kicked', { league_id: league.id, league_name: league.name });
-    showMsg(`تم طرد ${memberName}`);
+    showMsg(`✅ تم طرد ${memberName}`);
     await loadAll(user.id);
   };
 
   // ── حذف الليج ──────────────────────────────────────────────
   const deleteLeague = async () => {
     if (!league) return;
+    // ✅ FIX: إشعار للأعضاء الآخرين قبل الحذف
     const otherMembers = members.filter(m => m.user_id !== user?.id);
     await Promise.all(otherMembers.map(m =>
       sendNotification(m.user_id, 'league_deleted', { league_name: league.name })
     ));
-    await supabase.from('mini_leagues').update({ is_active: false }).eq('id', league.id);
+    // ✅ FIX: حذف فعلي — members أولاً ثم الليج (foreign key order)
+    await supabase.from('mini_league_members').delete().eq('league_id', league.id);
+    await supabase.from('mini_league_invitations').delete().eq('league_id', league.id);
+    await supabase.from('mini_leagues').delete().eq('id', league.id);
     router.push('/my-leagues');
   };
 
   // ── نسخ كود + رسالة واتساب ─────────────────────────────────
   const copyCode = () => {
     if (!league) return;
-    const txt = `🏆 انضم لليج "${league.name}" في الشمعدان × كأس العالم 2026!\nالكود: ${league.code}\nافتح التطبيق وروح ليجاتي ← إدخال الكود`;
+    const txt = `🏆 انضم لليج "${league.name}" في الشمعدان × كأس العالم 2026!\n` +
+      `سجّل دخولك عن طريق الرابط ده وهتنضم تلقائياً ⬇️\n` +
+      `https://worldcup.shamaadan.com/login?league=${league.code}`;
     navigator.clipboard.writeText(txt).then(() => {
       setCopyFeedback(true);
       setTimeout(() => setCopyFeedback(false), 2000);
