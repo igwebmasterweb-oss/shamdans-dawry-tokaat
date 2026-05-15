@@ -301,9 +301,9 @@ if (!finalReferralCode && userId) {
         predicted_extra_time: form.extraTime,
         surprise_answer: form.surpriseAnswer || null,
         submitted_at: new Date().toISOString(),
-        points: ex?.points ?? 0,
-        actual_home_score: null,
-        actual_away_score: null,
+        //points: ex?.points ?? 0,
+        //actual_home_score: null,
+        //actual_away_score: null,
       };
       if (ex) await supabase.from('predictions').update(payload).eq('id', ex.id);
       else await supabase.from('predictions').insert(payload);
