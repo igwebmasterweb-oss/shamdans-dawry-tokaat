@@ -96,14 +96,48 @@ export default function AdminPage() {
   };
 
   const saveResult = async () => {
-    if (!selectedMatch) return; setSavingResult(true); const fid = selectedMatch.fixture.id;
+    if (!selectedMatch) return;
+    setSavingResult(true);
+    const fid = selectedMatch.fixture.id;
     try {
-      const { data: ex, error: se } = await supabase.from('fixtures').select('id').eq('api_fixture_id',fid).maybeSingle(); if (se) throw se;
-      const payload = { actual_home_score:homeScore, actual_away_score:awayScore, first_scorer:firstScorer||null, went_extra_time:extraTime, surprise_answer:surpriseA||null, surprise_question:surpriseQ||null };
-      if (ex) { const { error } = await supabase.from('fixtures').update(payload).eq('api_fixture_id',fid); if (error) throw error; }
-      else { const { error } = await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:false,home_team:selectedMatch.teams.home.name,away_team:selectedMatch.teams.away.name,match_date:selectedMatch.fixture.date,round:selectedMatch.league.round,...payload}); if (error) throw error; }
-      setShowModal(false); await loadMatches(); showMsg('✅ تم حفظ النتيجة بنجاح');
-    } catch (err: any) { showMsg('❌ ' + (err?.message || 'خطأ في الحفظ'), 'error'); }
+      const { data: ex, error: se } = await supabase.from('fixtures').select('id').eq('api_fixture_id', fid).maybeSingle();
+      if (se) throw se;
+      const payload = {
+        actual_home_score: homeScore,
+        actual_away_score: awayScore,
+        first_scorer: firstScorer || null,
+        went_extra_time: extraTime,
+        surprise_answer: surpriseA || null,
+        surprise_question: surpriseQ || null,
+      };
+      if (ex) {
+        const { error } = await supabase.from('fixtures').update(payload).eq('api_fixture_id', fid);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('fixtures').insert({
+          api_fixture_id: fid, is_open: false,
+          home_team: selectedMatch.teams.home.name,
+          away_team: selectedMatch.teams.away.name,
+          match_date: selectedMatch.fixture.date,
+          round: selectedMatch.league.round,
+          ...payload,
+        });
+        if (error) throw error;
+      }
+
+      // ✅ احسب النقاط تلقائياً بعد حفظ النتيجة — بدون ما Admin يضغط زر منفصل
+      const res = await fetch('/api/update-results');
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'خطأ في حساب النقاط');
+
+      setShowModal(false);
+      await loadMatches();
+      await loadPredictions();
+      await loadLeaderboard();
+      showMsg(`✅ تم حفظ النتيجة وتحديث النقاط — ${data.message || ''}`);
+    } catch (err: any) {
+      showMsg('❌ ' + (err?.message || 'خطأ في الحفظ'), 'error');
+    }
     setSavingResult(false);
   };
 
