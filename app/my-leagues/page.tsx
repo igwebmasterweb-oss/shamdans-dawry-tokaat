@@ -210,7 +210,9 @@ export default function MyLeaguesPage() {
   };
 
   const getLeagueShareText = (lg: any) =>
-    `🏆 انضم لليج "${lg.name}" في الشمعدان × كأس العالم 2026!\nالكود: ${lg.code}\nسجّل من هنا: https://worldcup.shamaadan.com/login`;
+    `🏆 انضم لليج "${lg.name}" في الشمعدان × كأس العالم 2026!\n` +
+    `سجّل دخولك عن طريق الرابط ده وهتنضم تلقائياً ⬇️\n` +
+    `https://worldcup.shamaadan.com/login?league=${lg.code}`;
 
   const shareLeagueWhatsApp = (lg: any) => {
     if (typeof window === 'undefined') return;
