@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [myTotalPoints, setMyTotalPoints] = useState(0);
   const [showReferral, setShowReferral] = useState(false);
   const [referralCopied, setReferralCopied] = useState(false);
+  const [leagueJoinMsg, setLeagueJoinMsg] = useState('');
   const [socialFeed, setSocialFeed] = useState<any[]>([]);
   const [historyRankings, setHistoryRankings] = useState<any[]>([]);
   const [historyDates, setHistoryDates] = useState<string[]>([]);
@@ -52,6 +53,14 @@ export default function Dashboard() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/login'); return; }
       setUser(data.user);
+      if (typeof window !== 'undefined') {
+        const msg = window.sessionStorage.getItem('leagueJoinedMsg');
+        if (msg) {
+          window.sessionStorage.removeItem('leagueJoinedMsg');
+          setLeagueJoinMsg(msg);
+          setTimeout(() => setLeagueJoinMsg(''), 5000);
+        }
+      }
       loadData(data.user.id);
     });
   }, [router]);
@@ -63,6 +72,41 @@ export default function Dashboard() {
       if (pendingRef) {
         if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingRef');
         await supabase.rpc('process_referral', { p_referred_id: userId, p_referral_code: pendingRef });
+      }
+
+      // ✅ NEW: معالجة كود الليج — مستقل عن الـ referral
+      const pendingLeague =
+        (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('league') : null) ||
+        (typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingLeague') : null);
+      if (pendingLeague) {
+        if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingLeague');
+        try {
+          const { data: lgData } = await supabase
+            .from('mini_leagues')
+            .select('id, name')
+            .eq('code', pendingLeague.toUpperCase())
+            .maybeSingle();
+          if (lgData) {
+            const { data: alreadyMember } = await supabase
+              .from('mini_league_members')
+              .select('id')
+              .eq('league_id', lgData.id)
+              .eq('user_id', userId)
+              .maybeSingle();
+            if (!alreadyMember) {
+              await supabase.from('mini_league_members').insert({
+                league_id: lgData.id,
+                user_id: userId,
+                role: 'member',
+              });
+              if (typeof window !== 'undefined') {
+                window.sessionStorage.setItem('leagueJoinedMsg', '✅ انضممت لليج "' + lgData.name + '" بنجاح! 🏆');
+              }
+            }
+          }
+        } catch (e) {
+          console.error('League auto-join error:', e);
+        }
       }
 
       // كل الـ queries بالتوازي
@@ -83,8 +127,8 @@ export default function Dashboard() {
         supabase.from('fixtures').select('api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,surprise_answer,surprise_question'),
         supabase.from('predictions').select('*').eq('user_id', userId),
         supabase.from('user_points').select('referral_code,referral_count,total_points').eq('user_id', userId).maybeSingle(),
-        supabase.from('social_feed').select('*').order('created_at', { ascending: false }).limit(30),
-        supabase.from('historical_rankings').select('*').order('snapshot_date', { ascending: false }).order('rank', { ascending: true }),
+        supabase.from('social_feed').select('*, profiles:user_id(display_name)').order('created_at', { ascending: false }).limit(30),
+        supabase.from('historical_rankings').select('*, profiles:user_id(display_name)').order('week_start', { ascending: false }).order('total_points', { ascending: false }),
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
       ]);
 
@@ -94,6 +138,19 @@ export default function Dashboard() {
       const sbFixtures = sbFixturesRes.data;
       const userPreds = userPredsRes.data;
       const myPointsRow = myPointsRowRes.data;
+
+// FIX: لو مفيش referral_code نولده دلوقتي
+let finalReferralCode = myPointsRow?.referral_code || '';
+if (!finalReferralCode && userId) {
+  finalReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  // نحفظه في الداتابيز
+  supabase.from('user_points').upsert({ 
+    user_id: userId, 
+    referral_code: finalReferralCode,
+    referral_count: myPointsRow?.referral_count || 0,
+    total_points: myPointsRow?.total_points || 0
+  }).then(() => {});
+}
       const feedData = feedDataRes.data;
       const histData = histDataRes.data;
       const userPointsData = userPointsDataRes.data;
@@ -170,39 +227,39 @@ export default function Dashboard() {
 
   const saveProfile = async () => {
     if (!user) return;
-    if (!profileForm.display_name.trim()) { setProfileMsg('❌ الاسم مطلوب'); return; }
     setProfileSaving(true);
+
+    // ✅ FIX قوي: فيسبوك مطلوب عشان ياخد 5 نقاط
+    if (!profileForm.display_name.trim() || !profileForm.phone.trim() || !profileForm.facebook_url.trim()) {
+      setProfileMsg('❌ لازم تملى الاسم + التليفون + رابط فيسبوك عشان تاخد 5 نقاط');
+      setProfileSaving(false);
+      return;
+    }
+
+    const fbUrl = profileForm.facebook_url.trim();
+    const fbValid = /^https?:\/\/(www\.)?(facebook\.com|fb\.com)\/.+/i.test(fbUrl);
+    if (!fbValid) {
+      setProfileMsg('❌ رابط فيسبوك غير صحيح، يجب أن يبدأ بـ https://facebook.com/');
+      setProfileSaving(false);
+      return;
+    }
+
     try {
-      const fbUrl = profileForm.facebook_url.trim();
-      // FIX ٤: validate only if URL is provided, allow empty
-      const fbValid = !fbUrl || /^https?:\/\/(www\.)?(facebook\.com|fb\.com)\/.+/i.test(fbUrl);
-      if (!fbValid) {
-        setProfileMsg('❌ رابط فيسبوك غير صحيح، يجب أن يبدأ بـ https://facebook.com/');
-        setProfileSaving(false);
-        return;
-      }
       const hasAll = !!(profileForm.display_name.trim() && profileForm.phone.trim() && fbUrl && fbValid);
       const isCompleting = !profile?.bonus_points_awarded && hasAll;
       const updates: any = {
         full_name: profileForm.display_name.trim(),
         phone: profileForm.phone.trim() || null,
-        facebook_url: fbValid ? (fbUrl || null) : null,
-        profile_completed: !!(profileForm.display_name.trim() && profileForm.phone.trim()),
+        facebook_url: fbUrl,
+        profile_completed: true,
+        bonus_points_awarded: true,
+        bonus_points: 5,
         updated_at: new Date().toISOString(),
       };
-      if (isCompleting) { updates.bonus_points_awarded = true; updates.bonus_points = 5; }
       const { error } = await supabase.from('profiles').upsert({ id: user.id, ...updates });
       if (error) throw error;
-      if (isCompleting) {
-        setProfileMsg('✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉');
-      } else if (!hasAll && !profile?.bonus_points_awarded) {
-        const missing = [];
-        if (!profileForm.phone.trim()) missing.push('التليفون');
-        if (!fbUrl) missing.push('فيسبوك');
-        setProfileMsg(`💾 تم الحفظ — أكمل ${missing.join(' + ')} للحصول على 5 نقاط 🎁`);
-      } else {
-        setProfileMsg('✅ تم الحفظ!');
-      }
+
+      setProfileMsg('✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉');
       await loadData(user.id);
       setTimeout(() => { setShowProfileModal(false); setProfileMsg(''); }, 2500);
     } catch {
@@ -244,12 +301,24 @@ export default function Dashboard() {
         predicted_extra_time: form.extraTime,
         surprise_answer: form.surpriseAnswer || null,
         submitted_at: new Date().toISOString(),
-        points: ex?.points ?? 0,
-        actual_home_score: null,
-        actual_away_score: null,
+        //points: ex?.points ?? 0,
+        //actual_home_score: null,
+        //actual_away_score: null,
       };
       if (ex) await supabase.from('predictions').update(payload).eq('id', ex.id);
-      else await supabase.from('predictions').insert(payload);
+      else {
+        await supabase.from('predictions').insert(payload);
+        // ✅ سجّل في social_feed عند أول توقع
+        await supabase.from('social_feed').insert({
+          user_id: user.id,
+          type: 'share_predictions',
+          data: {
+            home: match.teams.home.name,
+            away: match.teams.away.name,
+            fixture_id: match.fixture.id,
+          },
+        });
+      }
       const { data } = await supabase.from('predictions').select('*').eq('user_id', user.id);
       setPredictions(data || []);
       setMessages(m => ({ ...m, [match.fixture.id]: '✅ تم الحفظ!' }));
@@ -262,13 +331,14 @@ export default function Dashboard() {
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
-  const feedEventLabel = (event: string, meta: any) => {
-    switch (event) {
-      case 'prediction_submitted': return `⚽ توقّع نتيجة ${meta?.home || ''} × ${meta?.away || ''}`;
-      case 'referral_bonus': return '🎉 دعا صديقاً جديداً وربح 5 نقاط!';
-      case 'profile_completed': return '✅ أكمل بياناته الشخصية وربح 5 نقاط!';
-      case 'points_earned': return `🏅 كسب ${meta?.points || ''} نقطة`;
-      default: return '🔔 نشاط جديد';
+  const feedEventLabel = (type: string, data: any) => {
+    switch (type) {
+      case 'invite_friend':     return '🎉 دعا صديقاً جديداً وربح نقاط!';
+      case 'joined_league':     return `🏆 انضم للبطولة ${data?.league_name || ''}`;
+      case 'share_league':      return '🔗 شارك رابط البطولة';
+      case 'completed_profile': return '✅ أكمل بياناته الشخصية وربح 5 نقاط!';
+      case 'share_predictions': return `⚽ شارك توقعاته (${data?.home || ''} × ${data?.away || ''})`;
+      default:                  return '🔔 نشاط جديد';
     }
   };
 
@@ -413,6 +483,15 @@ export default function Dashboard() {
       {profileIncomplete && (
         <div onClick={() => setShowProfileModal(true)} style={{ background: 'linear-gradient(90deg,rgba(217,178,95,.1),rgba(217,178,95,.04))', borderBottom: '1px solid rgba(217,178,95,.18)', padding: '10px 20px', cursor: 'pointer', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#f2d79e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           🎁 أكمل ملفك الشخصي (اسم + تليفون) واحصل على 5 نقاط مجاناً! &nbsp;<strong>اضغط هنا</strong>
+        </div>
+      )}
+
+      {leagueJoinMsg && (
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '12px 20px 0' }}>
+          <div style={{ padding: '14px 20px', borderRadius: 16, background: 'rgba(39,176,110,.12)', border: '1px solid rgba(39,176,110,.25)', color: '#94f0c0', fontFamily: 'Cairo, sans-serif', fontSize: 14, fontWeight: 700, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <span>{leagueJoinMsg}</span>
+            <a href="/my-leagues" style={{ color: '#ffe3a6', textDecoration: 'underline', fontWeight: 800, flexShrink: 0 }}>اضغط هنا لرؤية الليج ←</a>
+          </div>
         </div>
       )}
 
@@ -726,14 +805,14 @@ export default function Dashboard() {
                     </button>
                   ))}
                 </div>
-                {historyRankings.filter((r: any) => r.snapshot_date === activeHistoryDate).map((player: any, i: number) => {
+                {historyRankings.filter((r: any) => r.week_start === activeHistoryDate).map((player: any, i: number) => {
                   const isMe = player.user_id === user?.id;
                   return (
-                    <div key={player.user_id + player.snapshot_date} className={`rank-item${isMe ? ' me' : ''}`}>
-                      <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontWeight: 800, fontSize: 14 }}>#{player.rank}</span>}</div>
+                    <div key={player.user_id + player.week_start} className={`rank-item${isMe ? ' me' : ''}`}>
+                      <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontWeight: 800, fontSize: 14 }}>#{i + 1}</span>}</div>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{player.user_name || '—'} {isMe && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{new Date(player.snapshot_date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{player.profiles?.display_name || '—'} {isMe && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{new Date(player.week_start).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.total_points}</div>
@@ -762,13 +841,13 @@ export default function Dashboard() {
             ) : socialFeed.map((item: any) => (
               <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', background: 'rgba(255,255,255,.025)', border: '1px solid var(--line)', borderRadius: 18, marginBottom: 10 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(217,178,95,.1)', display: 'grid', placeItems: 'center', fontSize: 18, flexShrink: 0 }}>
-                  {item.event_type === 'referral_bonus' ? '🎉' : item.event_type === 'profile_completed' ? '✅' : item.event_type === 'points_earned' ? '🏅' : '⚽'}
+                  {item.type === 'invite_friend' ? '🎉' : item.type === 'completed_profile' ? '✅' : item.type === 'joined_league' ? '🏆' : item.type === 'share_league' ? '🔗' : '⚽'}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 13, fontFamily: 'Cairo, sans-serif' }}>
                     {item.user_name || 'لاعب'} {item.user_id === user?.id && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>}
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{feedEventLabel(item.event_type, item.meta)}</div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{feedEventLabel(item.type, item.data)}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{timeAgo(item.created_at)}</div>
                 </div>
               </div>
