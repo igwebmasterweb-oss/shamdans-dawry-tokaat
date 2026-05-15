@@ -94,6 +94,19 @@ export default function Dashboard() {
       const sbFixtures = sbFixturesRes.data;
       const userPreds = userPredsRes.data;
       const myPointsRow = myPointsRowRes.data;
+
+// FIX: لو مفيش referral_code نولده دلوقتي
+let finalReferralCode = myPointsRow?.referral_code || '';
+if (!finalReferralCode && userId) {
+  finalReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+  // نحفظه في الداتابيز
+  supabase.from('user_points').upsert({ 
+    user_id: userId, 
+    referral_code: finalReferralCode,
+    referral_count: myPointsRow?.referral_count || 0,
+    total_points: myPointsRow?.total_points || 0
+  }).then(() => {});
+}
       const feedData = feedDataRes.data;
       const histData = histDataRes.data;
       const userPointsData = userPointsDataRes.data;
@@ -170,39 +183,39 @@ export default function Dashboard() {
 
   const saveProfile = async () => {
     if (!user) return;
-    if (!profileForm.display_name.trim()) { setProfileMsg('❌ الاسم مطلوب'); return; }
     setProfileSaving(true);
+
+    // ✅ FIX قوي: فيسبوك مطلوب عشان ياخد 5 نقاط
+    if (!profileForm.display_name.trim() || !profileForm.phone.trim() || !profileForm.facebook_url.trim()) {
+      setProfileMsg('❌ لازم تملى الاسم + التليفون + رابط فيسبوك عشان تاخد 5 نقاط');
+      setProfileSaving(false);
+      return;
+    }
+
+    const fbUrl = profileForm.facebook_url.trim();
+    const fbValid = /^https?:\/\/(www\.)?(facebook\.com|fb\.com)\/.+/i.test(fbUrl);
+    if (!fbValid) {
+      setProfileMsg('❌ رابط فيسبوك غير صحيح، يجب أن يبدأ بـ https://facebook.com/');
+      setProfileSaving(false);
+      return;
+    }
+
     try {
-      const fbUrl = profileForm.facebook_url.trim();
-      // FIX ٤: validate only if URL is provided, allow empty
-      const fbValid = !fbUrl || /^https?:\/\/(www\.)?(facebook\.com|fb\.com)\/.+/i.test(fbUrl);
-      if (!fbValid) {
-        setProfileMsg('❌ رابط فيسبوك غير صحيح، يجب أن يبدأ بـ https://facebook.com/');
-        setProfileSaving(false);
-        return;
-      }
       const hasAll = !!(profileForm.display_name.trim() && profileForm.phone.trim() && fbUrl && fbValid);
       const isCompleting = !profile?.bonus_points_awarded && hasAll;
       const updates: any = {
         full_name: profileForm.display_name.trim(),
         phone: profileForm.phone.trim() || null,
-        facebook_url: fbValid ? (fbUrl || null) : null,
-        profile_completed: !!(profileForm.display_name.trim() && profileForm.phone.trim()),
+        facebook_url: fbUrl,
+        profile_completed: true,
+        bonus_points_awarded: true,
+        bonus_points: 5,
         updated_at: new Date().toISOString(),
       };
-      if (isCompleting) { updates.bonus_points_awarded = true; updates.bonus_points = 5; }
       const { error } = await supabase.from('profiles').upsert({ id: user.id, ...updates });
       if (error) throw error;
-      if (isCompleting) {
-        setProfileMsg('✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉');
-      } else if (!hasAll && !profile?.bonus_points_awarded) {
-        const missing = [];
-        if (!profileForm.phone.trim()) missing.push('التليفون');
-        if (!fbUrl) missing.push('فيسبوك');
-        setProfileMsg(`💾 تم الحفظ — أكمل ${missing.join(' + ')} للحصول على 5 نقاط 🎁`);
-      } else {
-        setProfileMsg('✅ تم الحفظ!');
-      }
+
+      setProfileMsg('✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉');
       await loadData(user.id);
       setTimeout(() => { setShowProfileModal(false); setProfileMsg(''); }, 2500);
     } catch {
