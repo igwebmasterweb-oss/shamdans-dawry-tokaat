@@ -58,14 +58,14 @@ export default function Dashboard() {
 
   const loadData = async (userId: string) => {
     try {
-      // معالجة الـ referral أولاً لو جه من رابط دعوة (SSR-safe)
+      // SSR-safe referral processing
       const pendingRef = typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingRef') : null;
       if (pendingRef) {
         if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingRef');
         await supabase.rpc('process_referral', { p_referred_id: userId, p_referral_code: pendingRef });
       }
 
-      // تنفيذ كل الـ queries بالتوازي
+      // كل الـ queries بالتوازي
       const [
         profileRes,
         sessionRes,
@@ -80,23 +80,17 @@ export default function Dashboard() {
         supabase.from('profiles').select('*').eq('id', userId).single(),
         supabase.auth.getSession(),
         fetch('/api/fixtures').then(res => res.json()),
-        supabase
-          .from('fixtures')
-          .select('api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,surprise_answer,surprise_question'),
+        supabase.from('fixtures').select('api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,surprise_answer,surprise_question'),
         supabase.from('predictions').select('*').eq('user_id', userId),
         supabase.from('user_points').select('referral_code,referral_count,total_points').eq('user_id', userId).maybeSingle(),
         supabase.from('social_feed').select('*').order('created_at', { ascending: false }).limit(30),
-        supabase
-          .from('historical_rankings')
-          .select('*')
-          .order('snapshot_date', { ascending: false })
-          .order('rank', { ascending: true }),
+        supabase.from('historical_rankings').select('*').order('snapshot_date', { ascending: false }).order('rank', { ascending: true }),
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
       ]);
 
       const profileData = profileRes.data;
       const sessionData = sessionRes.data;
-      const apiMatches = fixturesApiRes?.response || [];
+      const apiMatches = (fixturesApiRes as any)?.response || [];
       const sbFixtures = sbFixturesRes.data;
       const userPreds = userPredsRes.data;
       const myPointsRow = myPointsRowRes.data;
@@ -118,7 +112,7 @@ export default function Dashboard() {
 
       const sbMap = new Map(sbFixtures?.map((f: any) => [f.api_fixture_id, f]) || []);
       const merged = apiMatches.map((m: any) => {
-        const sb = sbMap.get(m.fixture.id);
+        const sb: any = sbMap.get(m.fixture.id);
         return {
           ...m,
           is_open: sb?.is_open ?? false,
@@ -133,15 +127,18 @@ export default function Dashboard() {
       setMatches(merged);
       setPredictions(userPreds || []);
 
-      // مصدر النقاط الموحّد من user_points.total_points
+      // ─── FIX ١+٢: مصدر النقاط والـ referral code ───
+      // لو مفيش row في user_points، نجيبه من leaderboard (userPointsData)
       if (myPointsRow) {
         setReferralCode(myPointsRow.referral_code || '');
         setReferralCount(myPointsRow.referral_count || 0);
         setMyTotalPoints(myPointsRow.total_points || 0);
       } else {
-        setReferralCode('');
-        setReferralCount(0);
-        setMyTotalPoints(0);
+        // fallback: دور على المستخدم في الـ leaderboard data
+        const myRow = (userPointsData || []).find((r: any) => r.user_id === userId);
+        setReferralCode(myRow?.referral_code || '');
+        setReferralCount(myRow?.referral_count || 0);
+        setMyTotalPoints(myRow?.total_points || 0);
       }
 
       setSocialFeed(feedData || []);
@@ -177,31 +174,25 @@ export default function Dashboard() {
     setProfileSaving(true);
     try {
       const fbUrl = profileForm.facebook_url.trim();
+      // FIX ٤: validate only if URL is provided, allow empty
       const fbValid = !fbUrl || /^https?:\/\/(www\.)?(facebook\.com|fb\.com)\/.+/i.test(fbUrl);
       if (!fbValid) {
         setProfileMsg('❌ رابط فيسبوك غير صحيح، يجب أن يبدأ بـ https://facebook.com/');
         setProfileSaving(false);
         return;
       }
-
-      const hasAll = profileForm.display_name.trim() && profileForm.phone.trim() && fbUrl && fbValid;
+      const hasAll = !!(profileForm.display_name.trim() && profileForm.phone.trim() && fbUrl && fbValid);
       const isCompleting = !profile?.bonus_points_awarded && hasAll;
-
       const updates: any = {
         full_name: profileForm.display_name.trim(),
         phone: profileForm.phone.trim() || null,
-        facebook_url: fbValid ? fbUrl : null,
+        facebook_url: fbValid ? (fbUrl || null) : null,
         profile_completed: !!(profileForm.display_name.trim() && profileForm.phone.trim()),
         updated_at: new Date().toISOString(),
       };
-      if (isCompleting) {
-        updates.bonus_points_awarded = true;
-        updates.bonus_points = 5;
-      }
-
+      if (isCompleting) { updates.bonus_points_awarded = true; updates.bonus_points = 5; }
       const { error } = await supabase.from('profiles').upsert({ id: user.id, ...updates });
       if (error) throw error;
-
       if (isCompleting) {
         setProfileMsg('✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉');
       } else if (!hasAll && !profile?.bonus_points_awarded) {
@@ -212,7 +203,6 @@ export default function Dashboard() {
       } else {
         setProfileMsg('✅ تم الحفظ!');
       }
-
       await loadData(user.id);
       setTimeout(() => { setShowProfileModal(false); setProfileMsg(''); }, 2500);
     } catch {
@@ -270,10 +260,7 @@ export default function Dashboard() {
     setSubmitting(null);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
-  };
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
   const feedEventLabel = (event: string, meta: any) => {
     switch (event) {
@@ -296,46 +283,51 @@ export default function Dashboard() {
   };
 
   const getReferralLink = () => {
+    // FIX ٢: لو referralCode فاضي، مترجعش رابط ناقص
+    if (!referralCode) return '';
     if (typeof window === 'undefined') return `/login?ref=${referralCode}`;
     return `${window.location.origin}/login?ref=${referralCode}`;
   };
 
   const copyReferralLink = () => {
-    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
-    navigator.clipboard.writeText(getReferralLink()).then(() => {
+    const link = getReferralLink();
+    if (!link || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    navigator.clipboard.writeText(link).then(() => {
       setReferralCopied(true);
       setTimeout(() => setReferralCopied(false), 2500);
     });
   };
 
   const shareOnWhatsApp = () => {
-    if (typeof window === 'undefined') return;
-    const txt = encodeURIComponent(`🏆 انضم لمنافسة الشمعدان × كأس العالم 2026!\nسجّل عن طريق رابطي واحصل على نقاط إضافية:\n${getReferralLink()}`);
+    const link = getReferralLink();
+    if (!link || typeof window === 'undefined') return;
+    const txt = encodeURIComponent(`🏆 انضم لمنافسة الشمعدان × كأس العالم 2026!\nسجّل عن طريق رابطي واحصل على نقاط إضافية:\n${link}`);
     window.open(`https://wa.me/?text=${txt}`, '_blank');
   };
 
   const shareOnFacebook = () => {
-    if (typeof window === 'undefined') return;
-    const url = encodeURIComponent(getReferralLink());
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=600,height=400');
+    const link = getReferralLink();
+    if (!link || typeof window === 'undefined') return;
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}`, '_blank', 'width=600,height=400');
   };
 
   const shareOnMessenger = () => {
-    if (typeof window === 'undefined') return;
-    const url = encodeURIComponent(getReferralLink());
+    const link = getReferralLink();
+    if (!link || typeof window === 'undefined') return;
+    const url = encodeURIComponent(link);
     window.open(`https://www.facebook.com/dialog/send?link=${url}&app_id=1302682795390354&redirect_uri=${url}`, '_blank');
   };
 
-  // ── LOADING ──
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#070809', display: 'grid', placeItems: 'center', fontFamily: 'Cairo, sans-serif', color: '#f4f1e8' }}>
+    <div dir="rtl" style={{ minHeight: '100vh', background: '#070809', display: 'grid', placeItems: 'center', fontFamily: 'Cairo, sans-serif', color: '#f4f1e8' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🏆</div>
-        <div style={{ color: '#d9b25f', fontSize: 18, fontWeight: 700 }}>جاري التحميل...</div>
+        <div style={{ fontSize: 16, color: '#a8a39a' }}>جاري التحميل...</div>
       </div>
     </div>
   );
 
+  // FIX ٦: استخدام myTotalPoints مباشرة (مش myPoints محسوب يدوي)
   const myPoints = myTotalPoints;
   const myRank = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
@@ -348,29 +340,14 @@ export default function Dashboard() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
         :root {
-          --bg: #070809;
-          --surface: #111315;
-          --surface-2: #171a1d;
-          --surface-3: #1d2125;
-          --line: rgba(255,255,255,.08);
-          --text: #f4f1e8;
-          --muted: #a8a39a;
-          --gold: #d9b25f;
-          --gold-soft: rgba(217,178,95,.14);
-          --red: #c93a2f;
-          --green: #27b06e;
-          --blue: #3b82f6;
+          --bg: #070809; --surface: #111315; --surface-2: #171a1d; --surface-3: #1d2125;
+          --line: rgba(255,255,255,.08); --text: #f4f1e8; --muted: #a8a39a;
+          --gold: #d9b25f; --gold-soft: rgba(217,178,95,.14);
+          --red: #c93a2f; --green: #27b06e; --blue: #3b82f6;
           --shadow: 0 16px 40px rgba(0,0,0,.35);
         }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-          font-family: 'Cairo', sans-serif;
-          background: radial-gradient(circle at top right, rgba(201,58,47,.08), transparent 26%),
-                      radial-gradient(circle at top left, rgba(217,178,95,.08), transparent 28%), #070809;
-          color: var(--text);
-          direction: rtl;
-          min-height: 100vh;
-        }
+        body { font-family: 'Cairo', sans-serif; background: radial-gradient(circle at top right,rgba(201,58,47,.08),transparent 26%), radial-gradient(circle at top left,rgba(217,178,95,.08),transparent 28%), #070809; color: var(--text); direction: rtl; min-height: 100vh; }
         .tab-btn { padding:10px 22px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); cursor:pointer; font-family:'Cairo',sans-serif; font-size:14px; font-weight:700; transition:all .2s; }
         .tab-btn.active { background:linear-gradient(90deg,rgba(217,178,95,.18),rgba(217,178,95,.06)); border-color:rgba(217,178,95,.3); color:#fff1ce; }
         .round-btn { padding:8px 16px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); cursor:pointer; font-family:'Cairo',sans-serif; font-size:13px; font-weight:700; transition:all .2s; }
@@ -402,39 +379,35 @@ export default function Dashboard() {
         .modal-input:focus { border-color:rgba(217,178,95,.4); }
       `}</style>
 
-      {/* ══════════════════ HEADER ══════════════════ */}
-      <header style={{ background: 'rgba(7,8,9,.92)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--line)', padding: '14px 20px', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 28 }}>🏆</span>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 16, color: '#d9b25f' }}>الشمعدان × كأس العالم</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>أهلاً {displayName}! 👋</div>
-            </div>
+      {/* ══ HEADER ══ */}
+      <div dir="rtl" style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', borderBottom: '1px solid var(--line)', padding: '14px 20px', position: 'sticky', top: 0, zIndex: 100, backdropFilter: 'blur(12px)' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 22 }}>🏆</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>الشمعدان × كأس العالم</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>أهلاً {displayName}! 👋</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.25)', borderRadius: 12, padding: '8px 14px', textAlign: 'center' }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#d9b25f', fontVariantNumeric: 'tabular-nums' }}>{myPoints}</div>
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
-            </div>
-            {myRank > 0 && (
-              <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 12, padding: '8px 14px', textAlign: 'center' }}>
-                <div style={{ fontSize: 18, fontWeight: 800 }}>#{myRank}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)' }}>ترتيب</div>
-              </div>
-            )}
-            <button onClick={() => setShowProfileModal(true)} style={{ padding: '9px 16px', borderRadius: 12, cursor: 'pointer', border: profileIncomplete ? '1px solid rgba(217,178,95,.35)' : '1px solid var(--line)', background: profileIncomplete ? 'rgba(217,178,95,.08)' : 'var(--surface-2)', color: profileIncomplete ? '#f2d79e' : 'var(--text)', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>
-              {profileIncomplete ? '🎁 أكمل ملفك +5 نقاط' : `✏️ ${displayName}`}
-            </button>
-            <a href="/my-leagues" style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface-2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>🏆 ليجاتي</a>
-            <button onClick={() => setShowReferral(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(39,176,110,.3)', background: 'rgba(39,176,110,.08)', color: '#5effa8', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              🎁 ادعُ صديق
-              {referralCount > 0 && <span style={{ background: 'rgba(39,176,110,.2)', borderRadius: 999, padding: '1px 8px', fontSize: 12 }}>{referralCount}</span>}
-            </button>
-            <button onClick={handleLogout} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(201,58,47,.25)', background: 'rgba(201,58,47,.08)', color: '#ff9c91', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>خروج</button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--gold-soft)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '6px 14px', minWidth: 60 }}>
+            <span style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{myPoints}</span>
+            <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700 }}>نقطة</span>
           </div>
+          {myRank > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(255,255,255,.04)', border: '1px solid var(--line)', borderRadius: 12, padding: '6px 14px', minWidth: 60 }}>
+              <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--text)' }}>#{myRank}</span>
+              <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700 }}>ترتيب</span>
+            </div>
+          )}
+          <button onClick={() => setShowProfileModal(true)} style={{ padding: '9px 16px', borderRadius: 12, cursor: 'pointer', border: profileIncomplete ? '1px solid rgba(217,178,95,.35)' : '1px solid var(--line)', background: profileIncomplete ? 'rgba(217,178,95,.08)' : 'var(--surface-2)', color: profileIncomplete ? '#f2d79e' : 'var(--text)', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {profileIncomplete ? '🎁 أكمل ملفك +5 نقاط' : `✏️ ${displayName}`}
+          </button>
+          <a href="/my-leagues" style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(217,178,95,.25)', background: 'rgba(217,178,95,.06)', color: '#f2d79e', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>🏆 ليجاتي</a>
+          <button onClick={() => setShowReferral(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(39,176,110,.3)', background: 'rgba(39,176,110,.08)', color: '#5effa8', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            🎁 ادعُ صديق
+            {referralCount > 0 && <span style={{ background: 'rgba(39,176,110,.2)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>{referralCount}</span>}
+          </button>
+          <button onClick={handleLogout} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(201,58,47,.25)', background: 'rgba(201,58,47,.06)', color: '#ff9c91', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>خروج</button>
         </div>
-      </header>
+      </div>
 
       {/* ── INCOMPLETE BANNER ── */}
       {profileIncomplete && (
@@ -443,34 +416,35 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ══════════════════ PROFILE MODAL ══════════════════ */}
+      {/* ══ PROFILE MODAL ══ */}
       {showProfileModal && (
         <div className="modal-overlay" onClick={() => { setShowProfileModal(false); setProfileMsg(''); }}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontWeight: 800, fontSize: 18, color: '#d9b25f' }}>👤 ملفك الشخصي</h3>
+              <h3 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--text)' }}>👤 ملفك الشخصي</h3>
               <button onClick={() => { setShowProfileModal(false); setProfileMsg(''); }} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center' }}>✕</button>
             </div>
             {!profile?.bonus_points_awarded && (
-              <div style={{ background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 14, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#f2d79e', lineHeight: 1.7 }}>
+              <div style={{ background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 14, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#f2d79e', fontFamily: 'Cairo, sans-serif', lineHeight: 1.6 }}>
                 🎁 أكمل <strong>الاسم + التليفون + فيسبوك</strong> واحصل على 5 نقاط!
-                <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ marginTop: 8, display: 'flex', gap: 10, fontSize: 12 }}>
                   <span>{profileForm.display_name.trim() ? '✅' : '○'} الاسم</span>
                   <span>{profileForm.phone.trim() ? '✅' : '○'} التليفون</span>
                   <span>{profileForm.facebook_url.trim() ? '✅' : '○'} فيسبوك</span>
                 </div>
               </div>
             )}
-            <label style={{ display: 'block', fontSize: 13, color: 'var(--muted)', marginBottom: 6, fontWeight: 700 }}>الاسم الكامل &nbsp;<span style={{ color: 'var(--red)' }}>*</span></label>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 6, fontFamily: 'Cairo, sans-serif' }}>الاسم الكامل &nbsp;<span style={{ color: 'var(--red)' }}>*</span></label>
             <input type="text" value={profileForm.display_name} onChange={e => setProfileForm(f => ({ ...f, display_name: e.target.value }))} placeholder="اسمك كما تريد أن يظهر في الصدارة" className="modal-input" style={{ marginBottom: 14 }} />
-            <label style={{ display: 'block', fontSize: 13, color: 'var(--muted)', marginBottom: 6, fontWeight: 700 }}>رقم التليفون &nbsp;<span style={{ fontSize: 11, color: '#a8a39a' }}>(مطلوب للنقاط)</span></label>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 6, fontFamily: 'Cairo, sans-serif' }}>رقم التليفون &nbsp;<span style={{ color: 'var(--muted)', fontWeight: 400 }}>(مطلوب للنقاط)</span></label>
             <input type="tel" value={profileForm.phone} onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))} placeholder="01012345678" className="modal-input" style={{ marginBottom: 14, direction: 'ltr', textAlign: 'right' }} />
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--muted)', marginBottom: 6, fontWeight: 700 }}>
-              رابط فيسبوك
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 6, fontFamily: 'Cairo, sans-serif' }}>
+              رابط فيسبوك &nbsp;
               {profile?.facebook_bonus_awarded
-                ? <span style={{ fontSize: 11, background: 'rgba(39,176,110,.12)', border: '1px solid rgba(39,176,110,.2)', color: '#94f0c0', borderRadius: 999, padding: '2px 10px' }}>✅ مضاف</span>
-                : <span style={{ fontSize: 11, background: 'var(--gold-soft)', border: '1px solid rgba(217,178,95,.2)', color: '#ffe3a6', borderRadius: 999, padding: '2px 10px' }}>+5 نقاط عند إكمال الثلاثة</span>}
+                ? <span style={{ color: '#94f0c0', fontSize: 11 }}>✅ مضاف</span>
+                : <span style={{ color: 'var(--gold)', fontSize: 11 }}>+5 نقاط عند إكمال الثلاثة</span>}
             </label>
+            {/* FIX ٤: إزالة readOnly — الحقل قابل للتعديل دائماً */}
             <input
               type="url"
               value={profileForm.facebook_url}
@@ -478,61 +452,61 @@ export default function Dashboard() {
               placeholder="https://facebook.com/username"
               className="modal-input"
               style={{ marginBottom: 20, direction: 'ltr', textAlign: 'right' }}
-              readOnly={!!(profile?.facebook_url && profileForm.facebook_url)}
             />
-            {profileMsg && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 12, background: profileMsg.startsWith('✅') ? 'rgba(39,176,110,.12)' : profileMsg.startsWith('💾') ? 'rgba(217,178,95,.1)' : 'rgba(201,58,47,.12)', color: profileMsg.startsWith('✅') ? '#94f0c0' : profileMsg.startsWith('💾') ? '#f2d79e' : '#ff9c91', fontSize: 13, fontWeight: 700, textAlign: 'center' }}>{profileMsg}</div>}
-            <button onClick={saveProfile} disabled={profileSaving} className="save-btn">
-              {profileSaving ? '⏳ جاري الحفظ...' : '💾 حفظ البيانات'}
-            </button>
+            {profileMsg && <div style={{ padding: '12px 16px', borderRadius: 12, background: profileMsg.startsWith('✅') ? 'rgba(39,176,110,.12)' : 'rgba(201,58,47,.12)', border: `1px solid ${profileMsg.startsWith('✅') ? 'rgba(39,176,110,.25)' : 'rgba(201,58,47,.25)'}`, color: profileMsg.startsWith('✅') ? '#94f0c0' : '#ff9c91', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700, marginBottom: 16 }}>{profileMsg}</div>}
+            <button onClick={saveProfile} disabled={profileSaving} className="save-btn">{profileSaving ? '⏳ جاري الحفظ...' : '💾 حفظ البيانات'}</button>
           </div>
         </div>
       )}
 
-      {/* ══════════════════ REFERRAL MODAL ══════════════════ */}
+      {/* ══ REFERRAL MODAL ══ */}
       {showReferral && (
         <div className="modal-overlay" onClick={() => setShowReferral(false)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontWeight: 800, fontSize: 18, color: '#d9b25f' }}>🎁 ادعُ أصدقاءك</h3>
+              <h3 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--text)' }}>🎁 ادعُ أصدقاءك</h3>
               <button onClick={() => setShowReferral(false)} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center' }}>✕</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-              <div style={{ background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 16, padding: '16px', textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: '#d9b25f' }}>{referralCount}</div>
+              <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--gold)' }}>{referralCount}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>أصدقاء انضموا</div>
               </div>
-              <div style={{ background: 'rgba(39,176,110,.08)', border: '1px solid rgba(39,176,110,.2)', borderRadius: 16, padding: '16px', textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: '#5effa8' }}>{referralCount * 5}</div>
+              <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: '#94f0c0' }}>{referralCount * 5}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>نقاط من الدعوات</div>
               </div>
             </div>
-            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px 16px', marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: '#d9b25f', fontWeight: 700, marginBottom: 10 }}>⚡ كيف يعمل؟</div>
-              <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 2 }}>
-                <div>١. شارك رابطك مع أصدقاءك</div>
-                <div>٢. لما يسجلوا عن طريق رابطك → <span style={{ color: '#5effa8', fontWeight: 700 }}>+5 نقاط لك</span></div>
-                <div>٣. مفيش حد أقصى للدعوات 🚀</div>
+            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, marginBottom: 16, fontSize: 13, color: 'var(--muted)', fontFamily: 'Cairo, sans-serif', lineHeight: 2 }}>
+              <strong style={{ color: 'var(--gold)' }}>⚡ كيف يعمل؟</strong><br />
+              ١. شارك رابطك مع أصدقاءك<br />
+              ٢. لما يسجلوا عن طريق رابطك → <span style={{ color: '#94f0c0', fontWeight: 700 }}>+5 نقاط لك</span><br />
+              ٣. مفيش حد أقصى للدعوات 🚀
+            </div>
+            {/* FIX ٢: إظهار رسالة لو الكود مش موجود بعد */}
+            {referralCode ? (
+              <>
+                <div style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 14, padding: '12px 16px', fontFamily: 'monospace', fontSize: 13, color: 'var(--text)', wordBreak: 'break-all', marginBottom: 12, direction: 'ltr', textAlign: 'left' }}>
+                  {typeof window !== 'undefined' ? getReferralLink() : '...'}
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <button onClick={copyReferralLink} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1px solid var(--line)', background: referralCopied ? 'rgba(39,176,110,.15)' : 'var(--surface-2)', color: referralCopied ? '#94f0c0' : 'var(--text)', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700 }}>{referralCopied ? '✅ تم النسخ' : '📋 نسخ'}</button>
+                  <button onClick={shareOnWhatsApp} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1px solid rgba(39,176,110,.25)', background: 'rgba(39,176,110,.1)', color: '#94f0c0', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700 }}>💬 واتساب</button>
+                  <button onClick={shareOnFacebook} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.1)', color: '#93c5fd', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700 }}>📘 فيسبوك</button>
+                  <button onClick={shareOnMessenger} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1px solid rgba(99,102,241,.25)', background: 'rgba(99,102,241,.1)', color: '#c4b5fd', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700 }}>⚡ ماسنجر</button>
+                </div>
+              </>
+            ) : (
+              <div style={{ background: 'rgba(217,178,95,.06)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 14, padding: '14px 16px', textAlign: 'center', fontSize: 13, color: '#f2d79e', fontFamily: 'Cairo, sans-serif' }}>
+                ⏳ جاري تحميل رابط الدعوة... حاول مجدداً بعد لحظة
               </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <div style={{ flex: 1, background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'ltr', textAlign: 'left' }}>
-                {typeof window !== 'undefined' ? getReferralLink() : '...'}
-              </div>
-              <button onClick={copyReferralLink} style={{ padding: '10px 16px', borderRadius: 12, border: '1px solid rgba(217,178,95,.3)', background: referralCopied ? 'rgba(39,176,110,.12)' : 'rgba(217,178,95,.1)', color: referralCopied ? '#94f0c0' : '#f2d79e', cursor: 'pointer', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', fontFamily: 'Cairo, sans-serif' }}>
-                {referralCopied ? '✅ تم النسخ' : '📋 نسخ'}
-              </button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-              <button onClick={shareOnWhatsApp} style={{ padding: '12px', borderRadius: 14, border: '1px solid rgba(39,176,110,.25)', background: 'rgba(39,176,110,.1)', color: '#5effa8', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: 'Cairo, sans-serif' }}>💬 واتساب</button>
-              <button onClick={shareOnFacebook} style={{ padding: '12px', borderRadius: 14, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.1)', color: '#93c5fd', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: 'Cairo, sans-serif' }}>📘 فيسبوك</button>
-              <button onClick={shareOnMessenger} style={{ padding: '12px', borderRadius: 14, border: '1px solid rgba(99,102,241,.25)', background: 'rgba(99,102,241,.1)', color: '#c4b5fd', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: 'Cairo, sans-serif' }}>⚡ ماسنجر</button>
-            </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ══════════════════ MAIN ══════════════════ */}
-      <main style={{ maxWidth: 960, margin: '0 auto', padding: '20px 16px' }}>
+      {/* ══ MAIN ══ */}
+      <div dir="rtl" style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px' }}>
 
         {/* Stats Row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
@@ -543,15 +517,15 @@ export default function Dashboard() {
             { label: 'المتسابقون', value: leaderboard.length, color: '#7db1ff', icon: '👥' },
           ].map(s => (
             <div key={s.label} className="stat-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, marginBottom: 4 }}>{s.icon}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.label}</div>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{s.label}</div>
             </div>
           ))}
         </div>
 
-        {/* ── TABS ── */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+        {/* TABS */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', overflowX: 'auto', paddingBottom: 4 }}>
           {([
             { id: 'predict', label: '⚽ التوقعات' },
             { id: 'my', label: '📋 توقعاتي' },
@@ -563,7 +537,7 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* ════════════════ PREDICT TAB ════════════════ */}
+        {/* ════ PREDICT TAB ════ */}
         {activeTab === 'predict' && (
           <div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -574,9 +548,9 @@ export default function Dashboard() {
               ))}
             </div>
             {filteredMatches.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
-                <div style={{ fontWeight: 700 }}>لا توجد ماتشات في هذه الجولة</div>
+                <div>لا توجد ماتشات في هذه الجولة</div>
               </div>
             ) : filteredMatches.map(match => {
               const existing = predictions.find(p => p.fixture_id === match.fixture.id);
@@ -585,51 +559,45 @@ export default function Dashboard() {
               const msg = messages[match.fixture.id];
               return (
                 <div key={match.fixture.id} className="match-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>{match.teams.home.name} &nbsp;×&nbsp; {match.teams.away.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{new Date(match.fixture.date).toLocaleDateString('ar-EG', { weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                    </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>{match.teams.home.name} &nbsp;×&nbsp; {match.teams.away.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{new Date(match.fixture.date).toLocaleDateString('ar-EG', { weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <span className={match.is_open ? 'pill-open' : 'pill-closed'}>{match.is_open ? '🟢 مفتوح' : '🔒 مغلق'}</span>
                       {existing && <span className="pill-saved">✅ محفوظ</span>}
                     </div>
                   </div>
-
-                  {/* Teams display */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+                  {/* Teams */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                     <div style={{ textAlign: 'center' }}>
-                      {match.teams.home.logo ? <img src={match.teams.home.logo} alt={match.teams.home.name} width={48} height={48} style={{ margin: '0 auto 6px', display: 'block' }} loading="lazy" /> : <span style={{ fontSize: 40 }}>⚽</span>}
+                      {match.teams.home.logo ? <img src={match.teams.home.logo} alt={match.teams.home.name} width={48} height={48} style={{ margin: '0 auto 6px', objectFit: 'contain' }} /> : <span style={{ fontSize: 32 }}>⚽</span>}
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{match.teams.home.name}</div>
                     </div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--muted)', textAlign: 'center' }}>{hasResult ? `${match.actual_home_score} — ${match.actual_away_score}` : 'VS'}</div>
+                    <div style={{ textAlign: 'center', fontSize: 18, fontWeight: 900, color: hasResult ? 'var(--gold)' : 'var(--muted)' }}>{hasResult ? `${match.actual_home_score} — ${match.actual_away_score}` : 'VS'}</div>
                     <div style={{ textAlign: 'center' }}>
-                      {match.teams.away.logo ? <img src={match.teams.away.logo} alt={match.teams.away.name} width={48} height={48} style={{ margin: '0 auto 6px', display: 'block' }} loading="lazy" /> : <span style={{ fontSize: 40 }}>⚽</span>}
+                      {match.teams.away.logo ? <img src={match.teams.away.logo} alt={match.teams.away.name} width={48} height={48} style={{ margin: '0 auto 6px', objectFit: 'contain' }} /> : <span style={{ fontSize: 32 }}>⚽</span>}
                       <div style={{ fontSize: 13, fontWeight: 700 }}>{match.teams.away.name}</div>
                     </div>
                   </div>
-
-                  {/* Actual result details */}
+                  {/* Actual result */}
                   {hasResult && (
-                    <div style={{ background: 'rgba(39,176,110,.08)', border: '1px solid rgba(39,176,110,.18)', borderRadius: 14, padding: '12px 16px', marginBottom: 14 }}>
-                      <div style={{ fontSize: 12, color: '#94f0c0', fontWeight: 700, marginBottom: 6 }}>النتيجة الفعلية</div>
-                      {match.first_scorer && <div style={{ fontSize: 13, color: 'var(--muted)' }}>⚽ أول هدف: {match.first_scorer}</div>}
+                    <div style={{ background: 'rgba(39,176,110,.08)', border: '1px solid rgba(39,176,110,.16)', borderRadius: 14, padding: '10px 14px', marginBottom: 12 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#94f0c0', marginBottom: 6 }}>النتيجة الفعلية</div>
+                      {match.first_scorer && <div style={{ fontSize: 12, color: 'var(--muted)' }}>⚽ أول هدف: {match.first_scorer}</div>}
                       {existing && (
-                        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 24, fontWeight: 800, color: (existing.points || 0) >= 10 ? '#ffe3a6' : (existing.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{existing.points || 0}</span>
-                          <span style={{ fontSize: 12, color: 'var(--muted)' }}>نقطة</span>
+                        <div style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: (existing.points || 0) >= 10 ? '#ffe3a6' : (existing.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                          {existing.points || 0}&nbsp; نقطة
                         </div>
                       )}
                     </div>
                   )}
-
-                  {/* Prediction form — open */}
+                  {/* Prediction form */}
                   {match.is_open && (
-                    <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '16px' }}>
-                      <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 12 }}>توقّع النتيجة</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>توقّع النتيجة</div>
                       {[{ key: 'homeScore', team: match.teams.home.name }, { key: 'awayScore', team: match.teams.away.name }].map(({ key, team }) => (
                         <div key={key} className="score-row">
-                          <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>{team}</span>
+                          <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{team}</span>
                           <button className="score-btn" onClick={() => setForm(match.fixture.id, { [key]: Math.max(0, (form[key] || 0) - 1) })}>−</button>
                           <span className="score-val">{form[key] || 0}</span>
                           <button className="score-btn plus" onClick={() => setForm(match.fixture.id, { [key]: (form[key] || 0) + 1 })}>+</button>
@@ -637,34 +605,32 @@ export default function Dashboard() {
                       ))}
                       <div className="field-row">
                         <span className="field-label">⚽ أول هدف</span>
-                        <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: '#ffe3a6', border: '1px solid rgba(217,178,95,.2)' }}>+3</span>
+                        <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: 'var(--gold)' }}>+3</span>
                         <input type="text" value={form.firstScorer} onChange={e => setForm(match.fixture.id, { firstScorer: e.target.value })} className="field-input" placeholder="مثال: مبابي" />
                       </div>
                       <div className="field-row">
                         <input type="checkbox" checked={form.extraTime} onChange={e => setForm(match.fixture.id, { extraTime: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--gold)', flexShrink: 0 }} />
                         <span className="field-label">⏱️ وقت إضافي؟</span>
-                        <span className="points-tag" style={{ background: 'rgba(59,130,246,.1)', color: '#93c5fd', border: '1px solid rgba(59,130,246,.2)' }}>+2</span>
+                        <span className="points-tag" style={{ background: 'rgba(59,130,246,.1)', color: '#93c5fd' }}>+2</span>
                       </div>
                       {match.surprise_question && (
                         <div className="field-row">
                           <span className="field-label">🎯 {match.surprise_question}</span>
-                          <span className="points-tag" style={{ background: 'rgba(39,176,110,.1)', color: '#94f0c0', border: '1px solid rgba(39,176,110,.2)' }}>+5</span>
+                          <span className="points-tag" style={{ background: 'rgba(99,102,241,.1)', color: '#c4b5fd' }}>+5</span>
                           <input type="text" value={form.surpriseAnswer} onChange={e => setForm(match.fixture.id, { surpriseAnswer: e.target.value })} className="field-input" style={{ maxWidth: 120 }} placeholder="إجابتك..." />
                         </div>
                       )}
-                      {msg && <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 14, marginBottom: 10, color: msg.startsWith('✅') ? '#94f0c0' : '#ff9c91' }}>{msg}</div>}
+                      {msg && <div style={{ padding: '10px', borderRadius: 12, background: msg.startsWith('✅') ? 'rgba(39,176,110,.1)' : 'rgba(201,58,47,.1)', color: msg.startsWith('✅') ? '#94f0c0' : '#ff9c91', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{msg}</div>}
                       <button onClick={() => submitPrediction(match)} disabled={submitting === match.fixture.id} className="save-btn">
                         {submitting === match.fixture.id ? '⏳ جاري الحفظ...' : existing ? '💾 تحديث التوقع' : '⚽ حفظ التوقع'}
                       </button>
                     </div>
                   )}
-
-                  {/* Saved prediction — closed, no result yet */}
                   {!match.is_open && !hasResult && existing && (
                     <div className="pred-box">
-                      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>توقعك المسجّل</div>
-                      <div style={{ fontSize: 22, fontWeight: 800 }}>{existing.predicted_home_score} — {existing.predicted_away_score}</div>
-                      {existing.predicted_first_scorer && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>⚽ {existing.predicted_first_scorer}</div>}
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>توقعك المسجّل</div>
+                      <div style={{ fontSize: 20, fontWeight: 900 }}>{existing.predicted_home_score} — {existing.predicted_away_score}</div>
+                      {existing.predicted_first_scorer && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>⚽ {existing.predicted_first_scorer}</div>}
                     </div>
                   )}
                 </div>
@@ -673,33 +639,36 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ════════════════ MY PREDICTIONS TAB ════════════════ */}
+        {/* ════ MY PREDICTIONS TAB ════ */}
         {activeTab === 'my' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontWeight: 800, fontSize: 20 }}>توقعاتي</h2>
-              <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.25)', borderRadius: 12, padding: '8px 16px', fontWeight: 800, color: '#d9b25f' }}>🏅 {myPoints} نقطة</div>
+              <h2 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18 }}>توقعاتي</h2>
+              {/* FIX ٦: عرض النقاط من myTotalPoints مباشرة */}
+              <div style={{ background: 'var(--gold-soft)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '8px 16px', fontSize: 15, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>🏅 {myPoints} نقطة</div>
             </div>
             {predictions.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-                <div style={{ fontWeight: 700 }}>لم تقدم أي توقعات بعد</div>
+                <div>لم تقدم أي توقعات بعد</div>
               </div>
             ) : predictions.map(p => {
               const hasResult = p.actual_home_score !== null;
               return (
-                <div key={p.id} className="rank-item" style={(p.points || 0) >= 10 ? { borderColor: 'rgba(217,178,95,.28)', background: 'linear-gradient(90deg,rgba(217,178,95,.07),rgba(255,255,255,.015))' } : {}}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700 }}>{p.home_team} × {p.away_team}</div>
-                    <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-                      توقعك: <strong>{p.predicted_home_score} — {p.predicted_away_score}</strong>
-                      {p.predicted_first_scorer && <span style={{ marginRight: 8 }}> ⚽ {p.predicted_first_scorer}</span>}
+                <div key={p.id} className="match-card" style={p.points >= 10 ? { borderColor: 'rgba(217,178,95,.28)', background: 'linear-gradient(90deg,rgba(217,178,95,.07),rgba(255,255,255,.015))' } : {}}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>{p.home_team} × {p.away_team}</div>
+                      <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                        توقعك: <strong style={{ color: 'var(--text)' }}>{p.predicted_home_score} — {p.predicted_away_score}</strong>
+                        {p.predicted_first_scorer && <span style={{ marginRight: 10 }}>⚽ {p.predicted_first_scorer}</span>}
+                      </div>
+                      {hasResult && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>الفعلية: <strong style={{ color: 'var(--text)' }}>{p.actual_home_score} — {p.actual_away_score}</strong></div>}
                     </div>
-                    {hasResult && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>الفعلية: <strong>{p.actual_home_score} — {p.actual_away_score}</strong></div>}
-                  </div>
-                  <div style={{ textAlign: 'center', minWidth: 64, padding: '8px 12px', borderRadius: 12, background: !hasResult ? 'var(--surface-3)' : (p.points || 0) >= 10 ? 'rgba(217,178,95,.12)' : (p.points || 0) >= 5 ? 'rgba(39,176,110,.12)' : 'var(--surface-3)', color: !hasResult ? 'var(--muted)' : (p.points || 0) >= 10 ? '#ffe3a6' : (p.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)' }}>
-                    <div style={{ fontSize: 20, fontWeight: 800 }}>{hasResult ? p.points || 0 : '⏳'}</div>
-                    {hasResult && <div style={{ fontSize: 11 }}>نقطة</div>}
+                    <div style={{ textAlign: 'center', minWidth: 56, background: !hasResult ? 'var(--surface-3)' : (p.points || 0) >= 10 ? 'rgba(217,178,95,.12)' : (p.points || 0) >= 5 ? 'rgba(39,176,110,.12)' : 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 14, padding: '8px', color: !hasResult ? 'var(--muted)' : (p.points || 0) >= 10 ? '#ffe3a6' : (p.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)' }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{hasResult ? (p.points || 0) : '⏳'}</div>
+                      {hasResult && <div style={{ fontSize: 10, fontWeight: 700 }}>نقطة</div>}
+                    </div>
                   </div>
                 </div>
               );
@@ -707,27 +676,27 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ════════════════ LEADERBOARD TAB ════════════════ */}
+        {/* ════ LEADERBOARD TAB ════ */}
         {activeTab === 'leaders' && (
           <div>
-            <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 20 }}>🏆 ترتيب المتسابقين</h2>
+            <h2 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, marginBottom: 20 }}>🏆 ترتيب المتسابقين</h2>
             {leaderboard.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>🏆</div>
-                <div style={{ fontWeight: 700 }}>لا توجد نتائج بعد</div>
+                <div>لا توجد نتائج بعد</div>
               </div>
             ) : leaderboard.map((player: any, i) => {
               const isMe = player.user_id === user?.id;
               const name = player.display_name || player.user_email?.split('@')[0];
               return (
                 <div key={player.user_id} className={`rank-item${isMe ? ' me' : ''}`}>
-                  <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontWeight: 800, fontSize: 15 }}>#{i + 1}</span>}</div>
+                  <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontWeight: 800, fontSize: 14 }}>#{i + 1}</span>}</div>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>{name} {isMe && <span style={{ fontSize: 11, background: 'rgba(217,178,95,.15)', borderRadius: 999, padding: '2px 8px', color: '#ffe3a6' }}>أنت</span>} {player.profile_completed && <span style={{ fontSize: 12 }}>✅</span>}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{player.count} توقع</div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{name} {isMe && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>} {player.profile_completed && <span style={{ fontSize: 12 }}>✅</span>}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{player.count} توقع</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: '#d9b25f', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
                   </div>
                 </div>
@@ -736,21 +705,21 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ════════════════ HISTORY TAB ════════════════ */}
+        {/* ════ HISTORY TAB ════ */}
         {activeTab === 'history' && (
           <div>
             <div style={{ marginBottom: 20 }}>
-              <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>📈 السجل التاريخي للترتيب</h2>
+              <h2 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, marginBottom: 6 }}>📈 السجل التاريخي للترتيب</h2>
               <p style={{ fontSize: 13, color: 'var(--muted)' }}>لقطات يومية للترتيب منذ بداية البطولة</p>
             </div>
             {historyDates.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
-                <div style={{ fontWeight: 700 }}>لا يوجد سجل تاريخي بعد</div>
+                <div>لا يوجد سجل تاريخي بعد</div>
               </div>
             ) : (
               <>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
                   {historyDates.map(date => (
                     <button key={date} onClick={() => setActiveHistoryDate(date)} className={`round-btn${activeHistoryDate === date ? ' active' : ''}`}>
                       {new Date(date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })}
@@ -761,13 +730,13 @@ export default function Dashboard() {
                   const isMe = player.user_id === user?.id;
                   return (
                     <div key={player.user_id + player.snapshot_date} className={`rank-item${isMe ? ' me' : ''}`}>
-                      <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontWeight: 800, fontSize: 15 }}>#{player.rank}</span>}</div>
+                      <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontWeight: 800, fontSize: 14 }}>#{player.rank}</span>}</div>
                       <div>
-                        <div style={{ fontWeight: 700 }}>{player.user_name || '—'} {isMe && <span style={{ fontSize: 11, background: 'rgba(217,178,95,.15)', borderRadius: 999, padding: '2px 8px', color: '#ffe3a6' }}>أنت</span>}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{new Date(player.snapshot_date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{player.user_name || '—'} {isMe && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{new Date(player.snapshot_date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: '#d9b25f', fontVariantNumeric: 'tabular-nums' }}>{player.total_points}</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.total_points}</div>
                         <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
                       </div>
                     </div>
@@ -778,37 +747,36 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ════════════════ FEED TAB ════════════════ */}
+        {/* ════ FEED TAB ════ */}
         {activeTab === 'feed' && (
           <div>
             <div style={{ marginBottom: 20 }}>
-              <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>🌍 نشاط اللاعبين</h2>
+              <h2 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, marginBottom: 6 }}>🌍 نشاط اللاعبين</h2>
               <p style={{ fontSize: 13, color: 'var(--muted)' }}>آخر الأحداث في المنافسة</p>
             </div>
             {socialFeed.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-                <div style={{ fontWeight: 700 }}>لا يوجد نشاط بعد — كن أول من يسجّل!</div>
+                <div>لا يوجد نشاط بعد — كن أول من يسجّل!</div>
               </div>
             ) : socialFeed.map((item: any) => (
-              <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 18px', background: 'linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01))', border: '1px solid var(--line)', borderRadius: 18, marginBottom: 10 }}>
-                <div style={{ width: 42, height: 42, borderRadius: 14, background: 'rgba(217,178,95,.1)', display: 'grid', placeItems: 'center', fontSize: 20, flexShrink: 0 }}>
+              <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', background: 'rgba(255,255,255,.025)', border: '1px solid var(--line)', borderRadius: 18, marginBottom: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(217,178,95,.1)', display: 'grid', placeItems: 'center', fontSize: 18, flexShrink: 0 }}>
                   {item.event_type === 'referral_bonus' ? '🎉' : item.event_type === 'profile_completed' ? '✅' : item.event_type === 'points_earned' ? '🏅' : '⚽'}
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>
-                    {item.user_name || 'لاعب'}
-                    {item.user_id === user?.id && <span style={{ marginRight: 6, fontSize: 11, background: 'rgba(217,178,95,.15)', borderRadius: 999, padding: '2px 8px', color: '#ffe3a6' }}>أنت</span>}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, fontFamily: 'Cairo, sans-serif' }}>
+                    {item.user_name || 'لاعب'} {item.user_id === user?.id && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{feedEventLabel(item.event_type, item.meta)}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{timeAgo(item.created_at)}</div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0, marginTop: 4 }}>{timeAgo(item.created_at)}</div>
               </div>
             ))}
           </div>
         )}
 
-      </main>
+      </div>
     </>
   );
 }
