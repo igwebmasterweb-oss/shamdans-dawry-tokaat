@@ -28,14 +28,9 @@ export default function MyLeaguesPage() {
     setTimeout(() => setMessage(''), 4000);
   };
 
-  // ─────────────────────────────────────────────
-  // FIX ١: loadData مُصلحة — closing braces صح
-  // FIX ٣: بتجيب memberCount و myRank لكل ليج
-  // ─────────────────────────────────────────────
   const loadData = useCallback(async (uid: string) => {
     setLoading(true);
     try {
-      // الخطوة ١: جيب كل الليجات اللي المستخدم عضو فيها
       const { data: memberRows, error: memberErr } = await supabase
         .from('mini_league_members')
         .select('league_id, role')
@@ -43,7 +38,6 @@ export default function MyLeaguesPage() {
 
       if (memberErr) throw memberErr;
 
-      // FIX ١: الـ early return كان بيمنع باقي الكود — صُلّح
       if (!memberRows || memberRows.length === 0) {
         setLeagues([]);
         setLoading(false);
@@ -53,7 +47,6 @@ export default function MyLeaguesPage() {
       const leagueIds = memberRows.map((r: any) => r.league_id);
       const roleMap = new Map(memberRows.map((r: any) => [r.league_id, r.role]));
 
-      // الخطوة ٢: جيب بيانات الليجات
       const { data: leagueRows, error: lgErr } = await supabase
         .from('mini_leagues')
         .select('*')
@@ -62,13 +55,11 @@ export default function MyLeaguesPage() {
 
       if (lgErr) throw lgErr;
 
-      // FIX ٣: جيب كل الأعضاء لكل الليجات دفعة واحدة
       const { data: allMembers } = await supabase
         .from('mini_league_members')
         .select('league_id, user_id')
         .in('league_id', leagueIds);
 
-      // FIX ٣: جيب نقاط كل المستخدمين في الليجات
       const allMemberUserIds = [...new Set((allMembers || []).map((m: any) => m.user_id))];
       const { data: allPoints } = await supabase
         .from('user_points')
@@ -77,41 +68,30 @@ export default function MyLeaguesPage() {
 
       const pointsMap = new Map((allPoints || []).map((p: any) => [p.user_id, p]));
 
-      // الخطوة ٣: ادمج البيانات
       const enriched = (leagueRows || []).map((lg: any) => {
         const lgMembers = (allMembers || []).filter((m: any) => m.league_id === lg.id);
         const memberCount = lgMembers.length;
-
-        // احسب ترتيب المستخدم في الليج
         const sorted = lgMembers
           .map((m: any) => ({ user_id: m.user_id, pts: pointsMap.get(m.user_id)?.total_points || 0 }))
           .sort((a: any, b: any) => b.pts - a.pts);
         const myRankIdx = sorted.findIndex((m: any) => m.user_id === uid);
         const myRank = myRankIdx >= 0 ? myRankIdx + 1 : '—';
-
-        // قائمة الأعضاء مع أسماؤهم ونقاطهم
         const members = sorted.map((m: any, i: number) => ({
           user_id: m.user_id,
           name: pointsMap.get(m.user_id)?.full_name || pointsMap.get(m.user_id)?.user_email?.split('@')[0] || 'مجهول',
           pts: m.pts,
           rank: i + 1,
         }));
-
-        return {
-          ...lg,
-          role: roleMap.get(lg.id) || 'member',
-          memberCount,
-          myRank,
-          members,
-        };
+        return { ...lg, role: roleMap.get(lg.id) || 'member', memberCount, myRank, members };
       });
 
       setLeagues(enriched);
     } catch (err: any) {
       console.error('loadData error:', err);
       showMsg('❌ خطأ في تحميل البيانات: ' + (err.message || ''), 'error');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const loadAllUsers = useCallback(async () => {
@@ -137,9 +117,6 @@ export default function MyLeaguesPage() {
     });
   }, [router, loadData, loadAllUsers]);
 
-  // ─────────────────────────────────────────────
-  // FIX ٢: createLeague مُصلحة — closing braces صح
-  // ─────────────────────────────────────────────
   const createLeague = async () => {
     if (!newLeagueName.trim() || !user) return;
     const ownedCount = leagues.filter((l: any) => l.role === 'owner').length;
@@ -154,24 +131,26 @@ export default function MyLeaguesPage() {
         .select()
         .single();
       if (error) throw error;
-      await supabase.from('mini_league_members').insert({
+
+      // ✅ FIX: إضافة الـ owner كـ member تلقائياً
+      const { error: memberErr } = await supabase.from('mini_league_members').insert({
         league_id: lg.id,
         user_id: user.id,
         role: 'owner',
       });
+      if (memberErr) throw memberErr;
+
       setNewLeagueName('');
       setShowCreate(false);
       showMsg(`✅ تم إنشاء "${lg.name}" — كود: ${lg.code}`);
       await loadData(user.id);
     } catch (err: any) {
       showMsg('❌ ' + (err.message || 'خطأ في الإنشاء'), 'error');
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
-  // ─────────────────────────────────────────────
-  // FIX ٢: respondToInvite مُصلحة
-  // ─────────────────────────────────────────────
   const respondToInvite = async (notif: any, accept: boolean) => {
     const { league_id, league_name, from_user_id } = notif.data;
     try {
@@ -209,10 +188,7 @@ export default function MyLeaguesPage() {
 
   const leaveLeague = async (lg: any) => {
     if (!confirm(`هل تريد مغادرة "${lg.name}"؟`)) return;
-    await supabase.from('mini_league_members')
-      .delete()
-      .eq('league_id', lg.id)
-      .eq('user_id', user.id);
+    await supabase.from('mini_league_members').delete().eq('league_id', lg.id).eq('user_id', user.id);
     showMsg(`غادرت "${lg.name}"`);
     await loadData(user.id);
   };
@@ -275,28 +251,32 @@ export default function MyLeaguesPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
         :root {
-          --bg: #070809; --surface: #111315; --surface-2: #171a1d; --surface-3: #1d2125;
-          --line: rgba(255,255,255,.08); --text: #f4f1e8; --muted: #a8a39a;
-          --gold: #d9b25f; --gold-soft: rgba(217,178,95,.14);
-          --red: #c93a2f; --green: #27b06e;
-          --shadow: 0 16px 40px rgba(0,0,0,.35);
+          --bg: #070809; --surface: #111315; --surface-2: #171a1d;
+          --surface-3: #1d2125; --line: rgba(255,255,255,.08);
+          --text: #f4f1e8; --muted: #a8a39a; --gold: #d9b25f;
+          --gold-soft: rgba(217,178,95,.14); --red: #c93a2f;
+          --green: #27b06e; --shadow: 0 16px 40px rgba(0,0,0,.35);
         }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Cairo', sans-serif; background: radial-gradient(circle at top right,rgba(201,58,47,.08),transparent 26%), radial-gradient(circle at top left,rgba(217,178,95,.08),transparent 28%), #070809; color: var(--text); direction: rtl; min-height: 100vh; }
-        .nav-pill { padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 700; transition: all .2s; }
+        body { font-family: Cairo, sans-serif; background: radial-gradient(circle at top right,rgba(201,58,47,.08),transparent 26%), radial-gradient(circle at top left,rgba(217,178,95,.08),transparent 28%), #070809; color: var(--text); direction: rtl; min-height: 100vh; }
+        .nav-pill { padding: 10px 18px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; font-family: Cairo, sans-serif; font-size: 13px; font-weight: 700; transition: all .2s; text-decoration: none; display: inline-flex; align-items: center; }
         .nav-pill:hover { background: var(--surface-3); color: var(--text); }
         .nav-pill.gold { border-color: rgba(217,178,95,.3); background: rgba(217,178,95,.1); color: #ffe3a6; }
         .nav-pill.gold:hover { background: rgba(217,178,95,.18); }
         .nav-pill:disabled { opacity: .4; cursor: not-allowed; }
         .league-card { background: linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015)); border: 1px solid var(--line); border-radius: 24px; padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
         .league-card.owner { border-color: rgba(217,178,95,.2); }
-        .action-btn { padding: 9px 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 700; transition: all .2s; white-space: nowrap; min-height: 40px; }
+        .action-btn { padding: 9px 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); cursor: pointer; font-family: Cairo, sans-serif; font-size: 13px; font-weight: 700; transition: all .2s; white-space: nowrap; min-height: 40px; }
         .action-btn:hover { background: rgba(255,255,255,.1); }
-        .field-input { width: 100%; padding: 13px 16px; border-radius: 14px; background: var(--surface-3); border: 1px solid var(--line); color: var(--text); font-family: 'Cairo', sans-serif; font-size: 14px; outline: none; transition: border-color .2s; }
+        .field-input { width: 100%; padding: 13px 16px; border-radius: 14px; background: var(--surface-3); border: 1px solid var(--line); color: var(--text); font-family: Cairo, sans-serif; font-size: 14px; outline: none; transition: border-color .2s; }
         .field-input:focus { border-color: rgba(217,178,95,.4); }
         .member-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); backdrop-filter: blur(6px); display: grid; place-items: center; z-index: 1000; padding: 20px; }
-        .modal-box { background: linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015)),var(--surface); border: 1px solid rgba(217,178,95,.2); border-radius: 28px; padding: 28px; width: 100%; max-width: 460px; box-shadow: 0 24px 64px rgba(0,0,0,.6); }
+        .modal-box { background: linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015),var(--surface)); border: 1px solid rgba(217,178,95,.2); border-radius: 28px; padding: 28px; width: 100%; max-width: 460px; box-shadow: 0 24px 64px rgba(0,0,0,.6); }
+        .enter-league-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px; border-radius: 14px; background: rgba(217,178,95,.12); border: 1px solid rgba(217,178,95,.3); color: #ffe3a6; cursor: pointer; font-family: Cairo, sans-serif; font-size: 13px; font-weight: 700; transition: all .2s; text-decoration: none; }
+        .enter-league-btn:hover { background: rgba(217,178,95,.22); }
+        .manage-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid var(--line); color: var(--muted); cursor: pointer; font-family: Cairo, sans-serif; font-size: 13px; font-weight: 700; transition: all .2s; text-decoration: none; }
+        .manage-btn:hover { background: rgba(255,255,255,.12); color: var(--text); }
       `}</style>
 
       {/* ══ HEADER ══ */}
@@ -324,33 +304,22 @@ export default function MyLeaguesPage() {
       {/* ══ MAIN ══ */}
       <div dir="rtl" style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px' }}>
 
-        {/* Message */}
         {message && (
           <div style={{ padding: '14px 20px', borderRadius: 16, marginBottom: 16, fontFamily: 'Cairo, sans-serif', fontSize: 14, fontWeight: 700, textAlign: 'center', background: msgType === 'success' ? 'rgba(39,176,110,.12)' : 'rgba(201,58,47,.12)', border: `1px solid ${msgType === 'success' ? 'rgba(39,176,110,.25)' : 'rgba(201,58,47,.25)'}`, color: msgType === 'success' ? '#94f0c0' : '#ff9c91' }}>
             {message}
           </div>
         )}
 
-        {/* Create form */}
         {showCreate && (
           <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015))', border: '1px solid rgba(217,178,95,.2)', borderRadius: 24, padding: 20, marginBottom: 20 }}>
             <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 14, color: 'var(--gold)' }}>＋ إنشاء ليج جديد</div>
-            <input
-              type="text"
-              value={newLeagueName}
-              onChange={e => setNewLeagueName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && createLeague()}
-              placeholder="اسم الليج..."
-              className="field-input"
-              style={{ marginBottom: 12, direction: 'rtl' }}
-            />
+            <input type="text" value={newLeagueName} onChange={e => setNewLeagueName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createLeague()} placeholder="اسم الليج..." className="field-input" style={{ marginBottom: 12, direction: 'rtl' }} />
             <button onClick={createLeague} disabled={creating || !newLeagueName.trim()} className="nav-pill gold" style={{ width: '100%', justifyContent: 'center', borderRadius: 14, padding: '13px', fontSize: 14 }}>
               {creating ? '⏳ جاري الإنشاء...' : '✅ إنشاء'}
             </button>
           </div>
         )}
 
-        {/* Content */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>⏳</div>
@@ -367,6 +336,7 @@ export default function MyLeaguesPage() {
           <div>
             {leagues.map((lg: any) => (
               <div key={lg.id} className={`league-card${lg.role === 'owner' ? ' owner' : ''}`}>
+
                 {/* League header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
                   <div style={{ flex: 1 }}>
@@ -383,7 +353,7 @@ export default function MyLeaguesPage() {
                       </span>
                     </div>
                   </div>
-                  {/* Code */}
+                  {/* ✅ FIX: كود الانضمام */}
                   <div style={{ textAlign: 'center', background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 14, padding: '8px 14px', minWidth: 90 }}>
                     <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>كود الانضمام</div>
                     <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: 2, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{lg.code}</div>
@@ -403,11 +373,23 @@ export default function MyLeaguesPage() {
                           {m.name}
                           {m.user_id === user?.id && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11, marginRight: 6 }}>أنت</span>}
                         </div>
-                        <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{m.pts} نقطة</div>
+                        <div style={{ fontSize: 14, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{m.pts}</div>
                       </div>
                     ))}
                   </div>
                 )}
+
+                {/* ✅ FIX: أزرار الدخول والإدارة */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+                  <Link href={`/mini-league/${lg.code}`} className="enter-league-btn">
+                    🏆 دخول الليج
+                  </Link>
+                  {lg.role === 'owner' && (
+                    <Link href={`/mini-league/${lg.code}/manage`} className="manage-btn">
+                      ⚙️ إدارة الليج
+                    </Link>
+                  )}
+                </div>
 
                 {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -425,6 +407,7 @@ export default function MyLeaguesPage() {
                     <button onClick={() => deleteLeague(lg)} className="action-btn" style={{ background: 'rgba(201,58,47,.1)', border: '1px solid rgba(201,58,47,.2)', color: '#ff9c91', marginRight: 'auto' }}>🗑️ حذف</button>
                   )}
                 </div>
+
               </div>
             ))}
           </div>
@@ -462,8 +445,8 @@ export default function MyLeaguesPage() {
             </div>
             {notifications.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif', fontSize: 14 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
-                لا توجد إشعارات
+                <div style={{ fontSize: 32, marginBottom: 8 }}>🔕</div>
+                <div>لا توجد إشعارات</div>
               </div>
             ) : notifications.map((n: any) => (
               <div key={n.id} style={{ padding: '14px 16px', borderRadius: 16, marginBottom: 10, background: n.read ? 'rgba(255,255,255,.02)' : 'rgba(217,178,95,.06)', border: `1px solid ${n.read ? 'var(--line)' : 'rgba(217,178,95,.18)'}` }}>
