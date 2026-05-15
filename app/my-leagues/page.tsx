@@ -51,24 +51,15 @@ export default function MyLeaguesPage() {
       .in('id', leagueIds)
       .order('created_at', { ascending: false });
 
-    // ✅ التعديل النهائي: نستخدم mini_league_members بدل standings
-    const enriched = await Promise.all((leagueRows || []).map(async (lg: any) => {
-      const { data: membersData } = await supabase
-        .from('mini_league_members')
-        .select('user_id, role, joined_at')
-        .eq('league_id', lg.id);
-
-      const memberCount = membersData?.length || 0;
-      const myRole = roleMap.get(lg.id) || 'member';
-
+    const enriched = (leagueRows || []).map((lg: any) => {
       return {
         ...lg,
-        role: myRole,
-        memberCount,
+        role: roleMap.get(lg.id) || 'member',
+        memberCount: 0,
         myRank: '—',
-        members: membersData || []
+        members: []
       };
-    }));
+    });
 
     setLeagues(enriched);
     setLoading(false);
@@ -93,7 +84,6 @@ export default function MyLeaguesPage() {
     });
   }, [router, loadData, loadAllUsers]);
 
-  // ── إنشاء ليج ──────────────────────────────────────────────
   const createLeague = async () => {
     if (!newLeagueName.trim() || !user) return;
     const ownedCount = leagues.filter(l => l.role === 'owner').length;
@@ -119,7 +109,6 @@ export default function MyLeaguesPage() {
     setCreating(false);
   };
 
-  // ── الرد على دعوة ──────────────────────────────────────────
   const respondToInvite = async (notif: any, accept: boolean) => {
     const { league_id, league_name, from_user_id } = notif.data;
     try {
@@ -142,7 +131,6 @@ export default function MyLeaguesPage() {
     }
   };
 
-  // ── مغادرة الليج ───────────────────────────────────────────
   const leaveLeague = async (lg: any) => {
     if (!confirm(`هل تريد مغادرة "${lg.name}"؟`)) return;
     await supabase.from('mini_league_members').delete().eq('league_id', lg.id).eq('user_id', user.id);
@@ -150,7 +138,6 @@ export default function MyLeaguesPage() {
     await loadData(user.id);
   };
 
-  // ── نسخ كود ───────────────────────────────────────────────
   const copyCode = (lg: any) => {
     const txt = `🏆 انضم لليج "${lg.name}" في الشمعدان × كأس العالم 2026!\nالكود: ${lg.code}\nافتح التطبيق وروح ليجاتي ← إدخال الكود`;
     navigator.clipboard.writeText(txt).then(() => {
@@ -159,7 +146,6 @@ export default function MyLeaguesPage() {
     });
   };
 
-  // ── مشاركة الليج ──────────────────────────────────────────
   const getLeagueShareText = (lg: any) =>
     `🏆 انضم لليج "${lg.name}" في الشمعدان × كأس العالم 2026!\nالكود: ${lg.code}\nسجّل من هنا: https://worldcup.shamaadan.com/login`;
 
@@ -189,7 +175,6 @@ export default function MyLeaguesPage() {
     }
   };
 
-  // ── تسجيل خروج ────────────────────────────────────────────
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
@@ -227,7 +212,6 @@ export default function MyLeaguesPage() {
         .notif-item.unread { background:rgba(217,178,95,.06); border-color:rgba(217,178,95,.18); }
       `}</style>
 
-      {/* ══ HEADER ══ */}
       <header style={{ background: 'rgba(7,8,9,.92)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--line)', padding: '14px 20px', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -248,7 +232,6 @@ export default function MyLeaguesPage() {
           </div>
         </div>
 
-        {/* Notifications dropdown */}
         {showNotif && (
           <div className="slide-down" style={{ position: 'absolute', left: 20, right: 20, top: '100%', maxWidth: 400, margin: '0 auto', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, boxShadow: '0 16px 40px rgba(0,0,0,.5)', zIndex: 200 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -273,17 +256,13 @@ export default function MyLeaguesPage() {
         )}
       </header>
 
-      {/* ══ MAIN ══ */}
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px' }}>
-
-        {/* Toast message */}
         {message && (
           <div style={{ marginBottom: 16, padding: '12px 18px', borderRadius: 14, background: msgType === 'success' ? 'rgba(39,176,110,.12)' : 'rgba(201,58,47,.12)', border: `1px solid ${msgType === 'success' ? 'rgba(39,176,110,.25)' : 'rgba(201,58,47,.25)'}`, color: msgType === 'success' ? '#94f0c0' : '#ff9c91', fontWeight: 700, fontSize: 14, textAlign: 'center' }}>
             {message}
           </div>
         )}
 
-        {/* Top bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800 }}>🏆 ليجاتي</h1>
@@ -296,7 +275,6 @@ export default function MyLeaguesPage() {
           </div>
         </div>
 
-        {/* Create form */}
         {showCreate && (
           <div className="card slide-down" style={{ marginBottom: 20, background: 'var(--surface-2)', border: '1px solid rgba(217,178,95,.2)' }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#d9b25f', marginBottom: 14 }}>＋ إنشاء ليج جديد</div>
@@ -315,7 +293,6 @@ export default function MyLeaguesPage() {
           </div>
         )}
 
-        {/* Loading */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)' }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>⏳</div>
@@ -355,24 +332,6 @@ export default function MyLeaguesPage() {
                   </div>
                 </div>
 
-                {/* League standings */}
-                {lg.members.length > 0 && (
-                  <div style={{ background: 'var(--surface-3)', borderRadius: 14, padding: '12px', marginBottom: 14 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 10 }}>الترتيب</div>
-                    {lg.members.slice(0, 5).map((m: any, i: number) => (
-                      <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 4px', borderBottom: i < Math.min(lg.members.length, 5) - 1 ? '1px solid var(--line)' : 'none' }}>
-                        <span style={{ fontSize: 16, minWidth: 24 }}>{i < 3 ? medals[i] : `${i + 1}.`}</span>
-                        <span style={{ flex: 1, fontSize: 13, fontWeight: m.user_id === user?.id ? 700 : 500, color: m.user_id === user?.id ? '#d9b25f' : 'var(--text)' }}>
-                          {m.user_name || '—'} {m.user_id === user?.id && <span style={{ fontSize: 10, color: '#d9b25f' }}>← أنت</span>}
-                        </span>
-                        <span style={{ fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: '#d9b25f' }}>{m.total_points || 0}</span>
-                      </div>
-                    ))}
-                    {lg.members.length > 5 && <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 8 }}>+ {lg.members.length - 5} أعضاء</div>}
-                  </div>
-                )}
-
-                {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button onClick={() => shareLeagueWhatsApp(lg)} className="action-btn" style={{ background: 'rgba(39,176,110,.15)', border: '1px solid rgba(39,176,110,.25)', color: '#94f0c0' }}>💬 واتساب</button>
                   <button onClick={() => shareLeagueFacebook(lg)} className="action-btn" style={{ background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.25)', color: '#93c5fd' }}>📘 فيسبوك</button>
@@ -388,7 +347,6 @@ export default function MyLeaguesPage() {
         )}
       </main>
 
-      {/* Share modal fallback */}
       {shareLeague && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', backdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setShareLeague(null)}>
           <div style={{ background: 'var(--surface)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }} onClick={e => e.stopPropagation()}>
