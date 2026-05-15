@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [profileMsg, setProfileMsg] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [referralCount, setReferralCount] = useState(0);
+  const [myTotalPoints, setMyTotalPoints] = useState(0);
   const [showReferral, setShowReferral] = useState(false);
   const [referralCopied, setReferralCopied] = useState(false);
   const [socialFeed, setSocialFeed] = useState<any[]>([]);
@@ -133,7 +134,7 @@ export default function Dashboard() {
     setProfileSaving(true);
     try {
       const fbUrl = profileForm.facebook_url.trim();
-      const fbValid = fbUrl && (fbUrl.includes('facebook.com') || fbUrl.includes('fb.com'));
+      const fbValid = !fbUrl || /^https?:\/\/(www\.)?(facebook\.com|fb\.com)\/.+/i.test(fbUrl);
 
       // النقاط تُعطى مرة واحدة فقط لما يكمل الثلاثة: اسم + تليفون + فيسبوك
       const hasAll = profileForm.display_name.trim() && profileForm.phone.trim() && fbValid;
@@ -223,9 +224,13 @@ export default function Dashboard() {
     return `منذ ${Math.floor(hrs / 24)} يوم`;
   };
 
-  const getReferralLink = () => `${window.location.origin}/login?ref=${referralCode}`;
+  const getReferralLink = () => {
+    if (typeof window === 'undefined') return `/login?ref=${referralCode}`;
+    return `${window.location.origin}/login?ref=${referralCode}`;
+  };
 
   const copyReferralLink = () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard) return;
     navigator.clipboard.writeText(getReferralLink()).then(() => {
       setReferralCopied(true);
       setTimeout(() => setReferralCopied(false), 2500);
@@ -233,16 +238,19 @@ export default function Dashboard() {
   };
 
   const shareOnWhatsApp = () => {
+    if (typeof window === 'undefined') return;
     const txt = encodeURIComponent(`🏆 انضم لمنافسة الشمعدان × كأس العالم 2026!\nسجّل عن طريق رابطي واحصل على نقاط إضافية:\n${getReferralLink()}`);
     window.open(`https://wa.me/?text=${txt}`, '_blank');
   };
 
   const shareOnFacebook = () => {
+    if (typeof window === 'undefined') return;
     const url = encodeURIComponent(getReferralLink());
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=600,height=400');
   };
 
   const shareOnMessenger = () => {
+    if (typeof window === 'undefined') return;
     const url = encodeURIComponent(getReferralLink());
     window.open(`https://www.facebook.com/dialog/send?link=${url}&app_id=1302682795390354&redirect_uri=${url}`, '_blank');
   };
@@ -258,7 +266,7 @@ export default function Dashboard() {
     </div>
   );
 
-  const myPoints = predictions.reduce((s, p) => s + (p.points || 0), 0) + (profile?.bonus_points || 0);
+  const myPoints = myTotalPoints;
   const myRank = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
   const medals = ['🥇', '🥈', '🥉'];
