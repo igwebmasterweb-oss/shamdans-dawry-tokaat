@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [myTotalPoints, setMyTotalPoints] = useState(0);
   const [showReferral, setShowReferral] = useState(false);
   const [referralCopied, setReferralCopied] = useState(false);
+  const [leagueJoinMsg, setLeagueJoinMsg] = useState('');
   const [socialFeed, setSocialFeed] = useState<any[]>([]);
   const [historyRankings, setHistoryRankings] = useState<any[]>([]);
   const [historyDates, setHistoryDates] = useState<string[]>([]);
@@ -52,6 +53,14 @@ export default function Dashboard() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/login'); return; }
       setUser(data.user);
+      if (typeof window !== 'undefined') {
+        const msg = window.sessionStorage.getItem('leagueJoinedMsg');
+        if (msg) {
+          window.sessionStorage.removeItem('leagueJoinedMsg');
+          setLeagueJoinMsg(msg);
+          setTimeout(() => setLeagueJoinMsg(''), 5000);
+        }
+      }
       loadData(data.user.id);
     });
   }, [router]);
@@ -63,6 +72,41 @@ export default function Dashboard() {
       if (pendingRef) {
         if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingRef');
         await supabase.rpc('process_referral', { p_referred_id: userId, p_referral_code: pendingRef });
+      }
+
+      // ✅ NEW: معالجة كود الليج — مستقل عن الـ referral
+      const pendingLeague =
+        (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('league') : null) ||
+        (typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingLeague') : null);
+      if (pendingLeague) {
+        if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingLeague');
+        try {
+          const { data: lgData } = await supabase
+            .from('mini_leagues')
+            .select('id, name')
+            .eq('code', pendingLeague.toUpperCase())
+            .maybeSingle();
+          if (lgData) {
+            const { data: alreadyMember } = await supabase
+              .from('mini_league_members')
+              .select('id')
+              .eq('league_id', lgData.id)
+              .eq('user_id', userId)
+              .maybeSingle();
+            if (!alreadyMember) {
+              await supabase.from('mini_league_members').insert({
+                league_id: lgData.id,
+                user_id: userId,
+                role: 'member',
+              });
+              if (typeof window !== 'undefined') {
+                window.sessionStorage.setItem('leagueJoinedMsg', '✅ انضممت لليج "' + lgData.name + '" بنجاح! 🏆');
+              }
+            }
+          }
+        } catch (e) {
+          console.error('League auto-join error:', e);
+        }
       }
 
       // كل الـ queries بالتوازي
@@ -426,6 +470,15 @@ if (!finalReferralCode && userId) {
       {profileIncomplete && (
         <div onClick={() => setShowProfileModal(true)} style={{ background: 'linear-gradient(90deg,rgba(217,178,95,.1),rgba(217,178,95,.04))', borderBottom: '1px solid rgba(217,178,95,.18)', padding: '10px 20px', cursor: 'pointer', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#f2d79e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           🎁 أكمل ملفك الشخصي (اسم + تليفون) واحصل على 5 نقاط مجاناً! &nbsp;<strong>اضغط هنا</strong>
+        </div>
+      )}
+
+      {leagueJoinMsg && (
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '12px 20px 0' }}>
+          <div style={{ padding: '14px 20px', borderRadius: 16, background: 'rgba(39,176,110,.12)', border: '1px solid rgba(39,176,110,.25)', color: '#94f0c0', fontFamily: 'Cairo, sans-serif', fontSize: 14, fontWeight: 700, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <span>{leagueJoinMsg}</span>
+            <a href="/my-leagues" style={{ color: '#ffe3a6', textDecoration: 'underline', fontWeight: 800, flexShrink: 0 }}>اضغط هنا لرؤية الليج ←</a>
+          </div>
         </div>
       )}
 
