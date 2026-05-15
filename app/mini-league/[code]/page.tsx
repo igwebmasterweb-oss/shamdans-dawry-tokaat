@@ -19,7 +19,7 @@ export default function MiniLeaguePage() {
 
   const loadLeague = useCallback(async (uid: string) => {
     const { data: lg } = await supabase
-      .from('mini_leagues').select('*').eq('code', code).eq('is_active', true).maybeSingle();
+      .from('mini_leagues').select('*').eq('code', code).maybeSingle();
     if (!lg) { router.push('/my-leagues'); return; }
     setLeague(lg);
     const { data: mem } = await supabase
@@ -51,6 +51,14 @@ export default function MiniLeaguePage() {
             setMembers(standings || []);
           }
         )
+        // ✅ FIX 3: نستمع لتغيير نقاط الأعضاء برضه
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'user_points' },
+          async () => {
+            const { data: standings } = await supabase
+              .from('mini_league_standings').select('*').eq('league_id', lg.id).order('rank', { ascending: true });
+            setMembers(standings || []);
+          }
+        )
         .subscribe();
     });
     return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
@@ -60,7 +68,9 @@ export default function MiniLeaguePage() {
 
   const copyCode = () => {
     if (!league) return;
-    const txt = `🏆 انضم لليج "${league.name}" في الشمعدان × كأس العالم 2026!\nالكود: ${league.code}\nافتح التطبيق وروح ليجاتي ← إدخال الكود`;
+    const txt = `🏆 انضم لليج "${league.name}" في الشمعدان × كأس العالم 2026!\n` +
+      `سجّل دخولك عن طريق الرابط ده وهتنضم تلقائياً ⬇️\n` +
+      `https://worldcup.shamaadan.com/login?league=${league.code}`;
     navigator.clipboard.writeText(txt).then(() => {
       setCopyFeedback(true);
       setTimeout(() => setCopyFeedback(false), 2000);
