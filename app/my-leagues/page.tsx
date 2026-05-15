@@ -51,26 +51,23 @@ export default function MyLeaguesPage() {
       .in('id', leagueIds)
       .order('created_at', { ascending: false });
 
-const enriched = await Promise.all((leagueRows || []).map(async (lg: any) => {
-  // ✅ FIX النهائي: نستخدم mini_league_members بدل standings
-  const { data: membersData } = await supabase
-    .from('mini_league_members')
-    .select('user_id, role, joined_at')
-    .eq('league_id', lg.id);
+    // ✅ التعديل النهائي: نستخدم mini_league_members بدل standings
+    const enriched = await Promise.all((leagueRows || []).map(async (lg: any) => {
+      const { data: membersData } = await supabase
+        .from('mini_league_members')
+        .select('user_id, role, joined_at')
+        .eq('league_id', lg.id);
 
-  const memberCount = membersData?.length || 0;
-  const myRole = membersData?.find(m => m.user_id === user.id)?.role || 'member';
+      const memberCount = membersData?.length || 0;
+      const myRole = roleMap.get(lg.id) || 'member';
 
-  return {
-    ...lg,
-    role: myRole,
-    memberCount,
-    myRank: '—',
-    members: membersData || []
-  };
-}));
-      const myRank = members?.find((m: any) => m.user_id === uid)?.rank ?? '—';
-      return { ...lg, role: roleMap.get(lg.id), memberCount: members?.length || 0, myRank, members: members || [] };
+      return {
+        ...lg,
+        role: myRole,
+        memberCount,
+        myRank: '—',
+        members: membersData || []
+      };
     }));
 
     setLeagues(enriched);
