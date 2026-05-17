@@ -127,8 +127,8 @@ export default function Dashboard() {
         supabase.from('fixtures').select('api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,surprise_answer,surprise_question'),
         supabase.from('predictions').select('*').eq('user_id', userId),
         supabase.from('user_points').select('referral_code,referral_count,total_points').eq('user_id', userId).maybeSingle(),
-        supabase.from('social_feed').select('*, profiles:user_id(display_name)').order('created_at', { ascending: false }).limit(30),
-        supabase.from('historical_rankings').select('*, profiles:user_id(display_name)').order('week_start', { ascending: false }).order('total_points', { ascending: false }),
+        supabase.from('social_feed').select('*').order('created_at', { ascending: false }).limit(50),
+        supabase.from('historical_rankings').select('*').order('week_start', { ascending: false }).order('total_points', { ascending: false }),
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
       ]);
 
@@ -154,6 +154,12 @@ if (!finalReferralCode && userId) {
       const feedData = feedDataRes.data;
       const histData = histDataRes.data;
       const userPointsData = userPointsDataRes.data;
+
+      // ─── userNameMap: نجيب أسماء اللاعبين من user_points ───
+      const userNameMap: Record<string, string> = {};
+      (userPointsData || []).forEach((row: any) => {
+        userNameMap[row.user_id] = row.full_name || row.user_email?.split('@')[0] || 'لاعب';
+      });
 
       if (profileData) {
         setProfile(profileData);
@@ -198,13 +204,19 @@ if (!finalReferralCode && userId) {
         setMyTotalPoints(myRow?.total_points || 0);
       }
 
-      setSocialFeed(feedData || []);
+      setSocialFeed((feedData || []).map((item: any) => ({
+        ...item,
+        user_name: userNameMap[item.user_id] || 'لاعب',
+      })));
 
       if (histData && histData.length > 0) {
-        const dates = [...new Set(histData.map((r: any) => r.snapshot_date))] as string[];
+        const dates = [...new Set(histData.map((r: any) => r.week_start))] as string[];
         setHistoryDates(dates);
         setActiveHistoryDate(prev => prev || dates[0]);
-        setHistoryRankings(histData);
+        setHistoryRankings(histData.map((row: any) => ({
+          ...row,
+          display_name: userNameMap[row.user_id] || 'لاعب',
+        })));
       } else {
         setHistoryDates([]);
         setActiveHistoryDate('');
@@ -811,7 +823,7 @@ if (!finalReferralCode && userId) {
                     <div key={player.user_id + player.week_start} className={`rank-item${isMe ? ' me' : ''}`}>
                       <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontWeight: 800, fontSize: 14 }}>#{i + 1}</span>}</div>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{player.profiles?.display_name || '—'} {isMe && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>}</div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{player.display_name || '—'} {isMe && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)' }}>{new Date(player.week_start).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
