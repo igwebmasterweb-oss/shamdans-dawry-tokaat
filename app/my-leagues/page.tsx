@@ -195,6 +195,7 @@ export default function MyLeaguesPage() {
 
   const deleteLeague = async (lg: any) => {
     if (!confirm(`هل تريد حذف "${lg.name}" نهائياً؟`)) return;
+    await supabase.from('mini_league_invitations').delete().eq('league_id', lg.id);
     await supabase.from('mini_league_members').delete().eq('league_id', lg.id);
     await supabase.from('mini_leagues').delete().eq('id', lg.id);
     showMsg(`🗑️ تم حذف "${lg.name}"`);
