@@ -42,12 +42,17 @@ export default function Dashboard() {
   const [activeHistoryDate, setActiveHistoryDate] = useState('');
   const router = useRouter();
 
-  const rounds = ['Group Stage - 1', 'Group Stage - 2', 'Group Stage - 3'];
   const roundLabels: Record<string, string> = {
     'Group Stage - 1': 'الجولة الأولى',
     'Group Stage - 2': 'الجولة الثانية',
     'Group Stage - 3': 'الجولة الثالثة',
+    'Round of 16': 'دور الـ 16',
+    'Quarter-finals': 'ربع النهائي',
+    'Semi-finals': 'نصف النهائي',
+    '3rd Place Final': 'مباراة الثالث',
+    'Final': 'النهائي',
   };
+  const rounds = [...new Set(matches.map((m: any) => m.league?.round).filter(Boolean))] as string[];
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -188,6 +193,11 @@ if (!finalReferralCode && userId) {
         };
       });
       setMatches(merged);
+      // ✅ اضبط activeRound أوتوماتيك على أول راوند موجود
+      const availableRounds = [...new Set(merged.map((m: any) => m.league?.round).filter(Boolean))] as string[];
+      if (availableRounds.length > 0) {
+        setActiveRound(prev => availableRounds.includes(prev) ? prev : availableRounds[0]);
+      }
       setPredictions(userPreds || []);
 
       // ─── FIX ١+٢: مصدر النقاط والـ referral code ───
