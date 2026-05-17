@@ -84,10 +84,21 @@ export default function AdminPage() {
   // ✅ تحميل الليجات مع إحصائياتها
   const loadLeagues = useCallback(async () => {
     const { data: lgs } = await supabase.from('mini_leagues').select('*').order('created_at', { ascending: false });
-    const { data: members } = await supabase.from('mini_league_members').select('*, user_points(full_name, user_email, total_points)');
+    // ✅ جلب الأعضاء بدون nested join — بنجيب user_points منفصلة ونعمل map يدوي
+    const { data: members } = await supabase.from('mini_league_members').select('*');
     const { data: invites } = await supabase.from('mini_league_invitations').select('league_id, status');
+    // ✅ جلب بيانات المستخدمين من user_points
+    const { data: userPts } = await supabase.from('user_points').select('user_id, full_name, user_email, total_points');
+    const userPtsMap = new Map((userPts || []).map((u: any) => [u.user_id, u]));
+
+    // إثراء كل عضو ببياناته من user_points
+    const enrichedMembers = (members || []).map((m: any) => ({
+      ...m,
+      _profile: userPtsMap.get(m.user_id) || null,
+    }));
+
     const membersMap: Record<string, any[]> = {};
-    (members || []).forEach((m: any) => {
+    enrichedMembers.forEach((m: any) => {
       if (!membersMap[m.league_id]) membersMap[m.league_id] = [];
       membersMap[m.league_id].push(m);
     });
@@ -95,13 +106,28 @@ export default function AdminPage() {
     (invites || []).filter((i: any) => i.status === 'pending').forEach((i: any) => {
       pendingMap[i.league_id] = (pendingMap[i.league_id] || 0) + 1;
     });
+
+    // ✅ جلب مالك كل ليج
+    const ownerMap: Record<string, string> = {};
+    (lgs || []).forEach((lg: any) => {
+      const ownerMember = (membersMap[lg.id] || []).find((m: any) => m.role === 'owner' || m.user_id === lg.created_by);
+      if (ownerMember) {
+        ownerMap[lg.id] = ownerMember._profile?.full_name || ownerMember._profile?.user_email?.split('@')[0] || 'غير معروف';
+      }
+    });
+
     setLeagueMembers(membersMap);
-    setLeagues((lgs || []).map((lg: any) => ({
-      ...lg,
-      member_count: membersMap[lg.id]?.length || 0,
-      pending_invites: pendingMap[lg.id] || 0,
-      top_points: Math.max(...(membersMap[lg.id] || []).map((m: any) => m.user_points?.total_points || 0), 0),
-    })));
+    setLeagues((lgs || []).map((lg: any) => {
+      const lgMembers = membersMap[lg.id] || [];
+      const points = lgMembers.map((m: any) => m._profile?.total_points || 0);
+      return {
+        ...lg,
+        member_count: lgMembers.length,
+        pending_invites: pendingMap[lg.id] || 0,
+        top_points: points.length ? Math.max(...points) : 0,
+        owner_name: ownerMap[lg.id] || '—',
+      };
+    }));
   }, []);
 
   useEffect(() => {
@@ -302,9 +328,9 @@ export default function AdminPage() {
             { label:'محسوبة',          value:gradedCount,         color:'var(--green)' },
             { label:'ماتشات مفتوحة',  value:openCount,           color:'#facc15' },
             { label:'المتسابقين',      value:leaderboard.length,  color:'#ff9c91' },
-            { label:'الليجات',         value:leagues.length,      color:'#a78bfa' },
-            { label:'إجمالي الأعضاء', value:totalLeagueMembers,  color:'#38bdf8' },
-            { label:'دعوات معلقة',    value:totalPending,        color:'#fb923c' },
+            { label:'ميني ليجات',      value:leagues.length,      color:'#a78bfa' },
+            { label:'أعضاء ميني ليج', value:totalLeagueMembers,  color:'#38bdf8' },
+            { label:'دعوات ليج معلقة', value:totalPending,       color:'#fb923c' },
           ].map(s => (
             <div key={s.label} style={{ background:'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', border:'1px solid var(--line)', borderRadius:18, padding:'16px 18px', textAlign:'center' }}>
               <p style={{ fontSize:11, color:'var(--muted)', marginBottom:6 }}>{s.label}</p>
@@ -429,9 +455,9 @@ export default function AdminPage() {
             {/* إحصائيات مختصرة */}
             {biggestLeague && (
               <div style={{ background:'rgba(217,178,95,.06)', border:'1px solid rgba(217,178,95,.18)', borderRadius:16, padding:'14px 18px', marginBottom:20, fontSize:13, color:'#f2d79e', display:'flex', gap:24, flexWrap:'wrap' }}>
-                <span>🏆 أكبر ليج: <strong>{biggestLeague.name}</strong> ({biggestLeague.member_count} أعضاء)</span>
+                <span>🏆 أكبر ميني ليج: <strong>{biggestLeague.name}</strong> ({biggestLeague.member_count} أعضاء)</span>
                 <span>📩 إجمالي الدعوات المعلقة: <strong>{totalPending}</strong></span>
-                <span>📊 متوسط أعضاء الليجة: <strong>{leagues.length ? (totalLeagueMembers / leagues.length).toFixed(1) : 0}</strong></span>
+                <span>📊 متوسط أعضاء الميني ليج: <strong>{leagues.length ? (totalLeagueMembers / leagues.length).toFixed(1) : 0}</strong></span>
               </div>
             )}
 
@@ -448,7 +474,8 @@ export default function AdminPage() {
                         <div style={{ fontWeight:800, fontSize:15, marginBottom:4 }}>{lg.name}</div>
                         <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'center' }}>
                           <span style={{ fontSize:12, color:'var(--muted)' }}>كود: <span style={{ color:'var(--gold)', fontFamily:'monospace', fontWeight:700 }}>{lg.code}</span></span>
-                          <span style={{ fontSize:12, color:'var(--muted)' }}>👥 {lg.member_count} عضو</span>
+                          <span style={{ fontSize:12, color:'var(--muted)' }}>👑 المالك: <strong style={{ color:'var(--text)' }}>{lg.owner_name}</strong></span>
+                          <span style={{ fontSize:12, color:'var(--muted)' }}>👥 {lg.member_count} عضو في الليج</span>
                           {lg.pending_invites > 0 && <span style={{ fontSize:11, padding:'2px 8px', borderRadius:100, background:'rgba(251,146,60,.12)', color:'#fb923c', border:'1px solid rgba(251,146,60,.25)' }}>📩 {lg.pending_invites} دعوة معلقة</span>}
                           <span style={{ fontSize:11, color:'var(--muted)' }}>{new Date(lg.created_at).toLocaleDateString('ar-EG',{month:'short',day:'numeric'})}</span>
                         </div>
@@ -468,10 +495,10 @@ export default function AdminPage() {
                         {members.length === 0
                           ? <div style={{ fontSize:13, color:'var(--muted)', textAlign:'center', padding:'16px 0' }}>لا يوجد أعضاء</div>
                           : members
-                              .sort((a: any, b: any) => (b.user_points?.total_points || 0) - (a.user_points?.total_points || 0))
+                              .sort((a: any, b: any) => (b._profile?.total_points || 0) - (a._profile?.total_points || 0))
                               .map((m: any, idx: number) => {
-                                const name = m.user_points?.full_name || m.user_points?.user_email?.split('@')[0] || 'لاعب';
-                                const pts = m.user_points?.total_points || 0;
+                                const name = m._profile?.full_name || m._profile?.user_email?.split('@')[0] || 'لاعب';
+                                const pts = m._profile?.total_points || 0;
                                 const isOwner = m.role === 'owner';
                                 return (
                                   <div key={m.user_id} className="member-row">
