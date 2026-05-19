@@ -14,25 +14,33 @@ export async function GET() {
       .not('actual_home_score', 'is', null);
 
     if (fixError) throw fixError;
+
     if (!fixtures || fixtures.length === 0) {
-      return NextResponse.json({ success: true, message: 'لا توجد ماتشات بها نتائج بعد', updated: 0 });
+      return NextResponse.json({
+        success: true,
+        message: 'لا توجد ماتشات بها نتائج بعد',
+        updated: 0,
+      });
     }
 
     let totalUpdated = 0;
     const affectedUsers = new Set<string>();
 
     for (const fixture of fixtures) {
+      // ✅ جيب فقط التوقعات اللي points = null — منعاً لإعادة الحساب
       const { data: preds } = await supabaseAdmin
         .from('predictions')
         .select('*')
-        .eq('fixture_id', fixture.api_fixture_id);
+        .eq('fixture_id', fixture.api_fixture_id)
+        .is('points', null);
 
       if (!preds || preds.length === 0) continue;
 
       for (const pred of preds) {
         let points = 0;
+
         const actualHome = fixture.actual_home_score;
-        const actualAway  = fixture.actual_away_score;
+        const actualAway = fixture.actual_away_score;
         const predHome   = pred.predicted_home_score;
         const predAway   = pred.predicted_away_score;
 
@@ -42,7 +50,7 @@ export async function GET() {
         } else {
           // +5 الفايز صح
           const actualWinner = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw';
-          const predWinner   = predHome  > predAway   ? 'home' : predAway  > predHome   ? 'away' : 'draw';
+          const predWinner   = predHome   > predAway   ? 'home' : predAway   > predHome   ? 'away' : 'draw';
           if (actualWinner === predWinner) points += 5;
         }
 
@@ -69,15 +77,33 @@ export async function GET() {
 
         await supabaseAdmin
           .from('predictions')
-          .update({ points, actual_home_score: actualHome, actual_away_score: actualAway })
+          .update({
+            points,
+            actual_home_score: actualHome,
+            actual_away_score: actualAway,
+          })
           .eq('id', pred.id);
+
+        // ✅ social_feed insert عند كسب نقاط > 0
+        if (points > 0) {
+          await supabaseAdmin.from('social_feed').insert({
+            user_id: pred.user_id,
+            type: 'points_earned',
+            data: {
+              points,
+              fixture_id: fixture.api_fixture_id,
+              home_team: pred.home_team,
+              away_team: pred.away_team,
+            },
+          });
+        }
 
         affectedUsers.add(pred.user_id);
         totalUpdated++;
       }
     }
 
-    // ✅ حدّث user_points لكل المستخدمين المتأثرين
+    // refresh user_points لكل المتأثرين
     for (const userId of affectedUsers) {
       await supabaseAdmin.rpc('refresh_user_points', { p_user_id: userId });
     }
@@ -86,8 +112,13 @@ export async function GET() {
       success: true,
       message: `✅ تم تحديث ${totalUpdated} توقع لـ ${affectedUsers.size} مستخدم`,
       updated: totalUpdated,
+      users: affectedUsers.size,
     });
+
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
