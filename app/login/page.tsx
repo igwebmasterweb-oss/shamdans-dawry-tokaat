@@ -1,6 +1,6 @@
 'use client';
 import { supabase } from '../../lib/supabase';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 function LoginContent() {
@@ -15,7 +15,14 @@ function LoginContent() {
   const refParam = searchParams.get('ref') || '';
   const leagueParam = searchParams.get('league') || '';
 
+  // ✅ FIX: useRef يمنع تشغيل upsertProfile أكتر من مرة
+  const profileSyncedRef = useRef(false);
+
   const upsertProfile = async () => {
+    // ✅ FIX: guard بالـ ref بدل state فقط
+    if (profileSyncedRef.current) return;
+    profileSyncedRef.current = true;
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setProfileSynced(true);
@@ -23,8 +30,9 @@ function LoginContent() {
     const meta = user.user_metadata || {};
     const provider = user.app_metadata?.provider || 'email';
     const metaName = meta.full_name || meta.name || '';
-    const metaAvatar = meta.picture || meta.avatar_url || (meta.picture?.data?.url) || null;
-    const facebookUrl = provider === 'facebook' ? `https://facebook.com/${meta.id}` : null;
+    // ✅ FIX: Facebook avatar — يجرب كل المصادر بالترتيب الصح
+    const metaAvatar = meta.picture?.data?.url || meta.picture || meta.avatar_url || null;
+    const facebookUrl = provider === 'facebook' ? `https://facebook.com/${meta.sub || meta.id}` : null;
 
     const { data: existingProfile } = await supabase
       .from('profiles')
@@ -55,6 +63,7 @@ function LoginContent() {
     if (!alreadyHasReferral) {
       update.referral_code = Math.random().toString(36).substring(2, 8).toUpperCase();
     }
+
     if (provider === 'facebook') {
       if (!existingProfile?.facebook_id) update.facebook_id = meta.sub || meta.id;
       if (!existingProfile?.facebook_url) update.facebook_url = facebookUrl;
@@ -62,6 +71,7 @@ function LoginContent() {
         update.facebook_bonus_awarded = true;
       }
     }
+
     if (provider === 'google') {
       if (!existingProfile?.google_id) update.google_id = meta.sub || meta.id;
       if (!existingProfile?.google_bonus_awarded && hasName && !alreadyHasPoints) {
@@ -124,8 +134,9 @@ function LoginContent() {
     }
   };
 
+  // ✅ FIX: useEffect يستخدم الـ ref بدل state لمنع التكرار
   useEffect(() => {
-    if (profileSynced) return;
+    if (profileSyncedRef.current) return;
     const checkUser = async () => {
       const { data } = await supabase.auth.getSession();
       if (data?.session?.user) await upsertProfile();
@@ -135,142 +146,88 @@ function LoginContent() {
     });
     checkUser();
     return () => subscription.unsubscribe();
-  }, [profileSynced]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <div
-      dir="rtl"
-      style={{
-        minHeight: '100vh',
-        background: 'radial-gradient(ellipse 80% 50% at 50% -20%,rgba(217,178,95,.1),transparent),#070809',
-        display: 'grid',
-        placeItems: 'center',
-        padding: '24px 16px',
-        fontFamily: 'Cairo, sans-serif',
-        color: '#f4f1e8',
-      }}
-    >
+    <div style={{ minHeight: '100vh', background: '#070809', color: '#f4f1e8', fontFamily: "'Cairo', sans-serif", direction: 'rtl', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-        :root {
-          --bg:#070809; --surface:#111315; --surface-2:#171a1d; --surface-3:#1d2125;
-          --line:rgba(255,255,255,.08); --text:#f4f1e8; --muted:#a8a39a;
-          --gold:#d9b25f; --red:#c93a2f; --green:#27b06e;
-        }
-        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        .panel{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid var(--line);border-radius:24px;padding:32px 28px}
-        .social-btn{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:52px;border-radius:18px;background:var(--surface-3);border:1px solid var(--line);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif;transition:all .2s}
-        .social-btn:hover:not(:disabled){border-color:rgba(217,178,95,.25);background:rgba(217,178,95,.05)}
+        .social-btn{width:100%;padding:13px;border-radius:14px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#f4f1e8;cursor:pointer;font-family:'Cairo',sans-serif;font-size:14px;font-weight:700;transition:background .18s}
+        .social-btn:hover:not(:disabled){background:rgba(255,255,255,.08)}
         .social-btn:disabled{opacity:.5;cursor:not-allowed}
-        .field-input{width:100%;padding:14px 16px;border-radius:14px;background:var(--surface-3);border:1px solid var(--line);color:var(--text);font-family:'Cairo',sans-serif;font-size:15px;outline:none;transition:border-color .2s}
+        .field-input{width:100%;padding:13px 16px;border-radius:13px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#f4f1e8;font-family:'Cairo',sans-serif;font-size:14px;outline:none;transition:border-color .2s}
         .field-input:focus{border-color:rgba(217,178,95,.4)}
-        .field-input::placeholder{color:var(--muted)}
-        .btn-gold{width:100%;min-height:52px;border-radius:18px;border:none;background:linear-gradient(135deg,#e0bc73,#b9892d);color:#211708;font-size:16px;font-weight:800;cursor:pointer;font-family:'Cairo',sans-serif;box-shadow:0 8px 24px rgba(217,178,95,.22);transition:opacity .2s}
-        .btn-gold:hover:not(:disabled){opacity:.88}
-        .btn-gold:disabled{opacity:.6;cursor:not-allowed}
-        .msg-error{padding:12px 16px;border-radius:14px;background:rgba(201,58,47,.12);border:1px solid rgba(201,58,47,.28);color:#ff9c91;font-size:13px;font-weight:700}
+        .submit-btn{width:100%;padding:14px;border-radius:14px;border:none;background:linear-gradient(135deg,#d9b25f,#a8761a);color:#1a1200;font-family:'Cairo',sans-serif;font-size:15px;font-weight:800;cursor:pointer;transition:opacity .18s}
+        .submit-btn:hover:not(:disabled){opacity:.88}
+        .submit-btn:disabled{opacity:.5;cursor:not-allowed}
       `}</style>
 
-      <a
-        href="/"
-        dir="rtl"
-        style={{
-          position: 'absolute', top: 24, left: 24,
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          color: '#a8a39a', textDecoration: 'none', fontSize: 13, fontWeight: 700,
-          padding: '8px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,.08)',
-          background: 'rgba(255,255,255,.03)',
-        }}
-      >
-        ← الرئيسية
-      </a>
+      <a href="/" style={{ position: 'fixed', top: 16, right: 16, padding: '8px 16px', borderRadius: 999, border: '1px solid rgba(255,255,255,.08)', background: 'rgba(255,255,255,.03)', color: '#a8a39a', fontSize: 12, fontWeight: 700, textDecoration: 'none', fontFamily: 'Cairo,sans-serif' }}>← الرئيسية</a>
 
-      <div style={{ width: '100%', maxWidth: 420 }}>
+      <div style={{ width: '100%', maxWidth: 400 }}>
 
         {/* ✅ بانر الليج — يظهر لو جاي من رابط دعوة */}
         {leagueParam && (
-          <div style={{ marginBottom: 20, padding: '14px 20px', borderRadius: 18, background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.25)', textAlign: 'center', color: '#ffe3a6', fontSize: 14, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>
-            🏆 تم دعوتك للانضمام لليج
-            <br />
-            <span style={{ fontSize: 12, color: '#a8a39a', display: 'block', marginTop: 4 }}>بعد تسجيل الدخول ستنضم تلقائياً</span>
+          <div style={{ padding: '12px 18px', borderRadius: 14, marginBottom: 16, background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', textAlign: 'center' }}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: '#ffe3a6', marginBottom: 4 }}>🏆 تم دعوتك للانضمام لليج</div>
+            <div style={{ fontSize: 12, color: '#a8a39a' }}>بعد تسجيل الدخول ستنضم تلقائياً</div>
           </div>
         )}
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 52, marginBottom: 12 }}>🏆</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#d9b25f', marginBottom: 4 }}>الشمعدان</div>
-          <div style={{ fontSize: 14, color: '#a8a39a', fontWeight: 600 }}>× كأس العالم 2026</div>
-          <div style={{ fontSize: 13, color: 'rgba(168,163,154,.7)', marginTop: 8 }}>أحلى من الماتش.. اللي بيحصل جنبيه</div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, background: 'linear-gradient(135deg,rgba(217,178,95,.2),rgba(217,178,95,.06))', border: '1px solid rgba(217,178,95,.2)', borderRadius: 20, fontSize: 28, marginBottom: 12 }}>🕯️</div>
+          <div style={{ fontWeight: 900, fontSize: 22, letterSpacing: .5 }}>الشمعدان</div>
+          <div style={{ color: 'rgba(217,178,95,.8)', fontWeight: 700, fontSize: 13, marginBottom: 4 }}>× كأس العالم 2026</div>
+          <div style={{ color: '#a8a39a', fontSize: 12 }}>أحلى من الماتش.. اللي بيحصل جنبيه</div>
         </div>
 
-        <div className="panel">
+        <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', border: '1px solid rgba(255,255,255,.08)', borderRadius: 24, padding: 28 }}>
+
           {sent ? (
-            <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#d9b25f', marginBottom: 8 }}>تم إرسال الرابط!</div>
-              <div style={{ fontSize: 14, color: '#a8a39a', lineHeight: 1.7 }}>
-                افتح إيميلك واضغط على الرابط<br />هتدخل مباشرة على الداشبورد
-              </div>
+            <div style={{ textAlign: 'center', padding: '10px 0' }}>
+              <div style={{ fontSize: 44, marginBottom: 12 }}>✉️</div>
+              <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 8 }}>تم إرسال الرابط!</div>
+              <div style={{ color: '#a8a39a', fontSize: 13, marginBottom: 4 }}>افتح إيميلك واضغط على الرابط</div>
+              <div style={{ color: '#a8a39a', fontSize: 13, marginBottom: 20 }}>هتدخل مباشرة على الداشبورد</div>
               <button
                 onClick={() => setSent(false)}
-                style={{
-                  marginTop: 16, background: 'transparent',
-                  border: '1px solid rgba(255,255,255,.08)', color: '#a8a39a',
-                  fontSize: 12, fontWeight: 700, padding: '10px 20px',
-                  borderRadius: 10, fontFamily: 'Cairo, sans-serif', cursor: 'pointer',
-                }}
+                style={{ marginTop: 16, background: 'transparent', border: '1px solid rgba(255,255,255,.08)', color: '#a8a39a', fontSize: 12, fontWeight: 700, padding: '10px 20px', borderRadius: 10, fontFamily: 'Cairo, sans-serif', cursor: 'pointer' }}
               >
                 إرسال مرة تانية
               </button>
             </div>
           ) : (
             <>
-              <button
-                onClick={() => handleSocial('google')}
-                disabled={!!socialLoading || loading}
-                className="social-btn"
-                style={{ marginBottom: 10 }}
-              >
-                <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20c11 0 19.7-8 19.7-20 0-1.3-.1-2.7-.1-4z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.5 16 18.9 13 24 13c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.5 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.9 13.5-5l-6.2-5.2C29.3 35.2 26.8 36 24 36c-5.2 0-9.6-3.3-11.3-8H6.1C9.5 36 16.3 44 24 44z"/><path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.3-2.4 4.2-4.5 5.5l6.2 5.2C40.6 35.4 44 30 44 24c0-1.3-.1-2.7-.4-4z"/></svg>
+              <button onClick={() => handleSocial('google')} disabled={!!socialLoading || loading} className="social-btn" style={{ marginBottom: 10 }}>
                 {socialLoading === 'google' ? '⏳ جاري الدخول...' : 'الدخول بـ Google'}
               </button>
-
-              <button
-                onClick={() => handleSocial('facebook')}
-                disabled={!!socialLoading || loading}
-                className="social-btn"
-                style={{ marginBottom: 20 }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073C24 5.406 18.627 0 12 0S0 5.406 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.971H15.83c-1.491 0-1.956.93-1.956 1.874v2.25h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
+              <button onClick={() => handleSocial('facebook')} disabled={!!socialLoading || loading} className="social-btn" style={{ marginBottom: 20 }}>
                 {socialLoading === 'facebook' ? '⏳ جاري الدخول...' : 'الدخول بـ Facebook'}
               </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
                 <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.08)' }} />
-                <span style={{ fontSize: 12, color: '#a8a39a', fontWeight: 700 }}>أو عن طريق الإيميل</span>
+                <span style={{ color: '#a8a39a', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>أو عن طريق الإيميل</span>
                 <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.08)' }} />
               </div>
 
-              {errorMsg && <div className="msg-error" style={{ marginBottom: 14 }}>{errorMsg}</div>}
+              {errorMsg && <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(201,58,47,.1)', border: '1px solid rgba(201,58,47,.2)', color: '#ff9090', fontSize: 13, fontWeight: 700, marginBottom: 14, textAlign: 'center' }}>{errorMsg}</div>}
 
               <form onSubmit={handleLogin}>
-                <label style={{ display: 'block', fontSize: 13, color: '#a8a39a', fontWeight: 700, marginBottom: 8 }}>الإيميل</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="field-input"
-                  placeholder="example@gmail.com"
-                  required
-                  style={{ marginBottom: 16, minHeight: 52 }}
-                />
-                <button type="submit" disabled={loading || !!socialLoading} className="btn-gold">
+                <label style={{ fontSize: 13, color: '#a8a39a', fontWeight: 700, display: 'block', marginBottom: 8 }}>الإيميل</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="field-input" placeholder="example@gmail.com" required style={{ marginBottom: 16, minHeight: 52 }} />
+                <button type="submit" disabled={loading || !!socialLoading} className="submit-btn">
                   {loading ? '⏳ جاري الإرسال...' : '🔥 إرسال رابط الدخول'}
                 </button>
               </form>
             </>
           )}
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: 16, fontSize: 11, color: '#a8a39a', fontWeight: 700 }}>
+          بالدخول، أنت موافق على شروط الاستخدام وسياسة الخصوصية
         </div>
       </div>
     </div>
@@ -279,14 +236,7 @@ function LoginContent() {
 
 export default function Login() {
   return (
-    <Suspense fallback={
-      <div style={{ minHeight: '100vh', background: '#070809', display: 'grid', placeItems: 'center', fontFamily: 'Cairo, sans-serif', color: '#f4f1e8' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🏆</div>
-          <div style={{ fontSize: 16, color: '#a8a39a' }}>جاري التحميل...</div>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: '#070809', display: 'grid', placeItems: 'center', color: '#f4f1e8', fontFamily: 'Cairo,sans-serif' }}>جاري التحميل...</div>}>
       <LoginContent />
     </Suspense>
   );
