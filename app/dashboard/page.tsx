@@ -86,7 +86,15 @@ export default function Dashboard() {
       const pendingRef = typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingRef') : null;
       if (pendingRef) {
         if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingRef');
-        await supabase.rpc('process_referral', { p_referred_id: userId, p_referral_code: pendingRef });
+        const { error: refErr } = await supabase.rpc('process_referral', { p_referred_id: userId, p_referral_code: pendingRef });
+        // ✅ FIX: social_feed insert عند نجاح الدعوة
+        if (!refErr) {
+          await supabase.from('social_feed').insert({
+            user_id: userId,
+            type: 'invite_friend',
+            data: { referral_code: pendingRef },
+          });
+        }
       }
 
       const pendingLeague = (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('league') : null)
@@ -103,6 +111,12 @@ export default function Dashboard() {
               .eq('league_id', lgData.id).eq('user_id', userId).maybeSingle();
             if (!alreadyMember) {
               await supabase.from('mini_league_members').insert({ league_id: lgData.id, user_id: userId, role: 'member' });
+              // ✅ FIX: social_feed insert عند الانضمام التلقائي للليج
+              await supabase.from('social_feed').insert({
+                user_id: userId,
+                type: 'joined_league',
+                data: { league_name: lgData.name, league_id: lgData.id },
+              });
               if (typeof window !== 'undefined')
                 window.sessionStorage.setItem('leagueJoinedMsg', `✅ انضممت لليج "${lgData.name}" بنجاح! 🏆`);
             }
@@ -261,6 +275,12 @@ export default function Dashboard() {
         .eq('league_id', lgData.id).eq('user_id', user.id).maybeSingle();
       if (already) { setLeagueQuickMsg(`✅ أنت بالفعل عضو في "${lgData.name}"`); setLeagueJoining(false); return; }
       await supabase.from('mini_league_members').insert({ league_id: lgData.id, user_id: user.id, role: 'member' });
+      // ✅ FIX: social_feed insert عند انضمام ليج
+      await supabase.from('social_feed').insert({
+        user_id: user.id,
+        type: 'joined_league',
+        data: { league_name: lgData.name, league_id: lgData.id },
+      });
       setLeagueQuickMsg(`🎉 انضممت لـ "${lgData.name}" بنجاح!`);
       setLeagueCode('');
     } catch { setLeagueQuickMsg('❌ حدث خطأ، حاول مجدداً'); }
@@ -292,6 +312,14 @@ export default function Dashboard() {
       };
       const { error } = await supabase.from('profiles').upsert({ id: user.id, ...updates });
       if (error) throw error;
+      // ✅ FIX: social_feed insert عند إكمال الملف (أول مرة فقط)
+      if (!profile?.bonus_points_awarded) {
+        await supabase.from('social_feed').insert({
+          user_id: user.id,
+          type: 'completed_profile',
+          data: { display_name: profileForm.display_name.trim() },
+        });
+      }
       setProfileMsg('✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉');
       await loadData(user.id);
       setTimeout(() => { setShowProfileModal(false); setProfileMsg(''); }, 2500);
