@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState, Suspense } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabase';
 
@@ -125,9 +125,9 @@ function LoginContent() {
         return;
       }
 
-      // مهم جدًا:
-      // المستخدم الجديد يتم إنشاؤه من trigger في قاعدة البيانات.
-      // صفحة اللوجن لا تعمل insert هنا نهائيًا.
+      // مهم:
+      // المستخدم الجديد بيتعمل له profile من Trigger في Supabase
+      // لذلك لا نعمل insert من صفحة اللوجن
       if (!existingProfile) {
         persistPendingParams();
         setProfileSynced(true);
@@ -141,9 +141,7 @@ function LoginContent() {
         existingProfile.referral_code && existingProfile.referral_code.trim()
       );
 
-      const update: Partial<ProfileRow> & {
-        bonus_points?: number;
-      } = {};
+      const update: Partial<ProfileRow> & { bonus_points?: number } = {};
 
       if (!existingProfile.full_name || existingProfile.full_name.trim() === '') {
         update.full_name = hasName ? metaName : user.email?.split('@')[0] || '';
@@ -238,7 +236,6 @@ function LoginContent() {
   const handleSocial = async (provider: SocialProvider) => {
     setSocialLoading(provider);
     setErrorMsg('');
-
     persistPendingParams();
 
     const { error } = await supabase.auth.signInWithOAuth({
