@@ -2,6 +2,7 @@
 import { supabase } from '../../lib/supabase';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 interface Profile {
   id: string;
@@ -40,6 +41,15 @@ export default function Dashboard() {
   const [historyRankings, setHistoryRankings] = useState<any[]>([]);
   const [historyDates, setHistoryDates] = useState<string[]>([]);
   const [activeHistoryDate, setActiveHistoryDate] = useState('');
+  // ✅ NEW: نظام النقاط التفصيلي
+  const [pointsBreakdown, setPointsBreakdown] = useState<any[]>([]);
+  // ✅ NEW: mini league quick-join
+  const [leagueCode, setLeagueCode] = useState('');
+  const [leagueJoining, setLeagueJoining] = useState(false);
+  const [leagueQuickMsg, setLeagueQuickMsg] = useState('');
+  // ✅ NEW: تنبيهات الماتشات القريبة
+  const [upcomingAlert, setUpcomingAlert] = useState<any | null>(null);
+
   const router = useRouter();
 
   const roundLabels: Record<string, string> = {
@@ -52,6 +62,7 @@ export default function Dashboard() {
     '3rd Place Final': 'مباراة الثالث',
     'Final': 'النهائي',
   };
+
   const rounds = [...new Set(matches.map((m: any) => m.league?.round).filter(Boolean))] as string[];
 
   useEffect(() => {
@@ -72,59 +83,36 @@ export default function Dashboard() {
 
   const loadData = async (userId: string) => {
     try {
-      // SSR-safe referral processing
       const pendingRef = typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingRef') : null;
       if (pendingRef) {
         if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingRef');
         await supabase.rpc('process_referral', { p_referred_id: userId, p_referral_code: pendingRef });
       }
 
-      // ✅ NEW: معالجة كود الليج — مستقل عن الـ referral
-      const pendingLeague =
-        (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('league') : null) ||
-        (typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingLeague') : null);
+      const pendingLeague = (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('league') : null)
+        || (typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingLeague') : null);
       if (pendingLeague) {
         if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingLeague');
         try {
           const { data: lgData } = await supabase
-            .from('mini_leagues')
-            .select('id, name')
-            .eq('code', pendingLeague.toUpperCase())
-            .maybeSingle();
+            .from('mini_leagues').select('id, name')
+            .eq('code', pendingLeague.toUpperCase()).maybeSingle();
           if (lgData) {
             const { data: alreadyMember } = await supabase
-              .from('mini_league_members')
-              .select('id')
-              .eq('league_id', lgData.id)
-              .eq('user_id', userId)
-              .maybeSingle();
+              .from('mini_league_members').select('id')
+              .eq('league_id', lgData.id).eq('user_id', userId).maybeSingle();
             if (!alreadyMember) {
-              await supabase.from('mini_league_members').insert({
-                league_id: lgData.id,
-                user_id: userId,
-                role: 'member',
-              });
-              if (typeof window !== 'undefined') {
-                window.sessionStorage.setItem('leagueJoinedMsg', '✅ انضممت لليج "' + lgData.name + '" بنجاح! 🏆');
-              }
+              await supabase.from('mini_league_members').insert({ league_id: lgData.id, user_id: userId, role: 'member' });
+              if (typeof window !== 'undefined')
+                window.sessionStorage.setItem('leagueJoinedMsg', `✅ انضممت لليج "${lgData.name}" بنجاح! 🏆`);
             }
           }
-        } catch (e) {
-          console.error('League auto-join error:', e);
-        }
+        } catch (e) { console.error('League auto-join error:', e); }
       }
 
-      // كل الـ queries بالتوازي
       const [
-        profileRes,
-        sessionRes,
-        fixturesApiRes,
-        sbFixturesRes,
-        userPredsRes,
-        myPointsRowRes,
-        feedDataRes,
-        histDataRes,
-        userPointsDataRes,
+        profileRes, sessionRes, fixturesApiRes, sbFixturesRes,
+        userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes,
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
         supabase.auth.getSession(),
@@ -144,23 +132,22 @@ export default function Dashboard() {
       const userPreds = userPredsRes.data;
       const myPointsRow = myPointsRowRes.data;
 
-// FIX: لو مفيش referral_code نولده دلوقتي
-let finalReferralCode = myPointsRow?.referral_code || '';
-if (!finalReferralCode && userId) {
-  finalReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-  // نحفظه في الداتابيز
-  supabase.from('user_points').upsert({ 
-    user_id: userId, 
-    referral_code: finalReferralCode,
-    referral_count: myPointsRow?.referral_count || 0,
-    total_points: myPointsRow?.total_points || 0
-  }).then(() => {});
-}
+      // FIX: توليد referral_code لو مش موجود
+      let finalReferralCode = myPointsRow?.referral_code || '';
+      if (!finalReferralCode && userId) {
+        finalReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        supabase.from('user_points').upsert({
+          user_id: userId,
+          referral_code: finalReferralCode,
+          referral_count: myPointsRow?.referral_count || 0,
+          total_points: myPointsRow?.total_points || 0,
+        }).then(() => {});
+      }
+
       const feedData = feedDataRes.data;
       const histData = histDataRes.data;
       const userPointsData = userPointsDataRes.data;
 
-      // ─── userNameMap: نجيب أسماء اللاعبين من user_points ───
       const userNameMap: Record<string, string> = {};
       (userPointsData || []).forEach((row: any) => {
         userNameMap[row.user_id] = row.full_name || row.user_email?.split('@')[0] || 'لاعب';
@@ -193,23 +180,28 @@ if (!finalReferralCode && userId) {
         };
       });
       setMatches(merged);
-      // ✅ اضبط activeRound أوتوماتيك على أول راوند موجود
+
       const availableRounds = [...new Set(merged.map((m: any) => m.league?.round).filter(Boolean))] as string[];
-      if (availableRounds.length > 0) {
+      if (availableRounds.length > 0)
         setActiveRound(prev => availableRounds.includes(prev) ? prev : availableRounds[0]);
-      }
+
+      // ✅ NEW: تنبيه أقرب ماتش مفتوح لم يتوقع عليه
+      const openUnpredicted = merged.find((m: any) => {
+        const hasResult = m.actual_home_score !== null;
+        const predicted = (userPreds || []).find((p: any) => p.fixture_id === m.fixture.id);
+        return m.is_open && !hasResult && !predicted;
+      });
+      setUpcomingAlert(openUnpredicted || null);
+
       setPredictions(userPreds || []);
 
-      // ─── FIX ١+٢: مصدر النقاط والـ referral code ───
-      // لو مفيش row في user_points، نجيبه من leaderboard (userPointsData)
       if (myPointsRow) {
-        setReferralCode(myPointsRow.referral_code || '');
+        setReferralCode(finalReferralCode || myPointsRow.referral_code || '');
         setReferralCount(myPointsRow.referral_count || 0);
         setMyTotalPoints(myPointsRow.total_points || 0);
       } else {
-        // fallback: دور على المستخدم في الـ leaderboard data
         const myRow = (userPointsData || []).find((r: any) => r.user_id === userId);
-        setReferralCode(myRow?.referral_code || '');
+        setReferralCode(finalReferralCode || myRow?.referral_code || '');
         setReferralCount(myRow?.referral_count || 0);
         setMyTotalPoints(myRow?.total_points || 0);
       }
@@ -224,8 +216,7 @@ if (!finalReferralCode && userId) {
         setHistoryDates(dates);
         setActiveHistoryDate(prev => prev || dates[0]);
         setHistoryRankings(histData.map((row: any) => ({
-          ...row,
-          display_name: userNameMap[row.user_id] || 'لاعب',
+          ...row, display_name: userNameMap[row.user_id] || 'لاعب',
         })));
       } else {
         setHistoryDates([]);
@@ -241,34 +232,55 @@ if (!finalReferralCode && userId) {
         totalPoints: row.total_points || 0,
         count: row.predictions_count || 0,
       })));
+
+      // ✅ NEW: تحليل نقاط المستخدم من التوقعات المنتهية
+      const breakdown = (userPreds || [])
+        .filter((p: any) => p.actual_home_score !== null && p.points > 0)
+        .sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
+        .slice(0, 10);
+      setPointsBreakdown(breakdown);
+
     } catch (err) {
       console.error(err);
     }
     setLoading(false);
   };
 
+  // ✅ NEW: Quick Join League
+  const quickJoinLeague = async () => {
+    if (!user || !leagueCode.trim()) return;
+    setLeagueJoining(true);
+    setLeagueQuickMsg('');
+    try {
+      const { data: lgData } = await supabase
+        .from('mini_leagues').select('id, name')
+        .eq('code', leagueCode.trim().toUpperCase()).maybeSingle();
+      if (!lgData) { setLeagueQuickMsg('❌ كود غير صحيح'); setLeagueJoining(false); return; }
+      const { data: already } = await supabase
+        .from('mini_league_members').select('id')
+        .eq('league_id', lgData.id).eq('user_id', user.id).maybeSingle();
+      if (already) { setLeagueQuickMsg(`✅ أنت بالفعل عضو في "${lgData.name}"`); setLeagueJoining(false); return; }
+      await supabase.from('mini_league_members').insert({ league_id: lgData.id, user_id: user.id, role: 'member' });
+      setLeagueQuickMsg(`🎉 انضممت لـ "${lgData.name}" بنجاح!`);
+      setLeagueCode('');
+    } catch { setLeagueQuickMsg('❌ حدث خطأ، حاول مجدداً'); }
+    setLeagueJoining(false);
+  };
+
   const saveProfile = async () => {
     if (!user) return;
     setProfileSaving(true);
-
-    // ✅ FIX قوي: فيسبوك مطلوب عشان ياخد 5 نقاط
     if (!profileForm.display_name.trim() || !profileForm.phone.trim() || !profileForm.facebook_url.trim()) {
       setProfileMsg('❌ لازم تملى الاسم + التليفون + رابط فيسبوك عشان تاخد 5 نقاط');
-      setProfileSaving(false);
-      return;
+      setProfileSaving(false); return;
     }
-
     const fbUrl = profileForm.facebook_url.trim();
     const fbValid = /^https?:\/\/(www\.)?(facebook\.com|fb\.com)\/.+/i.test(fbUrl);
     if (!fbValid) {
       setProfileMsg('❌ رابط فيسبوك غير صحيح، يجب أن يبدأ بـ https://facebook.com/');
-      setProfileSaving(false);
-      return;
+      setProfileSaving(false); return;
     }
-
     try {
-      const hasAll = !!(profileForm.display_name.trim() && profileForm.phone.trim() && fbUrl && fbValid);
-      const isCompleting = !profile?.bonus_points_awarded && hasAll;
       const updates: any = {
         full_name: profileForm.display_name.trim(),
         phone: profileForm.phone.trim() || null,
@@ -280,13 +292,10 @@ if (!finalReferralCode && userId) {
       };
       const { error } = await supabase.from('profiles').upsert({ id: user.id, ...updates });
       if (error) throw error;
-
       setProfileMsg('✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉');
       await loadData(user.id);
       setTimeout(() => { setShowProfileModal(false); setProfileMsg(''); }, 2500);
-    } catch {
-      setProfileMsg('❌ خطأ في الحفظ، حاول مجدداً');
-    }
+    } catch { setProfileMsg('❌ خطأ في الحفظ، حاول مجدداً'); }
     setProfileSaving(false);
   };
 
@@ -323,22 +332,15 @@ if (!finalReferralCode && userId) {
         predicted_extra_time: form.extraTime,
         surprise_answer: form.surpriseAnswer || null,
         submitted_at: new Date().toISOString(),
-        //points: ex?.points ?? 0,
-        //actual_home_score: null,
-        //actual_away_score: null,
       };
-      if (ex) await supabase.from('predictions').update(payload).eq('id', ex.id);
-      else {
+      if (ex) {
+        await supabase.from('predictions').update(payload).eq('id', ex.id);
+      } else {
         await supabase.from('predictions').insert(payload);
-        // ✅ سجّل في social_feed عند أول توقع
         await supabase.from('social_feed').insert({
           user_id: user.id,
           type: 'share_predictions',
-          data: {
-            home: match.teams.home.name,
-            away: match.teams.away.name,
-            fixture_id: match.fixture.id,
-          },
+          data: { home: match.teams.home.name, away: match.teams.away.name, fixture_id: match.fixture.id },
         });
       }
       const { data } = await supabase.from('predictions').select('*').eq('user_id', user.id);
@@ -355,12 +357,12 @@ if (!finalReferralCode && userId) {
 
   const feedEventLabel = (type: string, data: any) => {
     switch (type) {
-      case 'invite_friend':     return '🎉 دعا صديقاً جديداً وربح نقاط!';
-      case 'joined_league':     return `🏆 انضم للبطولة ${data?.league_name || ''}`;
-      case 'share_league':      return '🔗 شارك رابط البطولة';
+      case 'invite_friend': return '🎉 دعا صديقاً جديداً وربح نقاط!';
+      case 'joined_league': return `🏆 انضم للبطولة ${data?.league_name || ''}`;
+      case 'share_league': return '🔗 شارك رابط البطولة';
       case 'completed_profile': return '✅ أكمل بياناته الشخصية وربح 5 نقاط!';
       case 'share_predictions': return `⚽ شارك توقعاته (${data?.home || ''} × ${data?.away || ''})`;
-      default:                  return '🔔 نشاط جديد';
+      default: return '🔔 نشاط جديد';
     }
   };
 
@@ -375,7 +377,6 @@ if (!finalReferralCode && userId) {
   };
 
   const getReferralLink = () => {
-    // FIX ٢: لو referralCode فاضي، مترجعش رابط ناقص
     if (!referralCode) return '';
     if (typeof window === 'undefined') return `/login?ref=${referralCode}`;
     return `${window.location.origin}/login?ref=${referralCode}`;
@@ -411,15 +412,14 @@ if (!finalReferralCode && userId) {
   };
 
   if (loading) return (
-    <div dir="rtl" style={{ minHeight: '100vh', background: '#070809', display: 'grid', placeItems: 'center', fontFamily: 'Cairo, sans-serif', color: '#f4f1e8' }}>
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#070809', fontFamily: 'Cairo, sans-serif', color: '#f4f1e8' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🏆</div>
-        <div style={{ fontSize: 16, color: '#a8a39a' }}>جاري التحميل...</div>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>جاري التحميل...</div>
       </div>
     </div>
   );
 
-  // FIX ٦: استخدام myTotalPoints مباشرة (مش myPoints محسوب يدوي)
   const myPoints = myTotalPoints;
   const myRank = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
@@ -434,12 +434,19 @@ if (!finalReferralCode && userId) {
         :root {
           --bg: #070809; --surface: #111315; --surface-2: #171a1d; --surface-3: #1d2125;
           --line: rgba(255,255,255,.08); --text: #f4f1e8; --muted: #a8a39a;
-          --gold: #d9b25f; --gold-soft: rgba(217,178,95,.14);
-          --red: #c93a2f; --green: #27b06e; --blue: #3b82f6;
-          --shadow: 0 16px 40px rgba(0,0,0,.35);
+          --gold: #d9b25f; --gold-soft: rgba(217,178,95,.14); --red: #c93a2f;
+          --green: #27b06e; --blue: #3b82f6; --shadow: 0 16px 40px rgba(0,0,0,.35);
         }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Cairo', sans-serif; background: radial-gradient(circle at top right,rgba(201,58,47,.08),transparent 26%), radial-gradient(circle at top left,rgba(217,178,95,.08),transparent 28%), #070809; color: var(--text); direction: rtl; min-height: 100vh; }
+        body {
+          font-family: 'Cairo', sans-serif;
+          background: radial-gradient(circle at top right,rgba(201,58,47,.08),transparent 26%),
+                      radial-gradient(circle at top left,rgba(217,178,95,.08),transparent 28%),
+                      #070809;
+          color: var(--text); direction: rtl; min-height: 100vh;
+        }
+        @keyframes slideDown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
         .tab-btn { padding:10px 22px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); cursor:pointer; font-family:'Cairo',sans-serif; font-size:14px; font-weight:700; transition:all .2s; }
         .tab-btn.active { background:linear-gradient(90deg,rgba(217,178,95,.18),rgba(217,178,95,.06)); border-color:rgba(217,178,95,.3); color:#fff1ce; }
         .round-btn { padding:8px 16px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); cursor:pointer; font-family:'Cairo',sans-serif; font-size:13px; font-weight:700; transition:all .2s; }
@@ -469,51 +476,107 @@ if (!finalReferralCode && userId) {
         .modal-box { background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015)),var(--surface); border:1px solid rgba(217,178,95,.2); border-radius:28px; padding:28px; width:100%; max-width:460px; box-shadow:0 24px 64px rgba(0,0,0,.6); }
         .modal-input { width:100%; padding:13px 16px; border-radius:14px; background:var(--surface-3); border:1px solid var(--line); color:var(--text); font-family:'Cairo',sans-serif; font-size:14px; outline:none; transition:border-color .2s; direction:rtl; }
         .modal-input:focus { border-color:rgba(217,178,95,.4); }
+        .quick-input { flex:1; padding:12px 16px; border-radius:14px; background:var(--surface-2); border:1px solid var(--line); color:var(--text); font-family:'Cairo',sans-serif; font-size:14px; font-weight:700; outline:none; transition:border-color .2s; direction:ltr; text-align:center; letter-spacing:.1em; }
+        .quick-input:focus { border-color:rgba(217,178,95,.4); }
+        .alert-banner { animation: slideDown .4s cubic-bezier(0.16,1,0.3,1); }
+        .pulse { animation: pulse 2s ease-in-out infinite; }
       `}</style>
 
       {/* ══ HEADER ══ */}
-      <div dir="rtl" style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', borderBottom: '1px solid var(--line)', padding: '14px 20px', position: 'sticky', top: 0, zIndex: 100, backdropFilter: 'blur(12px)' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 22 }}>🏆</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>الشمعدان × كأس العالم</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>أهلاً {displayName}! 👋</div>
+      <header style={{
+        background: 'linear-gradient(180deg, rgba(217,178,95,.06), transparent), var(--surface)',
+        borderBottom: '1px solid var(--line)',
+        padding: '14px 20px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: 10, fontFamily: "'Cairo', sans-serif",
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 12,
+            background: 'linear-gradient(135deg,rgba(217,178,95,.2),rgba(217,178,95,.06))',
+            border: '1px solid rgba(217,178,95,.2)', display: 'grid', placeItems: 'center', fontSize: 20,
+          }}>🏆</div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>الشمعدان × كأس العالم</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>أهلاً {displayName}! 👋</div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--gold-soft)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '6px 14px', minWidth: 60 }}>
-            <span style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{myPoints}</span>
-            <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700 }}>نقطة</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Points & Rank badges */}
+          <div style={{ padding: '8px 14px', borderRadius: 12, background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', fontSize: 13, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums', display: 'flex', alignItems: 'center', gap: 6 }}>
+            🏅 {myPoints} <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>نقطة</span>
           </div>
           {myRank > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(255,255,255,.04)', border: '1px solid var(--line)', borderRadius: 12, padding: '6px 14px', minWidth: 60 }}>
-              <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--text)' }}>#{myRank}</span>
-              <span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700 }}>ترتيب</span>
+            <div style={{ padding: '8px 14px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', fontSize: 13, fontWeight: 800, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              #{myRank} <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>ترتيب</span>
             </div>
           )}
-          <button onClick={() => setShowProfileModal(true)} style={{ padding: '9px 16px', borderRadius: 12, cursor: 'pointer', border: profileIncomplete ? '1px solid rgba(217,178,95,.35)' : '1px solid var(--line)', background: profileIncomplete ? 'rgba(217,178,95,.08)' : 'var(--surface-2)', color: profileIncomplete ? '#f2d79e' : 'var(--text)', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => setShowProfileModal(true)} style={{
+            padding: '9px 16px', borderRadius: 12, cursor: 'pointer',
+            border: profileIncomplete ? '1px solid rgba(217,178,95,.35)' : '1px solid var(--line)',
+            background: profileIncomplete ? 'rgba(217,178,95,.08)' : 'var(--surface-2)',
+            color: profileIncomplete ? '#f2d79e' : 'var(--text)',
+            fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
             {profileIncomplete ? '🎁 أكمل ملفك +5 نقاط' : `✏️ ${displayName}`}
           </button>
-          <a href="/my-leagues" style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(217,178,95,.25)', background: 'rgba(217,178,95,.06)', color: '#f2d79e', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>🏆 ليجاتي</a>
-          <button onClick={() => setShowReferral(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(39,176,110,.3)', background: 'rgba(39,176,110,.08)', color: '#5effa8', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Link href="/my-leagues" style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface-2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            🏆 ليجاتي
+          </Link>
+          <button onClick={() => setShowReferral(true)} style={{
+            padding: '9px 16px', borderRadius: 12,
+            border: '1px solid rgba(39,176,110,.3)', background: 'rgba(39,176,110,.08)',
+            color: '#5effa8', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+            fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
             🎁 ادعُ صديق
-            {referralCount > 0 && <span style={{ background: 'rgba(39,176,110,.2)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>{referralCount}</span>}
+            {referralCount > 0 && <span style={{ background: 'rgba(39,176,110,.2)', padding: '2px 7px', borderRadius: 999, fontSize: 11 }}>{referralCount}</span>}
           </button>
-          <button onClick={handleLogout} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(201,58,47,.25)', background: 'rgba(201,58,47,.06)', color: '#ff9c91', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>خروج</button>
+          <button onClick={handleLogout} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(201,58,47,.25)', background: 'rgba(201,58,47,.08)', color: '#ff9090', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>
+            خروج
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* ── INCOMPLETE BANNER ── */}
+      {/* ── INCOMPLETE PROFILE BANNER ── */}
       {profileIncomplete && (
-        <div onClick={() => setShowProfileModal(true)} style={{ background: 'linear-gradient(90deg,rgba(217,178,95,.1),rgba(217,178,95,.04))', borderBottom: '1px solid rgba(217,178,95,.18)', padding: '10px 20px', cursor: 'pointer', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#f2d79e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          🎁 أكمل ملفك الشخصي (اسم + تليفون) واحصل على 5 نقاط مجاناً! &nbsp;<strong>اضغط هنا</strong>
+        <div onClick={() => setShowProfileModal(true)} style={{
+          background: 'linear-gradient(90deg,rgba(217,178,95,.1),rgba(217,178,95,.04))',
+          borderBottom: '1px solid rgba(217,178,95,.18)', padding: '10px 20px',
+          cursor: 'pointer', textAlign: 'center', fontFamily: 'Cairo, sans-serif',
+          fontSize: 13, color: '#f2d79e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          🎁 أكمل ملفك الشخصي (اسم + تليفون) واحصل على 5 نقاط مجاناً! <strong>اضغط هنا</strong>
         </div>
       )}
 
+      {/* ── LEAGUE JOINED BANNER ── */}
       {leagueJoinMsg && (
-        <div style={{ maxWidth: 900, margin: '0 auto', padding: '12px 20px 0' }}>
-          <div style={{ padding: '14px 20px', borderRadius: 16, background: 'rgba(39,176,110,.12)', border: '1px solid rgba(39,176,110,.25)', color: '#94f0c0', fontFamily: 'Cairo, sans-serif', fontSize: 14, fontWeight: 700, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <span>{leagueJoinMsg}</span>
-            <a href="/my-leagues" style={{ color: '#ffe3a6', textDecoration: 'underline', fontWeight: 800, flexShrink: 0 }}>اضغط هنا لرؤية الليج ←</a>
-          </div>
+        <div className="alert-banner" style={{
+          background: 'linear-gradient(90deg,rgba(39,176,110,.12),rgba(39,176,110,.04))',
+          borderBottom: '1px solid rgba(39,176,110,.2)', padding: '10px 20px',
+          textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#94f0c0',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          {leagueJoinMsg} <Link href="/my-leagues" style={{ color: '#5effa8', fontWeight: 700, textDecoration: 'none' }}>اضغط هنا لرؤية الليج ←</Link>
+        </div>
+      )}
+
+      {/* ── UPCOMING MATCH ALERT ── */}
+      {upcomingAlert && (
+        <div className="alert-banner" style={{
+          background: 'linear-gradient(90deg,rgba(59,130,246,.1),rgba(59,130,246,.04))',
+          borderBottom: '1px solid rgba(59,130,246,.2)', padding: '10px 20px',
+          textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#93c5fd',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap',
+        }}>
+          <span className="pulse">⚡</span>
+          ماتش لم تتوقع عليه بعد: <strong>{upcomingAlert.teams.home.name} × {upcomingAlert.teams.away.name}</strong>
+          <button onClick={() => { setActiveTab('predict'); setActiveRound(upcomingAlert.league.round); setUpcomingAlert(null); }}
+            style={{ padding: '4px 12px', borderRadius: 999, background: 'rgba(59,130,246,.2)', border: '1px solid rgba(59,130,246,.3)', color: '#93c5fd', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>
+            توقع الآن
+          </button>
         </div>
       )}
 
@@ -522,40 +585,31 @@ if (!finalReferralCode && userId) {
         <div className="modal-overlay" onClick={() => { setShowProfileModal(false); setProfileMsg(''); }}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--text)' }}>👤 ملفك الشخصي</h3>
+              <h3 style={{ fontWeight: 800, fontSize: 18 }}>👤 ملفك الشخصي</h3>
               <button onClick={() => { setShowProfileModal(false); setProfileMsg(''); }} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center' }}>✕</button>
             </div>
             {!profile?.bonus_points_awarded && (
-              <div style={{ background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 14, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#f2d79e', fontFamily: 'Cairo, sans-serif', lineHeight: 1.6 }}>
+              <div style={{ background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 14, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: '#f2d79e', lineHeight: 1.7 }}>
                 🎁 أكمل <strong>الاسم + التليفون + فيسبوك</strong> واحصل على 5 نقاط!
-                <div style={{ marginTop: 8, display: 'flex', gap: 10, fontSize: 12 }}>
+                <div style={{ display: 'flex', gap: 10, marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
                   <span>{profileForm.display_name.trim() ? '✅' : '○'} الاسم</span>
                   <span>{profileForm.phone.trim() ? '✅' : '○'} التليفون</span>
                   <span>{profileForm.facebook_url.trim() ? '✅' : '○'} فيسبوك</span>
                 </div>
               </div>
             )}
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 6, fontFamily: 'Cairo, sans-serif' }}>الاسم الكامل &nbsp;<span style={{ color: 'var(--red)' }}>*</span></label>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>الاسم الكامل <span style={{ color: 'var(--gold)' }}>*</span></label>
             <input type="text" value={profileForm.display_name} onChange={e => setProfileForm(f => ({ ...f, display_name: e.target.value }))} placeholder="اسمك كما تريد أن يظهر في الصدارة" className="modal-input" style={{ marginBottom: 14 }} />
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 6, fontFamily: 'Cairo, sans-serif' }}>رقم التليفون &nbsp;<span style={{ color: 'var(--muted)', fontWeight: 400 }}>(مطلوب للنقاط)</span></label>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>رقم التليفون <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 400 }}>(مطلوب للنقاط)</span></label>
             <input type="tel" value={profileForm.phone} onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))} placeholder="01012345678" className="modal-input" style={{ marginBottom: 14, direction: 'ltr', textAlign: 'right' }} />
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 6, fontFamily: 'Cairo, sans-serif' }}>
-              رابط فيسبوك &nbsp;
-              {profile?.facebook_bonus_awarded
-                ? <span style={{ color: '#94f0c0', fontSize: 11 }}>✅ مضاف</span>
-                : <span style={{ color: 'var(--gold)', fontSize: 11 }}>+5 نقاط عند إكمال الثلاثة</span>}
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>
+              رابط فيسبوك {profile?.facebook_bonus_awarded ? <span style={{ color: '#94f0c0', fontSize: 11 }}>✅ مضاف</span> : <span style={{ color: 'var(--gold)', fontSize: 11 }}>+5 نقاط عند إكمال الثلاثة</span>}
             </label>
-            {/* FIX ٤: إزالة readOnly — الحقل قابل للتعديل دائماً */}
-            <input
-              type="url"
-              value={profileForm.facebook_url}
-              onChange={e => setProfileForm(f => ({ ...f, facebook_url: e.target.value }))}
-              placeholder="https://facebook.com/username"
-              className="modal-input"
-              style={{ marginBottom: 20, direction: 'ltr', textAlign: 'right' }}
-            />
-            {profileMsg && <div style={{ padding: '12px 16px', borderRadius: 12, background: profileMsg.startsWith('✅') ? 'rgba(39,176,110,.12)' : 'rgba(201,58,47,.12)', border: `1px solid ${profileMsg.startsWith('✅') ? 'rgba(39,176,110,.25)' : 'rgba(201,58,47,.25)'}`, color: profileMsg.startsWith('✅') ? '#94f0c0' : '#ff9c91', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700, marginBottom: 16 }}>{profileMsg}</div>}
-            <button onClick={saveProfile} disabled={profileSaving} className="save-btn">{profileSaving ? '⏳ جاري الحفظ...' : '💾 حفظ البيانات'}</button>
+            <input type="url" value={profileForm.facebook_url} onChange={e => setProfileForm(f => ({ ...f, facebook_url: e.target.value }))} placeholder="https://facebook.com/username" className="modal-input" style={{ marginBottom: 20, direction: 'ltr', textAlign: 'right' }} />
+            {profileMsg && <div style={{ padding: '12px 16px', borderRadius: 14, background: profileMsg.startsWith('✅') ? 'rgba(39,176,110,.1)' : 'rgba(201,58,47,.1)', border: `1px solid ${profileMsg.startsWith('✅') ? 'rgba(39,176,110,.2)' : 'rgba(201,58,47,.2)'}`, color: profileMsg.startsWith('✅') ? '#94f0c0' : '#ff9090', fontSize: 13, fontWeight: 700, marginBottom: 16, textAlign: 'center' }}>{profileMsg}</div>}
+            <button onClick={saveProfile} disabled={profileSaving} className="save-btn">
+              {profileSaving ? '⏳ جاري الحفظ...' : '💾 حفظ البيانات'}
+            </button>
           </div>
         </div>
       )}
@@ -565,52 +619,51 @@ if (!finalReferralCode && userId) {
         <div className="modal-overlay" onClick={() => setShowReferral(false)}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--text)' }}>🎁 ادعُ أصدقاءك</h3>
+              <h3 style={{ fontWeight: 800, fontSize: 18 }}>🎁 ادعُ أصدقاءك</h3>
               <button onClick={() => setShowReferral(false)} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center' }}>✕</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-              <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--gold)' }}>{referralCount}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>أصدقاء انضموا</div>
-              </div>
-              <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 900, color: '#94f0c0' }}>{referralCount * 5}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>نقاط من الدعوات</div>
-              </div>
+              {[{ label: 'أصدقاء انضموا', value: referralCount, color: 'var(--green)' }, { label: 'نقاط من الدعوات', value: referralCount * 5, color: 'var(--gold)' }].map(s => (
+                <div key={s.label} style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 16, padding: '16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 28, fontWeight: 900, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{s.label}</div>
+                </div>
+              ))}
             </div>
-            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 16, padding: 16, marginBottom: 16, fontSize: 13, color: 'var(--muted)', fontFamily: 'Cairo, sans-serif', lineHeight: 2 }}>
-              <strong style={{ color: 'var(--gold)' }}>⚡ كيف يعمل؟</strong><br />
+            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px 16px', marginBottom: 20, fontSize: 13, color: 'var(--text)', lineHeight: 1.9 }}>
+              <strong>⚡ كيف يعمل؟</strong><br />
               ١. شارك رابطك مع أصدقاءك<br />
-              ٢. لما يسجلوا عن طريق رابطك → <span style={{ color: '#94f0c0', fontWeight: 700 }}>+5 نقاط لك</span><br />
+              ٢. لما يسجلوا عن طريق رابطك → <span style={{ color: 'var(--gold)' }}>+5 نقاط لك</span><br />
               ٣. مفيش حد أقصى للدعوات 🚀
             </div>
-            {/* FIX ٢: إظهار رسالة لو الكود مش موجود بعد */}
             {referralCode ? (
               <>
-                <div style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 14, padding: '12px 16px', fontFamily: 'monospace', fontSize: 13, color: 'var(--text)', wordBreak: 'break-all', marginBottom: 12, direction: 'ltr', textAlign: 'left' }}>
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 14, padding: '12px 16px', marginBottom: 12, fontSize: 12, color: 'var(--muted)', fontFamily: 'monospace', direction: 'ltr', textAlign: 'center', wordBreak: 'break-all' }}>
                   {typeof window !== 'undefined' ? getReferralLink() : '...'}
                 </div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button onClick={copyReferralLink} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1px solid var(--line)', background: referralCopied ? 'rgba(39,176,110,.15)' : 'var(--surface-2)', color: referralCopied ? '#94f0c0' : 'var(--text)', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700 }}>{referralCopied ? '✅ تم النسخ' : '📋 نسخ'}</button>
-                  <button onClick={shareOnWhatsApp} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1px solid rgba(39,176,110,.25)', background: 'rgba(39,176,110,.1)', color: '#94f0c0', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700 }}>💬 واتساب</button>
-                  <button onClick={shareOnFacebook} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1px solid rgba(59,130,246,.25)', background: 'rgba(59,130,246,.1)', color: '#93c5fd', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700 }}>📘 فيسبوك</button>
-                  <button onClick={shareOnMessenger} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1px solid rgba(99,102,241,.25)', background: 'rgba(99,102,241,.1)', color: '#c4b5fd', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700 }}>⚡ ماسنجر</button>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+                  {[
+                    { label: referralCopied ? '✅ تم النسخ' : '📋 نسخ', fn: copyReferralLink, bg: 'rgba(255,255,255,.04)' },
+                    { label: '💬 واتساب', fn: shareOnWhatsApp, bg: 'rgba(37,211,102,.1)' },
+                    { label: '📘 فيسبوك', fn: shareOnFacebook, bg: 'rgba(24,119,242,.1)' },
+                    { label: '⚡ ماسنجر', fn: shareOnMessenger, bg: 'rgba(0,132,255,.1)' },
+                  ].map(b => (
+                    <button key={b.label} onClick={b.fn} style={{ padding: '10px 6px', borderRadius: 12, border: '1px solid var(--line)', background: b.bg, color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'Cairo, sans-serif' }}>{b.label}</button>
+                  ))}
                 </div>
               </>
             ) : (
-              <div style={{ background: 'rgba(217,178,95,.06)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 14, padding: '14px 16px', textAlign: 'center', fontSize: 13, color: '#f2d79e', fontFamily: 'Cairo, sans-serif' }}>
-                ⏳ جاري تحميل رابط الدعوة... حاول مجدداً بعد لحظة
-              </div>
+              <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--muted)', fontSize: 13 }}>⏳ جاري تحميل رابط الدعوة... حاول مجدداً بعد لحظة</div>
             )}
           </div>
         </div>
       )}
 
       {/* ══ MAIN ══ */}
-      <div dir="rtl" style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px' }}>
+      <main style={{ maxWidth: 860, margin: '0 auto', padding: '24px 16px' }}>
 
         {/* Stats Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 24 }}>
           {[
             { label: 'نقاطي', value: myPoints, color: 'var(--gold)', icon: '🏅' },
             { label: 'ترتيبي', value: myRank > 0 ? `#${myRank}` : '—', color: 'var(--text)', icon: '📊' },
@@ -618,15 +671,44 @@ if (!finalReferralCode && userId) {
             { label: 'المتسابقون', value: leaderboard.length, color: '#7db1ff', icon: '👥' },
           ].map(s => (
             <div key={s.label} className="stat-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+              <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
               <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>{s.label}</div>
             </div>
           ))}
         </div>
 
+        {/* ✅ NEW: Quick Join League */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: '16px 20px', marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>🏆 انضم لليج بكود سريع</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input
+              type="text"
+              value={leagueCode}
+              onChange={e => setLeagueCode(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && quickJoinLeague()}
+              placeholder="أدخل كود الليج..."
+              className="quick-input"
+              maxLength={8}
+            />
+            <button onClick={quickJoinLeague} disabled={leagueJoining || !leagueCode.trim()} style={{
+              padding: '12px 20px', borderRadius: 14, background: 'linear-gradient(135deg,#e0bc73,#b9892d)',
+              border: 'none', color: '#211708', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+              fontFamily: 'Cairo, sans-serif', opacity: (leagueJoining || !leagueCode.trim()) ? .5 : 1,
+            }}>
+              {leagueJoining ? '⏳' : 'انضم'}
+            </button>
+            <Link href="/my-leagues" style={{ padding: '12px 16px', borderRadius: 14, border: '1px solid var(--line)', background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 13, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+              عرض ليجاتي
+            </Link>
+          </div>
+          {leagueQuickMsg && (
+            <div style={{ marginTop: 10, fontSize: 13, fontWeight: 700, color: leagueQuickMsg.startsWith('🎉') || leagueQuickMsg.startsWith('✅') ? '#94f0c0' : '#ff9090' }}>{leagueQuickMsg}</div>
+          )}
+        </div>
+
         {/* TABS */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', overflowX: 'auto', paddingBottom: 4 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
           {([
             { id: 'predict', label: '⚽ التوقعات' },
             { id: 'my', label: '📋 توقعاتي' },
@@ -641,61 +723,79 @@ if (!finalReferralCode && userId) {
         {/* ════ PREDICT TAB ════ */}
         {activeTab === 'predict' && (
           <div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
               {rounds.map(r => (
                 <button key={r} className={`round-btn${activeRound === r ? ' active' : ''}`} onClick={() => setActiveRound(r)}>
-                  {roundLabels[r]} ({matches.filter(m => m.league.round === r).length})
+                  {roundLabels[r] || r} ({matches.filter(m => m.league.round === r).length})
                 </button>
               ))}
             </div>
+
             {filteredMatches.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
-                <div>لا توجد ماتشات في هذه الجولة</div>
+              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📅</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد ماتشات في هذه الجولة</div>
               </div>
             ) : filteredMatches.map(match => {
               const existing = predictions.find(p => p.fixture_id === match.fixture.id);
               const form = getForm(match);
               const hasResult = match.actual_home_score !== null && match.actual_home_score !== undefined;
               const msg = messages[match.fixture.id];
+
               return (
                 <div key={match.fixture.id} className="match-card">
+                  {/* Match header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>{match.teams.home.name} &nbsp;×&nbsp; {match.teams.away.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{new Date(match.fixture.date).toLocaleDateString('ar-EG', { weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                    <div style={{ display: 'flex', gap: 6 }}>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 15 }}>{match.teams.home.name} × {match.teams.away.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
+                        {new Date(match.fixture.date).toLocaleDateString('ar-EG', { weekday: 'long', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <span className={match.is_open ? 'pill-open' : 'pill-closed'}>{match.is_open ? '🟢 مفتوح' : '🔒 مغلق'}</span>
                       {existing && <span className="pill-saved">✅ محفوظ</span>}
                     </div>
                   </div>
-                  {/* Teams */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                    <div style={{ textAlign: 'center' }}>
-                      {match.teams.home.logo ? <img src={match.teams.home.logo} alt={match.teams.home.name} width={48} height={48} style={{ margin: '0 auto 6px', objectFit: 'contain' }} /> : <span style={{ fontSize: 32 }}>⚽</span>}
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>{match.teams.home.name}</div>
+
+                  {/* Teams visual */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1 }}>
+                      {match.teams.home.logo
+                        ? <img src={match.teams.home.logo} alt={match.teams.home.name} width={48} height={48} style={{ objectFit: 'contain' }} />
+                        : <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--surface-3)', display: 'grid', placeItems: 'center', fontSize: 22 }}>⚽</div>
+                      }
+                      <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'center' }}>{match.teams.home.name}</span>
                     </div>
-                    <div style={{ textAlign: 'center', fontSize: 18, fontWeight: 900, color: hasResult ? 'var(--gold)' : 'var(--muted)' }}>{hasResult ? `${match.actual_home_score} — ${match.actual_away_score}` : 'VS'}</div>
-                    <div style={{ textAlign: 'center' }}>
-                      {match.teams.away.logo ? <img src={match.teams.away.logo} alt={match.teams.away.name} width={48} height={48} style={{ margin: '0 auto 6px', objectFit: 'contain' }} /> : <span style={{ fontSize: 32 }}>⚽</span>}
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>{match.teams.away.name}</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--muted)', padding: '0 12px' }}>
+                      {hasResult ? `${match.actual_home_score} — ${match.actual_away_score}` : 'VS'}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1 }}>
+                      {match.teams.away.logo
+                        ? <img src={match.teams.away.logo} alt={match.teams.away.name} width={48} height={48} style={{ objectFit: 'contain' }} />
+                        : <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--surface-3)', display: 'grid', placeItems: 'center', fontSize: 22 }}>⚽</div>
+                      }
+                      <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'center' }}>{match.teams.away.name}</span>
                     </div>
                   </div>
+
                   {/* Actual result */}
                   {hasResult && (
-                    <div style={{ background: 'rgba(39,176,110,.08)', border: '1px solid rgba(39,176,110,.16)', borderRadius: 14, padding: '10px 14px', marginBottom: 12 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#94f0c0', marginBottom: 6 }}>النتيجة الفعلية</div>
+                    <div style={{ background: 'rgba(39,176,110,.08)', border: '1px solid rgba(39,176,110,.15)', borderRadius: 14, padding: '10px 14px', marginBottom: 14 }}>
+                      <div style={{ fontSize: 12, color: '#94f0c0', fontWeight: 700, marginBottom: 4 }}>النتيجة الفعلية</div>
                       {match.first_scorer && <div style={{ fontSize: 12, color: 'var(--muted)' }}>⚽ أول هدف: {match.first_scorer}</div>}
                       {existing && (
-                        <div style={{ marginTop: 6, fontSize: 13, fontWeight: 800, color: (existing.points || 0) >= 10 ? '#ffe3a6' : (existing.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
-                          {existing.points || 0}&nbsp; نقطة
+                        <div style={{ marginTop: 6, fontSize: 13, color: (existing.points || 0) >= 10 ? '#ffe3a6' : (existing.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                          نقاطك: <strong>{existing.points || 0}</strong> نقطة
                         </div>
                       )}
                     </div>
                   )}
+
                   {/* Prediction form */}
                   {match.is_open && (
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>توقّع النتيجة</div>
+                      <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 10 }}>توقّع النتيجة</div>
                       {[{ key: 'homeScore', team: match.teams.home.name }, { key: 'awayScore', team: match.teams.away.name }].map(({ key, team }) => (
                         <div key={key} className="score-row">
                           <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{team}</span>
@@ -704,34 +804,41 @@ if (!finalReferralCode && userId) {
                           <button className="score-btn plus" onClick={() => setForm(match.fixture.id, { [key]: (form[key] || 0) + 1 })}>+</button>
                         </div>
                       ))}
+
                       <div className="field-row">
                         <span className="field-label">⚽ أول هدف</span>
-                        <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: 'var(--gold)' }}>+3</span>
+                        <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: 'var(--gold)', border: '1px solid rgba(217,178,95,.2)' }}>+3</span>
                         <input type="text" value={form.firstScorer} onChange={e => setForm(match.fixture.id, { firstScorer: e.target.value })} className="field-input" placeholder="مثال: مبابي" />
                       </div>
+
                       <div className="field-row">
                         <input type="checkbox" checked={form.extraTime} onChange={e => setForm(match.fixture.id, { extraTime: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--gold)', flexShrink: 0 }} />
                         <span className="field-label">⏱️ وقت إضافي؟</span>
-                        <span className="points-tag" style={{ background: 'rgba(59,130,246,.1)', color: '#93c5fd' }}>+2</span>
+                        <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: 'var(--gold)', border: '1px solid rgba(217,178,95,.2)' }}>+2</span>
                       </div>
+
                       {match.surprise_question && (
                         <div className="field-row">
                           <span className="field-label">🎯 {match.surprise_question}</span>
-                          <span className="points-tag" style={{ background: 'rgba(99,102,241,.1)', color: '#c4b5fd' }}>+5</span>
+                          <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: 'var(--gold)', border: '1px solid rgba(217,178,95,.2)' }}>+5</span>
                           <input type="text" value={form.surpriseAnswer} onChange={e => setForm(match.fixture.id, { surpriseAnswer: e.target.value })} className="field-input" style={{ maxWidth: 120 }} placeholder="إجابتك..." />
                         </div>
                       )}
-                      {msg && <div style={{ padding: '10px', borderRadius: 12, background: msg.startsWith('✅') ? 'rgba(39,176,110,.1)' : 'rgba(201,58,47,.1)', color: msg.startsWith('✅') ? '#94f0c0' : '#ff9c91', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>{msg}</div>}
+
+                      {msg && <div style={{ textAlign: 'center', padding: '8px', fontSize: 13, fontWeight: 700, color: msg.startsWith('✅') ? '#94f0c0' : '#ff9090', marginBottom: 8 }}>{msg}</div>}
+
                       <button onClick={() => submitPrediction(match)} disabled={submitting === match.fixture.id} className="save-btn">
                         {submitting === match.fixture.id ? '⏳ جاري الحفظ...' : existing ? '💾 تحديث التوقع' : '⚽ حفظ التوقع'}
                       </button>
                     </div>
                   )}
+
+                  {/* Closed + saved prediction */}
                   {!match.is_open && !hasResult && existing && (
                     <div className="pred-box">
-                      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>توقعك المسجّل</div>
-                      <div style={{ fontSize: 20, fontWeight: 900 }}>{existing.predicted_home_score} — {existing.predicted_away_score}</div>
-                      {existing.predicted_first_scorer && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>⚽ {existing.predicted_first_scorer}</div>}
+                      <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>توقعك المسجّل</div>
+                      <div style={{ fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums', marginBottom: 4 }}>{existing.predicted_home_score} — {existing.predicted_away_score}</div>
+                      {existing.predicted_first_scorer && <div style={{ fontSize: 12, color: 'var(--muted)' }}>⚽ {existing.predicted_first_scorer}</div>}
                     </div>
                   )}
                 </div>
@@ -744,31 +851,51 @@ if (!finalReferralCode && userId) {
         {activeTab === 'my' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18 }}>توقعاتي</h2>
-              {/* FIX ٦: عرض النقاط من myTotalPoints مباشرة */}
-              <div style={{ background: 'var(--gold-soft)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '8px 16px', fontSize: 15, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>🏅 {myPoints} نقطة</div>
+              <h2 style={{ fontWeight: 800, fontSize: 20 }}>توقعاتي</h2>
+              <div style={{ padding: '10px 18px', borderRadius: 14, background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', fontSize: 16, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
+                🏅 {myPoints} نقطة
+              </div>
             </div>
+
+            {/* ✅ NEW: Points Breakdown */}
+            {pointsBreakdown.length > 0 && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: '16px 20px', marginBottom: 20 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', marginBottom: 12 }}>🔝 أفضل توقعاتك بالنقاط</div>
+                {pointsBreakdown.map((p: any, i) => (
+                  <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < pointsBreakdown.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{p.home_team} × {p.away_team}</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: (p.points || 0) >= 10 ? 'var(--gold)' : '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>+{p.points} نقطة</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {predictions.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
-                <div>لم تقدم أي توقعات بعد</div>
+              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>لم تقدم أي توقعات بعد</div>
               </div>
             ) : predictions.map(p => {
               const hasResult = p.actual_home_score !== null;
               return (
-                <div key={p.id} className="match-card" style={p.points >= 10 ? { borderColor: 'rgba(217,178,95,.28)', background: 'linear-gradient(90deg,rgba(217,178,95,.07),rgba(255,255,255,.015))' } : {}}>
+                <div key={p.id} className="match-card" style={(p.points || 0) >= 10 ? { borderColor: 'rgba(217,178,95,.28)', background: 'linear-gradient(90deg,rgba(217,178,95,.07),rgba(255,255,255,.015))' } : {}}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>{p.home_team} × {p.away_team}</div>
-                      <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-                        توقعك: <strong style={{ color: 'var(--text)' }}>{p.predicted_home_score} — {p.predicted_away_score}</strong>
-                        {p.predicted_first_scorer && <span style={{ marginRight: 10 }}>⚽ {p.predicted_first_scorer}</span>}
+                      <div style={{ fontWeight: 800, fontSize: 14 }}>{p.home_team} × {p.away_team}</div>
+                      <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+                        توقعك: <strong>{p.predicted_home_score} — {p.predicted_away_score}</strong>
+                        {p.predicted_first_scorer && <span style={{ marginRight: 8 }}>⚽ {p.predicted_first_scorer}</span>}
                       </div>
-                      {hasResult && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>الفعلية: <strong style={{ color: 'var(--text)' }}>{p.actual_home_score} — {p.actual_away_score}</strong></div>}
+                      {hasResult && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>الفعلية: <strong>{p.actual_home_score} — {p.actual_away_score}</strong></div>}
                     </div>
-                    <div style={{ textAlign: 'center', minWidth: 56, background: !hasResult ? 'var(--surface-3)' : (p.points || 0) >= 10 ? 'rgba(217,178,95,.12)' : (p.points || 0) >= 5 ? 'rgba(39,176,110,.12)' : 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 14, padding: '8px', color: !hasResult ? 'var(--muted)' : (p.points || 0) >= 10 ? '#ffe3a6' : (p.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)' }}>
-                      <div style={{ fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{hasResult ? (p.points || 0) : '⏳'}</div>
-                      {hasResult && <div style={{ fontSize: 10, fontWeight: 700 }}>نقطة</div>}
+                    <div style={{
+                      minWidth: 56, textAlign: 'center', padding: '8px',
+                      background: !hasResult ? 'var(--surface-3)' : (p.points || 0) >= 10 ? 'rgba(217,178,95,.12)' : (p.points || 0) >= 5 ? 'rgba(39,176,110,.12)' : 'var(--surface-3)',
+                      border: '1px solid var(--line)', borderRadius: 14,
+                      color: !hasResult ? 'var(--muted)' : (p.points || 0) >= 10 ? '#ffe3a6' : (p.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)',
+                    }}>
+                      <div style={{ fontSize: 18, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>{hasResult ? (p.points || 0) : '⏳'}</div>
+                      {hasResult && <div style={{ fontSize: 10, color: 'var(--muted)' }}>نقطة</div>}
                     </div>
                   </div>
                 </div>
@@ -780,25 +907,35 @@ if (!finalReferralCode && userId) {
         {/* ════ LEADERBOARD TAB ════ */}
         {activeTab === 'leaders' && (
           <div>
-            <h2 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, marginBottom: 20 }}>🏆 ترتيب المتسابقين</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontWeight: 800, fontSize: 20 }}>🏆 ترتيب المتسابقين</h2>
+              <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', fontWeight: 700, textDecoration: 'none' }}>عرض الكامل ←</Link>
+            </div>
+
             {leaderboard.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>🏆</div>
-                <div>لا توجد نتائج بعد</div>
+              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🏆</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد نتائج بعد</div>
               </div>
             ) : leaderboard.map((player: any, i) => {
               const isMe = player.user_id === user?.id;
               const name = player.display_name || player.user_email?.split('@')[0];
               return (
                 <div key={player.user_id} className={`rank-item${isMe ? ' me' : ''}`}>
-                  <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontWeight: 800, fontSize: 14 }}>#{i + 1}</span>}</div>
+                  <div className="medal-box" style={{ background: i < 3 ? 'rgba(217,178,95,.1)' : 'var(--surface-2)', border: `1px solid ${i < 3 ? 'rgba(217,178,95,.2)' : 'var(--line)'}` }}>
+                    {i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}
+                  </div>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{name} {isMe && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>} {player.profile_completed && <span style={{ fontSize: 12 }}>✅</span>}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{player.count} توقع</div>
+                    <div style={{ fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {name}
+                      {isMe && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'rgba(217,178,95,.15)', color: '#f2d79e', fontWeight: 700 }}>أنت</span>}
+                      {player.profile_completed && <span style={{ fontSize: 11, color: '#94f0c0' }}>✅</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{player.count} توقع</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: i < 3 ? 'var(--gold)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
+                    <div style={{ fontSize: 10, color: 'var(--muted)' }}>نقطة</div>
                   </div>
                 </div>
               );
@@ -810,13 +947,14 @@ if (!finalReferralCode && userId) {
         {activeTab === 'history' && (
           <div>
             <div style={{ marginBottom: 20 }}>
-              <h2 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, marginBottom: 6 }}>📈 السجل التاريخي للترتيب</h2>
-              <p style={{ fontSize: 13, color: 'var(--muted)' }}>لقطات يومية للترتيب منذ بداية البطولة</p>
+              <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>📈 السجل التاريخي للترتيب</h2>
+              <p style={{ fontSize: 13, color: 'var(--muted)' }}>لقطات أسبوعية للترتيب منذ بداية البطولة</p>
             </div>
+
             {historyDates.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
-                <div>لا يوجد سجل تاريخي بعد</div>
+              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📅</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>لا يوجد سجل تاريخي بعد</div>
               </div>
             ) : (
               <>
@@ -827,18 +965,26 @@ if (!finalReferralCode && userId) {
                     </button>
                   ))}
                 </div>
+
                 {historyRankings.filter((r: any) => r.week_start === activeHistoryDate).map((player: any, i: number) => {
                   const isMe = player.user_id === user?.id;
                   return (
-                    <div key={player.user_id + player.week_start} className={`rank-item${isMe ? ' me' : ''}`}>
-                      <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontWeight: 800, fontSize: 14 }}>#{i + 1}</span>}</div>
+                    <div key={`${player.user_id}-${i}`} className={`rank-item${isMe ? ' me' : ''}`}>
+                      <div className="medal-box">
+                        {i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}
+                      </div>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{player.display_name || '—'} {isMe && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{new Date(player.week_start).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                        <div style={{ fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {player.display_name || '—'}
+                          {isMe && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'rgba(217,178,95,.15)', color: '#f2d79e', fontWeight: 700 }}>أنت</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                          {new Date(player.week_start).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        </div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.total_points}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: i < 3 ? 'var(--gold)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{player.total_points}</div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>نقطة</div>
                       </div>
                     </div>
                   );
@@ -852,32 +998,34 @@ if (!finalReferralCode && userId) {
         {activeTab === 'feed' && (
           <div>
             <div style={{ marginBottom: 20 }}>
-              <h2 style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 18, marginBottom: 6 }}>🌍 نشاط اللاعبين</h2>
+              <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>🌍 نشاط اللاعبين</h2>
               <p style={{ fontSize: 13, color: 'var(--muted)' }}>آخر الأحداث في المنافسة</p>
             </div>
+
             {socialFeed.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', fontFamily: 'Cairo, sans-serif' }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-                <div>لا يوجد نشاط بعد — كن أول من يسجّل!</div>
+              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>لا يوجد نشاط بعد — كن أول من يسجّل!</div>
               </div>
             ) : socialFeed.map((item: any) => (
-              <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', background: 'rgba(255,255,255,.025)', border: '1px solid var(--line)', borderRadius: 18, marginBottom: 10 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(217,178,95,.1)', display: 'grid', placeItems: 'center', fontSize: 18, flexShrink: 0 }}>
+              <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '14px 18px', background: 'linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01))', border: `1px solid ${item.user_id === user?.id ? 'rgba(217,178,95,.2)' : 'var(--line)'}`, borderRadius: 18, marginBottom: 10 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', display: 'grid', placeItems: 'center', fontSize: 18, flexShrink: 0 }}>
                   {item.type === 'invite_friend' ? '🎉' : item.type === 'completed_profile' ? '✅' : item.type === 'joined_league' ? '🏆' : item.type === 'share_league' ? '🔗' : '⚽'}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13, fontFamily: 'Cairo, sans-serif' }}>
-                    {item.user_name || 'لاعب'} {item.user_id === user?.id && <span style={{ background: 'rgba(217,178,95,.15)', color: 'var(--gold)', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>أنت</span>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {item.user_name || 'لاعب'}
+                    {item.user_id === user?.id && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'rgba(217,178,95,.15)', color: '#f2d79e', fontWeight: 700 }}>أنت</span>}
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{feedEventLabel(item.type, item.data)}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{timeAgo(item.created_at)}</div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>{feedEventLabel(item.type, item.data)}</div>
                 </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0, marginTop: 2 }}>{timeAgo(item.created_at)}</div>
               </div>
             ))}
           </div>
         )}
 
-      </div>
+      </main>
     </>
   );
 }
