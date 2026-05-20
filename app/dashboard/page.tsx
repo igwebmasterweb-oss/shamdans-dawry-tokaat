@@ -133,7 +133,7 @@ export default function Dashboard() {
         fetch('/api/fixtures').then(res => res.json()),
         supabase.from('fixtures').select('api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,surprise_answer,surprise_question'),
         supabase.from('predictions').select('*').eq('user_id', userId),
-        supabase.from('user_points').select('referral_code,referral_count,total_points').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_points').select('referral_count,total_points').eq('user_id', userId).maybeSingle(),
         supabase.from('social_feed').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('historical_rankings').select('*').order('week_start', { ascending: false }).order('total_points', { ascending: false }),
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
@@ -146,17 +146,8 @@ export default function Dashboard() {
       const userPreds = userPredsRes.data;
       const myPointsRow = myPointsRowRes.data;
 
-      // FIX: توليد referral_code لو مش موجود
-      let finalReferralCode = myPointsRow?.referral_code || '';
-      if (!finalReferralCode && userId) {
-        finalReferralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-        supabase.from('user_points').upsert({
-          user_id: userId,
-          referral_code: finalReferralCode,
-          referral_count: myPointsRow?.referral_count || 0,
-          total_points: myPointsRow?.total_points || 0,
-        }).then(() => {});
-      }
+      // ✅ FIX: referral_code مصدره الوحيد هو profiles فقط
+      const finalReferralCode = profileData?.referral_code || '';
 
       const feedData = feedDataRes.data;
       const histData = histDataRes.data;
@@ -210,12 +201,12 @@ export default function Dashboard() {
       setPredictions(userPreds || []);
 
       if (myPointsRow) {
-        setReferralCode(finalReferralCode || myPointsRow.referral_code || '');
+        setReferralCode(finalReferralCode);
         setReferralCount(myPointsRow.referral_count || 0);
         setMyTotalPoints(myPointsRow.total_points || 0);
       } else {
         const myRow = (userPointsData || []).find((r: any) => r.user_id === userId);
-        setReferralCode(finalReferralCode || myRow?.referral_code || '');
+        setReferralCode(finalReferralCode);
         setReferralCount(myRow?.referral_count || 0);
         setMyTotalPoints(myRow?.total_points || 0);
       }
