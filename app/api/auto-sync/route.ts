@@ -105,7 +105,7 @@ export async function GET(request: Request) {
     // ⑤ لو في ماتشات اتحفظت → شغّل update-results أوتو
     if (syncedCount > 0) {
       const updateRes = await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL}/api/update-results`,
+        `${process.env.NEXT_PUBLIC_SITE_URL}/api/update-results`,
         { headers: { 'x-internal-key': process.env.CRON_SECRET || '' } }
       );
       const updateData = await updateRes.json();
