@@ -3,6 +3,10 @@
     {
       "path": "/api/auto-close-matches",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/auto-sync",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
