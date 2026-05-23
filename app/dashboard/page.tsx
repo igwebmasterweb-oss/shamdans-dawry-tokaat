@@ -807,8 +807,7 @@ export default function Dashboard() {
                 ? <span style={{ background: 'rgba(39,176,110,.1)', color: '#5effa8', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>✅ مضاف</span>
                 : <span style={{ background: 'rgba(217,178,95,.1)', color: '#ffe3a6', borderRadius: 999, padding: '2px 8px', fontSize: 11 }}>+5 نقاط عند إكمال الثلاثة</span>}
             </div>
-            <input type="url" value={profileForm.facebook_url} onChange={e 
-=> setProfileForm(f => ({ ...f, facebook_url: e.target.value }))} placeholder="https://facebook.com/username" className="modal-input" style={{ marginBottom: 20, direction: 'ltr', textAlign: 'right' }} />
+            <input type="url" value={profileForm.facebook_url} onChange={e => setProfileForm(f => ({ ...f, facebook_url: e.target.value }))} placeholder="https://facebook.com/username" className="modal-input" style={{ marginBottom: 20, direction: 'ltr', textAlign: 'right' }} />
             {profileMsg && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 12, background: profileMsg.startsWith('✅') ? 'rgba(39,176,110,.1)' : 'rgba(201,58,47,.1)', color: profileMsg.startsWith('✅') ? '#5effa8' : '#ff9e9e', fontSize: 13, fontWeight: 700 }}>{profileMsg}</div>}
             <button onClick={saveProfile} disabled={profileSaving} className="save-btn">{profileSaving ? '⏳ جاري الحفظ...' : '💾 حفظ البيانات'}</button>
           </div>
