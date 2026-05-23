@@ -412,6 +412,8 @@ export default function Dashboard() {
           red_card_in_match: sb?.red_card_in_match ?? false,
           penalty_in_match:  sb?.penalty_in_match  ?? false,
           both_teams_scored: sb?.both_teams_scored ?? false,
+        db_home_team:      sb?.home_team_name   ?? m.teams.home.name,
+        db_away_team:      sb?.away_team_name   ?? m.teams.away.name,
         };
       });
       setMatches(merged);
@@ -732,7 +734,7 @@ export default function Dashboard() {
                 <div style={{ fontSize: 13, color: 'var(--muted)' }}>أهلاً {displayName}! 👋</div>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '7px 14px', fontSize: 14, fontWeight: 800 }}>
                 <span>🏅</span>
                 <span style={{ color: 'var(--gold)' }}>{myPoints}</span>
@@ -1009,8 +1011,8 @@ export default function Dashboard() {
                         <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: '#ffe3a6', border: '1px solid rgba(217,178,95,.2)' }}>+3</span>
                         <PlayerSelect
                           fixtureId={match.fixture.id}
-                          homeTeam={match.teams.home.name}
-                          awayTeam={match.teams.away.name}
+                          homeTeam={match.db_home_team}
+                          awayTeam={match.db_away_team}
                           value={form.firstScorer}
                           onChange={val => setForm(match.fixture.id, { firstScorer: val })}
                         />
