@@ -23,9 +23,9 @@ export async function GET(request: NextRequest) {
   const isAuthorized =
     authHeader === `Bearer ${secret}` || internalKey === secret;
 
-//  if (secret && !isAuthorized) {
-//    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-//  }
+ if (secret && !isAuthorized) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+ }
 
   try {
     const LEAGUE_ID = process.env.NEXT_PUBLIC_LEAGUE_ID || '1';
