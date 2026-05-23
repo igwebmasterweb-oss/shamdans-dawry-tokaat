@@ -364,7 +364,7 @@ export default function Dashboard() {
         supabase.auth.getSession(),
         fetch('/api/fixtures').then(res => res.json()),
         supabase.from('fixtures').select(
-          'api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,red_card_in_match,penalty_in_match,both_teams_scored'
+          'api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,red_card_in_match,penalty_in_match,both_teams_scored,home_team_name,away_team_name'
         ),
         supabase.from('predictions').select('*').eq('user_id', userId),
         supabase.from('user_points').select('referral_count,total_points').eq('user_id', userId).maybeSingle(),
