@@ -36,7 +36,9 @@ function PlayerSelect({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (loaded) return;
+    if (!homeTeam || !awayTeam) return;
+    setLoaded(false);
+    setPlayers([]);
     async function load() {
       // ① team_players — السكواد الكامل للفريقين
       const { data: squadData } = await supabase
@@ -64,7 +66,7 @@ function PlayerSelect({
       setLoaded(true);
     }
     load();
-  }, [fixtureId, homeTeam, awayTeam, loaded]);
+  }, [fixtureId, homeTeam, awayTeam]);
 
   // إغلاق الـ dropdown لو ضغط برّا
   useEffect(() => {
@@ -726,7 +728,7 @@ export default function Dashboard() {
       {/* ══ HEADER ══ */}
       <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01))', borderBottom: '1px solid var(--line)', padding: '14px 20px' }}>
         <div style={{ maxWidth: 760, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'nowrap', overflowX: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ fontSize: 28 }}>🏆</div>
               <div>
