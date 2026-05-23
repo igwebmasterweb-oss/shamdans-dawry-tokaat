@@ -8,6 +8,7 @@ const supabaseAdmin = createClient(
 
 export async function GET() {
   try {
+    // ✅ جيب الماتشات اللي فيها نتائج فعلية فقط
     const { data: fixtures, error: fixError } = await supabaseAdmin
       .from('fixtures')
       .select('*')
@@ -39,22 +40,26 @@ export async function GET() {
       for (const pred of preds) {
         let points = 0;
 
-        const actualHome = fixture.actual_home_score;
-        const actualAway = fixture.actual_away_score;
-        const predHome   = pred.predicted_home_score;
-        const predAway   = pred.predicted_away_score;
+        const actualHome: number = fixture.actual_home_score;
+        const actualAway: number = fixture.actual_away_score;
+        const predHome: number   = pred.predicted_home_score;
+        const predAway: number   = pred.predicted_away_score;
 
-        // +10 نتيجة كاملة
+        // ══════════════════════════════════════
+        // +10 — نتيجة كاملة (النتيجة بالظبط)
+        // ══════════════════════════════════════
         if (predHome === actualHome && predAway === actualAway) {
           points += 10;
         } else {
-          // +5 الفايز صح
+          // +5 — توقع الفائز / التعادل
           const actualWinner = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw';
-          const predWinner   = predHome   > predAway   ? 'home' : predAway   > predHome   ? 'away' : 'draw';
+          const predWinner   = predHome  > predAway   ? 'home' : predAway  > predHome   ? 'away' : 'draw';
           if (actualWinner === predWinner) points += 5;
         }
 
-        // +3 أول هدف
+        // ══════════════════════════════════════
+        // +3 — أول هدف (مطابقة مرنة)
+        // ══════════════════════════════════════
         if (fixture.first_scorer && pred.predicted_first_scorer) {
           const actual    = fixture.first_scorer.trim().toLowerCase();
           const predicted = pred.predicted_first_scorer.trim().toLowerCase();
@@ -63,18 +68,38 @@ export async function GET() {
           }
         }
 
-        // +2 وقت إضافي
-        if (fixture.went_extra_time === pred.predicted_extra_time) points += 2;
-
-        // +5 سؤال المفاجأة
-        if (fixture.surprise_answer && pred.surprise_answer) {
-          const actual    = fixture.surprise_answer.trim().toLowerCase();
-          const predicted = pred.surprise_answer.trim().toLowerCase();
-          if (actual === predicted || actual.includes(predicted) || predicted.includes(actual)) {
-            points += 5;
-          }
+        // ══════════════════════════════════════
+        // +2 — وقت إضافي (بس لو الاتنين true)
+        // ✅ مش بنكافئ على توقع "لأ وقت إضافي" وهو فعلاً مفيش
+        // ══════════════════════════════════════
+        if (fixture.went_extra_time === true && pred.predicted_extra_time === true) {
+          points += 2;
         }
 
+        // ══════════════════════════════════════
+        // +2 — بطاقة حمراء (بس لو الاتنين true)
+        // ══════════════════════════════════════
+        if (fixture.red_card_in_match === true && pred.predicted_red_card === true) {
+          points += 2;
+        }
+
+        // ══════════════════════════════════════
+        // +2 — ركلة جزاء (بس لو الاتنين true)
+        // ══════════════════════════════════════
+        if (fixture.penalty_in_match === true && pred.predicted_penalty === true) {
+          points += 2;
+        }
+
+        // ══════════════════════════════════════
+        // +2 — كلا الفريقين سجّلا BTTS (بس لو الاتنين true)
+        // ══════════════════════════════════════
+        if (fixture.both_teams_scored === true && pred.predicted_both_teams === true) {
+          points += 2;
+        }
+
+        // ══════════════════════════════════════
+        // احفظ النقاط + النتيجة الفعلية في التوقع
+        // ══════════════════════════════════════
         await supabaseAdmin
           .from('predictions')
           .update({
@@ -84,7 +109,7 @@ export async function GET() {
           })
           .eq('id', pred.id);
 
-        // ✅ social_feed insert عند كسب نقاط > 0
+        // ✅ social_feed عند كسب نقاط > 0
         if (points > 0) {
           await supabaseAdmin.from('social_feed').insert({
             user_id: pred.user_id,
@@ -103,7 +128,7 @@ export async function GET() {
       }
     }
 
-    // refresh user_points لكل المتأثرين
+    // ✅ refresh user_points لكل المستخدمين المتأثرين
     for (const userId of affectedUsers) {
       await supabaseAdmin.rpc('refresh_user_points', { p_user_id: userId });
     }
