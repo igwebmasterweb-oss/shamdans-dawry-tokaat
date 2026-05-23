@@ -674,7 +674,7 @@ export default function Dashboard() {
       )}
 
       {/* ══ MAIN ══ */}
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '20px 16px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 16px' }}>
 
         {/* Stats Row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10, marginBottom: 20 }}>
@@ -789,15 +789,32 @@ export default function Dashboard() {
                     <div>
                       <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 10 }}>توقّع النتيجة</div>
 
-                      {/* Score inputs */}
-                      {[{ key: 'homeScore', team: match.teams.home.name }, { key: 'awayScore', team: match.teams.away.name }].map(({ key, team }) => (
-                        <div key={key} className="score-row">
-                          <span className="field-label">{team}</span>
-                          <button className="score-btn" onClick={() => setForm(match.fixture.id, { [key]: Math.max(0, (form[key] || 0) - 1) })}>−</button>
-                          <span className="score-val">{form[key] || 0}</span>
-                          <button className="score-btn plus" onClick={() => setForm(match.fixture.id, { [key]: (form[key] || 0) + 1 })}>+</button>
+                      {/* Score inputs — الفريقان جنب بعض */}
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr auto 1fr', alignItems:'center', gap:8, background:'var(--surface-2)', border:'1px solid var(--line)', borderRadius:18, padding:'12px 14px', marginBottom:10 }}>
+                        {/* الفريق الأول */}
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+                          <span style={{ fontSize:12, color:'var(--muted)', fontWeight:700, textAlign:'center' }}>{match.teams.home.name}</span>
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <button className="score-btn" onClick={() => setForm(match.fixture.id, { homeScore: Math.max(0,(form.homeScore||0)-1) })}>−</button>
+                            <span className="score-val">{form.homeScore || 0}</span>
+                            <button className="score-btn plus" onClick={() => setForm(match.fixture.id, { homeScore:(form.homeScore||0)+1 })}>+</button>
+                          </div>
                         </div>
-                      ))}
+                        {/* فاصل VS */}
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                          <span style={{ fontSize:11, color:'var(--muted)', fontWeight:700 }}>VS</span>
+                          <span style={{ fontSize:22, fontWeight:900, color:'var(--gold)' }}>—</span>
+                        </div>
+                        {/* الفريق الثاني */}
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+                          <span style={{ fontSize:12, color:'var(--muted)', fontWeight:700, textAlign:'center' }}>{match.teams.away.name}</span>
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <button className="score-btn" onClick={() => setForm(match.fixture.id, { awayScore: Math.max(0,(form.awayScore||0)-1) })}>−</button>
+                            <span className="score-val">{form.awayScore || 0}</span>
+                            <button className="score-btn plus" onClick={() => setForm(match.fixture.id, { awayScore:(form.awayScore||0)+1 })}>+</button>
+                          </div>
+                        </div>
+                      </div>
 
                       {/* ✅ أول هداف — PlayerSelect dropdown */}
                       <div className="field-row">
@@ -810,34 +827,30 @@ export default function Dashboard() {
                         />
                       </div>
 
-                      {/* وقت إضافي */}
-                      <div className="field-row">
-                        <input type="checkbox" checked={form.extraTime} onChange={e => setForm(match.fixture.id, { extraTime: e.target.checked })} style={{ width: 18, height: 18, accentColor: 'var(--gold)', flexShrink: 0 }} />
-                        <span className="field-label">⏱️ وقت إضافي؟</span>
-                        <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: 'var(--gold)' }}>+2</span>
-                      </div>
-
-                      {/* ✅ تعديل 5 الجديد: 3 checkboxes بدل سؤال المفاجأة */}
-                      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '12px 16px', marginBottom: 10 }}>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {/* ✅ التوقعات الإضافية + وقت إضافي — 2×2 grid */}
+                      <div style={{ background:'var(--surface-2)', border:'1px solid var(--line)', borderRadius:18, padding:'12px 14px', marginBottom:10 }}>
+                        <div style={{ fontSize:12, color:'var(--muted)', fontWeight:700, marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
                           توقعات إضافية
-                          <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: 'var(--gold)' }}>+2 نقطة لكل إجابة صح</span>
+                          <span className="points-tag" style={{ background:'rgba(217,178,95,.1)', color:'var(--gold)' }}>+2 نقطة لكل إجابة صح</span>
                         </div>
-                        {[
-                          { key: 'predicted_red_card',   label: '🟥 هيكون في بطاقة حمراء؟' },
-                          { key: 'predicted_penalty',    label: '⚽ هيكون في ركلة جزاء؟' },
-                          { key: 'predicted_both_teams', label: '🎯 هيسجل الفريقان معاً؟' },
-                        ].map(({ key, label }) => (
-                          <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={form[key] ?? false}
-                              onChange={e => setForm(match.fixture.id, { [key]: e.target.checked })}
-                              style={{ width: 18, height: 18, accentColor: 'var(--gold)', flexShrink: 0 }}
-                            />
-                            <span style={{ fontSize: 14, color: 'var(--text)' }}>{label}</span>
-                          </label>
-                        ))}
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                          {[
+                            { key:'extraTime',           label:'⏱️ وقت إضافي؟' },
+                            { key:'predicted_red_card',  label:'🟥 بطاقة حمراء؟' },
+                            { key:'predicted_penalty',   label:'⚽ ركلة جزاء؟' },
+                            { key:'predicted_both_teams',label:'🎯 الفريقان يسجّلان؟' },
+                          ].map(({ key, label }) => (
+                            <label key={key} style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', background:'var(--surface-3)', border:'1px solid var(--line)', borderRadius:12, padding:'9px 12px' }}>
+                              <input
+                                type="checkbox"
+                                checked={form[key] ?? false}
+                                onChange={e => setForm(match.fixture.id, { [key]: e.target.checked })}
+                                style={{ width:17, height:17, accentColor:'var(--gold)', flexShrink:0 }}
+                              />
+                              <span style={{ fontSize:13, color:'var(--text)', fontWeight:600 }}>{label}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
 
                       {msg && <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 700, color: msg.includes('✅') ? '#94f0c0' : '#ff9c91', textAlign: 'center' }}>{msg}</div>}
