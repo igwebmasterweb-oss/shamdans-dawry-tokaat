@@ -249,6 +249,49 @@ function PlayerSelect({
   );
 }
 
+
+
+// ✨ useCountdown — عداد تنازلي للمباراة القادمة
+function useCountdown(targetDate: string | null) {
+  const [timeLeft, setTimeLeft] = useState('');
+  useEffect(() => {
+    if (!targetDate) { setTimeLeft(''); return; }
+    const tick = () => {
+      const diff = new Date(targetDate).getTime() - Date.now();
+      if (diff <= 0) { setTimeLeft('الآن!'); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setTimeLeft(h > 0 ? `${h}س ${m}د ${s}ث` : `${m}د ${s}ث`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [targetDate]);
+  return timeLeft;
+}
+
+// ✨ useCountUp — animates number from old to new value
+function useCountUp(target: number, duration = 800) {
+  const [display, setDisplay] = useState(target);
+  const prev = useRef(target);
+  useEffect(() => {
+    const start = prev.current;
+    const end   = target;
+    if (start === end) return;
+    const startTime = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      setDisplay(Math.round(start + (end - start) * eased));
+      if (progress < 1) requestAnimationFrame(tick);
+      else prev.current = end;
+    };
+    requestAnimationFrame(tick);
+  }, [target, duration]);
+  return display;
+}
+
 export default function Dashboard() {
   const [user, setUser]                     = useState<any>(null);
   const [profile, setProfile]               = useState<Profile | null>(null);
@@ -282,6 +325,8 @@ export default function Dashboard() {
   const [leagueQuickMsg, setLeagueQuickMsg] = useState('');
   const [upcomingAlert, setUpcomingAlert]   = useState<any | null>(null);
   const router = useRouter();
+  const animatedPoints = useCountUp(myTotalPoints); // ✨ animated points
+  const countdown = useCountdown(upcomingAlert?.fixture?.date ?? null); // ✨ countdown
 
   const roundLabels: Record<string, string> = {
     'Group Stage - 1': 'الجولة الأولى',
@@ -708,6 +753,34 @@ export default function Dashboard() {
   const myPoints    = myTotalPoints;
   const myRank      = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
+
+  // ✨ إحصائيات محسوبة من البيانات الموجودة
+  const resolvedPreds  = predictions.filter((p: any) => p.actual_home_score !== null);
+  const correctPreds   = resolvedPreds.filter((p: any) => p.points && p.points > 0);
+  const accuracyPct    = resolvedPreds.length > 0
+    ? Math.round((correctPreds.length / resolvedPreds.length) * 100) : 0;
+
+  // Streak — rounds with at least one prediction
+  const roundsWithPred = new Set(
+    predictions.map((p: any) => {
+      const m = matches.find((m: any) => m.fixture.id === p.fixture_id);
+      return m?.league?.round;
+    }).filter(Boolean)
+  );
+  const streakCount = roundsWithPred.size;
+
+  // Progress للجولة الحالية
+  const roundTotal   = filteredMatches.length;
+  const roundDone    = filteredMatches.filter(m =>
+    predictions.find((p: any) => p.fixture_id === m.fixture.id)
+  ).length;
+  const roundPct     = roundTotal > 0 ? Math.round((roundDone / roundTotal) * 100) : 0;
+
+  // عدد المباريات المفتوحة اللي لم تُتوقع
+  const openUnpredictedCount = matches.filter((m: any) =>
+    m.is_open && m.actual_home_score === null &&
+    !predictions.find((p: any) => p.fixture_id === m.fixture.id)
+  ).length;
   const medals      = ['🥇', '🥈', '🥉'];
   const displayName = profile?.full_name || user?.email?.split('@')[0];
   const profileIncomplete = !profile?.profile_completed;
@@ -783,7 +856,7 @@ export default function Dashboard() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '7px 14px', fontSize: 14, fontWeight: 800 }}>
                 <span>🏅</span>
-                <span style={{ color: 'var(--gold)' }}>{myPoints}</span>
+                <span style={{ color: 'var(--gold)' }}>{animatedPoints}</span>
                 <span style={{ color: 'var(--muted)', fontSize: 12 }}>نقطة</span>
                 {myRank > 0 && (
                   <span style={{ background: 'rgba(217,178,95,.15)', borderRadius: 8, padding: '2px 8px', fontSize: 12, color: '#ffe3a6', marginRight: 4 }}>
@@ -822,7 +895,10 @@ export default function Dashboard() {
       {upcomingAlert && (
         <div className="alert-banner pulse" style={{ background: 'rgba(59,130,246,.08)', borderBottom: '1px solid rgba(59,130,246,.2)', padding: '10px 20px', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#93c5fd', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <span>⚡</span>
-          <span>ماتش لم تتوقع عليه بعد: <strong>{upcomingAlert.teams.home.name} × {upcomingAlert.teams.away.name}</strong></span>
+          <span>
+            ⚡ <strong>{upcomingAlert.teams.home.name} × {upcomingAlert.teams.away.name}</strong>
+            {countdown && <span style={{ marginRight: 8, background: 'rgba(59,130,246,.2)', borderRadius: 8, padding: '2px 8px', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>⏱ {countdown}</span>}
+          </span>
           <button onClick={() => { setActiveTab('predict'); setActiveRound(upcomingAlert.league.round); setUpcomingAlert(null); }} style={{ padding: '4px 12px', borderRadius: 999, background: 'rgba(59,130,246,.2)', border: '1px solid rgba(59,130,246,.3)', color: '#93c5fd', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>توقع الآن</button>
         </div>
       )}
@@ -910,12 +986,14 @@ export default function Dashboard() {
       {/* ══ MAIN ══ */}
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
         {/* Stats Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
           {[
-            { label: 'نقاطي',        value: myPoints,                                  color: 'var(--gold)',  icon: '🏅' },
+            { label: 'نقاطي',        value: animatedPoints,                                  color: 'var(--gold)',  icon: '🏅' },
             { label: 'ترتيبي',       value: myRank > 0 ? `#${myRank}` : '—',          color: 'var(--text)',  icon: '📊' },
             { label: 'توقعاتي',      value: predictions.length,                        color: '#8ae0b3',      icon: '⚽' },
             { label: 'المتسابقون',   value: leaderboard.length,                        color: '#7db1ff',      icon: '👥' },
+            { label: 'دقة التوقع',     value: resolvedPreds.length > 0 ? `${accuracyPct}%` : '—', color: '#c084fc', icon: '🎯' },
+            { label: 'الجولات',        value: streakCount > 0 ? `${streakCount} 🔥` : '—',        color: '#f97316', icon: '📅' },
           ].map(s => (
             <div key={s.label} className="stat-card" style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
@@ -943,7 +1021,7 @@ export default function Dashboard() {
         {/* TABS */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 24, overflowX: 'auto', paddingBottom: 4, scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
           {([
-            { id: 'predict', label: '⚽ التوقعات' },
+            { id: 'predict', label: openUnpredictedCount > 0 ? `⚽ التوقعات (${openUnpredictedCount})` : '⚽ التوقعات' },
             { id: 'my',      label: '📋 توقعاتي' },
             { id: 'leaders', label: '🏆 الصدارة' },
             { id: 'history', label: '📈 السجل التاريخي' },
@@ -964,10 +1042,44 @@ export default function Dashboard() {
               ))}
             </div>
 
+
+            {/* ✨ Progress bar الجولة الحالية */}
+            {roundTotal > 0 && (
+              <div style={{ marginBottom: 16, background: 'var(--surface)', borderRadius: 14, padding: '12px 16px', border: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>
+                  <span>تقدمك في الجولة الحالية</span>
+                  <span style={{ color: roundDone === roundTotal ? '#5effa8' : 'var(--gold)', fontWeight: 700 }}>
+                    {roundDone} / {roundTotal} مباراة
+                  </span>
+                </div>
+                <div style={{ height: 6, background: 'var(--surface-3)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${roundPct}%`,
+                    background: roundDone === roundTotal
+                      ? 'linear-gradient(90deg,#5effa8,#27b06e)'
+                      : 'linear-gradient(90deg,var(--gold),#f59e0b)',
+                    borderRadius: 99,
+                    transition: 'width 0.6s cubic-bezier(0.16,1,0.3,1)',
+                  }} />
+                </div>
+                {roundDone === roundTotal && roundTotal > 0 && (
+                  <div style={{ textAlign: 'center', fontSize: 12, color: '#5effa8', marginTop: 6, fontWeight: 700 }}>
+                    ✅ أكملت كل توقعات الجولة!
+                  </div>
+                )}
+              </div>
+            )}
             {filteredMatches.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>📅</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد ماتشات في هذه الجولة</div>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>
+                  {filteredMatches.some((m: any) => !m.is_open) && filteredMatches.every((m: any) => !m.is_open) ? '🔒' : '📅'}
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>
+                  {filteredMatches.some((m: any) => !m.is_open) && filteredMatches.every((m: any) => !m.is_open)
+                    ? 'كل مباريات الجولة مغلقة — انتظر الجولة القادمة 🕐'
+                    : 'لا توجد ماتشات في هذه الجولة'}
+                </div>
               </div>
             ) : filteredMatches.map(match => {
               const existing  = predictions.find(p => p.fixture_id === match.fixture.id);
