@@ -358,9 +358,9 @@ export default function MyLeaguesPage() {
 
                 {/* ✅ FIX: أزرار الدخول والإدارة */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                  <Link href={`/league/${lg.id}`} className="nav-pill gold" style={{ fontSize: 12, padding: '8px 14px' }}>🏆 دخول الليج</Link>
+                  <Link href={`/mini-league/${lg.code}`} className="nav-pill gold" style={{ fontSize: 12, padding: '8px 14px' }}>🏆 دخول الليج</Link>
                   {lg.role === 'owner' && (
-                    <Link href={`/league/${lg.id}/manage`} className="nav-pill" style={{ fontSize: 12, padding: '8px 14px' }}>⚙️ إدارة الليج</Link>
+                    <Link href={`/mini-league/${lg.code}/manage`} className="nav-pill" style={{ fontSize: 12, padding: '8px 14px' }}>⚙️ إدارة الليج</Link>
                   )}
                 </div>
 
