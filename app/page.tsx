@@ -8,14 +8,12 @@ export default function HomePage() {
   const [stats, setStats] = useState({ users: 0, predictions: 0 });
   const [statsLoaded, setStatsLoaded] = useState(false);
 
-  // ✅ بس نتحقق من اللوجن — مش redirect قسري
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setIsLoggedIn(true);
     });
   }, []);
 
-  // Stats ديناميكية
   useEffect(() => {
     const fetchStats = async () => {
       const [{ count: users }, { count: predictions }] = await Promise.all([
@@ -62,6 +60,7 @@ export default function HomePage() {
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
         @keyframes glow{0%,100%{box-shadow:0 0 20px rgba(217,178,95,.15)}50%{box-shadow:0 0 40px rgba(217,178,95,.35)}}
         @keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+        @keyframes rotateBorder{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
         .fade-up{animation:fadeUp .6s ease forwards}
         .fade-up-d1{animation:fadeUp .6s .1s ease both}
@@ -82,6 +81,40 @@ export default function HomePage() {
           border:1.5px solid rgba(39,176,110,.35);color:#94f0c0;
         }
 
+        /* ✅ Logo container — مربع مع padding يخلي الصورة كاملة */
+        .logo-hero-wrap{
+          position:relative;
+          width:160px;height:160px;
+          display:flex;align-items:center;justify-content:center;
+          animation:logoFloat 4s ease-in-out infinite;
+          margin-bottom:28px;
+        }
+        .logo-hero-wrap::before{
+          content:'';
+          position:absolute;inset:-3px;
+          border-radius:50%;
+          background:conic-gradient(rgba(217,178,95,.6),rgba(217,178,95,.1),rgba(217,178,95,.6));
+          animation:rotateBorder 4s linear infinite;
+          z-index:0;
+        }
+        .logo-hero-wrap::after{
+          content:'';
+          position:absolute;inset:0;
+          border-radius:50%;
+          background:var(--bg);
+          z-index:1;
+        }
+        .logo-hero-img{
+          position:relative;z-index:2;
+          /* ✅ contain بدل cover عشان اللوجو الطولي يظهر كامل */
+          width:130px;height:130px;
+          object-fit:contain;
+          /* خلفية شفافة تناسب اللوجو */
+          background:transparent;
+          border-radius:50%;
+          padding:8px;
+        }
+
         .pts-card{
           background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
           border:1px solid var(--line);border-radius:16px;padding:16px;
@@ -97,7 +130,6 @@ export default function HomePage() {
         }
         .step-card:hover{border-color:rgba(217,178,95,.2)}
 
-        /* Skeleton للـ stats */
         .stat-skeleton{
           background:linear-gradient(90deg,var(--line) 25%,rgba(255,255,255,.06) 50%,var(--line) 75%);
           background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;
@@ -105,39 +137,33 @@ export default function HomePage() {
         }
       `}</style>
 
-      {/* ══ NAVBAR — يظهر زر الداشبورد للمسجلين فقط ══ */}
+      {/* ══ NAVBAR ══ */}
       <nav style={{
         position: 'fixed', top: 0, right: 0, left: 0, zIndex: 100,
-        background: 'rgba(7,8,9,.85)', backdropFilter: 'blur(12px)',
+        background: 'rgba(7,8,9,.88)', backdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--line)',
         padding: '10px 20px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="/logo-FF.png" alt="الشمعدان" width={32} height={32} loading="eager"
-            style={{ borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(217,178,95,.25)' }} />
+          {/* ✅ في الـ Navbar: صورة صغيرة contain مع خلفية شفافة */}
+          <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', border: '1px solid rgba(217,178,95,.25)', background: 'rgba(217,178,95,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <img src="/logo-FF.png" alt="الشمعدان" width={28} height={28} loading="eager"
+              style={{ objectFit: 'contain', width: 26, height: 26 }} />
+          </div>
           <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)' }}>الشمعدان</span>
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* ✅ زر الداشبورد — يظهر بس للمسجلين */}
           {isLoggedIn ? (
             <>
-              <Link href="/dashboard" className="cta-btn dashboard" style={{ padding: '8px 18px', fontSize: 13 }}>
-                ← داشبوردي
-              </Link>
-              <Link href="/leaderboard" className="cta-btn secondary" style={{ padding: '8px 18px', fontSize: 13 }}>
-                🏆 الصدارة
-              </Link>
+              <Link href="/dashboard" className="cta-btn dashboard" style={{ padding: '8px 18px', fontSize: 13 }}>← داشبوردي</Link>
+              <Link href="/leaderboard" className="cta-btn secondary" style={{ padding: '8px 18px', fontSize: 13 }}>🏆 الصدارة</Link>
             </>
           ) : (
             <>
-              <Link href="/login" className="cta-btn primary" style={{ padding: '8px 18px', fontSize: 13 }}>
-                ابدأ الآن
-              </Link>
-              <Link href="/leaderboard" className="cta-btn secondary" style={{ padding: '8px 18px', fontSize: 13 }}>
-                🏆 الصدارة
-              </Link>
+              <Link href="/login" className="cta-btn primary" style={{ padding: '8px 18px', fontSize: 13 }}>ابدأ الآن</Link>
+              <Link href="/leaderboard" className="cta-btn secondary" style={{ padding: '8px 18px', fontSize: 13 }}>🏆 الصدارة</Link>
             </>
           )}
         </div>
@@ -154,24 +180,15 @@ export default function HomePage() {
         <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', border: '1px solid rgba(217,178,95,.04)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', width: 400, height: 400, borderRadius: '50%', border: '1px solid rgba(217,178,95,.06)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }} />
 
-        {/* اللوجو */}
-        <div className="fade-up" style={{ animation: 'logoFloat 4s ease-in-out infinite', marginBottom: 24 }}>
+        {/* ✅ اللوجو الكبير — contain + padding داخلي + border دوّار */}
+        <div className="fade-up logo-hero-wrap">
           <img
             src="/logo-FF.png"
             alt="شعار الشمعدان"
-            width={130}
-            height={130}
-            loading="eager"
-            style={{
-              borderRadius: '50%',
-              border: '2px solid rgba(217,178,95,.3)',
-              boxShadow: '0 0 40px rgba(217,178,95,.2)',
-              objectFit: 'cover',
-            }}
+            className="logo-hero-img"
           />
         </div>
 
-        {/* Title */}
         <div className="fade-up-d1">
           <div style={{ fontSize: 'clamp(11px,2.5vw,13px)', color: 'var(--gold)', fontWeight: 700, letterSpacing: 4, textTransform: 'uppercase', marginBottom: 12 }}>
             الشمعدان × كأس العالم 2026
@@ -187,30 +204,20 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* CTA Buttons — تتغير حسب حالة اللوجن */}
         <div className="fade-up-d2" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 52 }}>
           {isLoggedIn ? (
             <>
-              <Link href="/dashboard" className="cta-btn dashboard" style={{ animation: 'glow 3s ease-in-out infinite' }}>
-                ← ادخل داشبوردك
-              </Link>
-              <Link href="/leaderboard" className="cta-btn secondary">
-                🏆 الصدارة
-              </Link>
+              <Link href="/dashboard" className="cta-btn dashboard" style={{ animation: 'glow 3s ease-in-out infinite' }}>← ادخل داشبوردك</Link>
+              <Link href="/leaderboard" className="cta-btn secondary">🏆 الصدارة</Link>
             </>
           ) : (
             <>
-              <Link href="/login" className="cta-btn primary" style={{ animation: 'glow 3s ease-in-out infinite' }}>
-                ⚽ ابدأ التوقعات
-              </Link>
-              <Link href="/leaderboard" className="cta-btn secondary">
-                🏆 الصدارة
-              </Link>
+              <Link href="/login" className="cta-btn primary" style={{ animation: 'glow 3s ease-in-out infinite' }}>⚽ ابدأ التوقعات</Link>
+              <Link href="/leaderboard" className="cta-btn secondary">🏆 الصدارة</Link>
             </>
           )}
         </div>
 
-        {/* Stats ديناميكية */}
         <div className="fade-up-d3" style={{ display: 'flex', gap: 36, flexWrap: 'wrap', justifyContent: 'center' }}>
           {[
             { value: stats.users, label: 'متسابق مسجّل', icon: '👥', dynamic: true },
@@ -220,19 +227,14 @@ export default function HomePage() {
             <div key={i} style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 24, marginBottom: 4 }}>{s.icon}</div>
               <div style={{ fontWeight: 900, fontSize: 22, color: 'var(--gold)', minHeight: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {s.dynamic && !statsLoaded
-                  ? <span className="stat-skeleton" />
-                  : s.value.toLocaleString('ar-EG')
-                }
+                {s.dynamic && !statsLoaded ? <span className="stat-skeleton" /> : s.value.toLocaleString('ar-EG')}
               </div>
               <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>{s.label}</div>
             </div>
           ))}
         </div>
 
-        <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', animation: 'pulse 2s ease-in-out infinite', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>
-          ↓ اكتشف المزيد
-        </div>
+        <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', animation: 'pulse 2s ease-in-out infinite', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>↓ اكتشف المزيد</div>
       </section>
 
       {/* ══ POINTS SECTION ══ */}
@@ -240,9 +242,7 @@ export default function HomePage() {
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, letterSpacing: 3, marginBottom: 8 }}>نظام النقاط</div>
           <h2 style={{ fontSize: 'clamp(20px,4vw,28px)', fontWeight: 900, marginBottom: 10 }}>كل توقع صح = نقاط 🎯</h2>
-          <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 420, margin: '0 auto', lineHeight: 1.8 }}>
-            كلما كانت توقعاتك أدق، كلما تصدّرت الصدارة أسرع
-          </p>
+          <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 420, margin: '0 auto', lineHeight: 1.8 }}>كلما كانت توقعاتك أدق، كلما تصدّرت الصدارة أسرع</p>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 12 }}>
           {pointsCards.map((c, i) => (
@@ -277,32 +277,30 @@ export default function HomePage() {
 
       {/* ══ FINAL CTA ══ */}
       <section style={{
-        maxWidth: 580, marginInline: 'auto', margin: '0 auto 80px',
+        maxWidth: 580, marginInline: 'auto', marginBottom: 80,
         background: 'linear-gradient(135deg,rgba(217,178,95,.1),rgba(217,178,95,.04))',
         border: '1px solid rgba(217,178,95,.2)', borderRadius: 24,
         padding: 'clamp(32px,6vw,52px) 32px', textAlign: 'center',
-        marginBottom: 80,
       }}>
-        <img src="/logo-FF.png" alt="الشمعدان" width={64} height={64} loading="lazy"
-          style={{ borderRadius: '50%', margin: '0 auto 16px', display: 'block', border: '1px solid rgba(217,178,95,.25)', objectFit: 'cover' }} />
-        <h2 style={{ fontSize: 'clamp(17px,4vw,24px)', fontWeight: 900, marginBottom: 10 }}>
-          جاهز تثبت إنك أحسن محلل؟
-        </h2>
-        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 28, lineHeight: 1.8 }}>
-          سجّل دخولك دلوقتي وابدأ توقعاتك — مجاناً تماماً
-        </p>
-        {isLoggedIn ? (
-          <Link href="/dashboard" className="cta-btn dashboard">← ادخل داشبوردك</Link>
-        ) : (
-          <Link href="/login" className="cta-btn primary">🏆 انضم الآن مجاناً</Link>
-        )}
+        {/* ✅ اللوجو في الـ CTA — contain مع padding */}
+        <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(217,178,95,.06)', border: '1px solid rgba(217,178,95,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+          <img src="/logo-FF.png" alt="الشمعدان" width={56} height={56} loading="lazy"
+            style={{ objectFit: 'contain', width: 52, height: 52 }} />
+        </div>
+        <h2 style={{ fontSize: 'clamp(17px,4vw,24px)', fontWeight: 900, marginBottom: 10 }}>جاهز تثبت إنك أحسن محلل؟</h2>
+        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 28, lineHeight: 1.8 }}>سجّل دخولك دلوقتي وابدأ توقعاتك — مجاناً تماماً</p>
+        {isLoggedIn
+          ? <Link href="/dashboard" className="cta-btn dashboard">← ادخل داشبوردك</Link>
+          : <Link href="/login" className="cta-btn primary">🏆 انضم الآن مجاناً</Link>
+        }
       </section>
 
       {/* ══ FOOTER ══ */}
       <footer style={{ borderTop: '1px solid var(--line)', padding: '20px', textAlign: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <img src="/logo-FF.png" alt="الشمعدان" width={26} height={26} loading="lazy"
-            style={{ borderRadius: '50%', objectFit: 'cover' }} />
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(217,178,95,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img src="/logo-FF.png" alt="الشمعدان" width={22} height={22} loading="lazy" style={{ objectFit: 'contain' }} />
+          </div>
           <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--gold)' }}>الشمعدان</span>
         </div>
         <p style={{ fontSize: 12, color: 'var(--muted)' }}>© 2026 الشمعدان — كأس العالم</p>
