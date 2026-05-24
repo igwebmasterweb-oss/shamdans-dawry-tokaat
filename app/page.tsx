@@ -1,191 +1,312 @@
 'use client';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { supabase } from '../lib/supabase';
 
-export default function Home() {
+export default function HomePage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [stats, setStats] = useState({ users: 0, predictions: 0 });
+  const [statsLoaded, setStatsLoaded] = useState(false);
+
+  // ✅ بس نتحقق من اللوجن — مش redirect قسري
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setIsLoggedIn(true);
+    });
+  }, []);
+
+  // Stats ديناميكية
+  useEffect(() => {
+    const fetchStats = async () => {
+      const [{ count: users }, { count: predictions }] = await Promise.all([
+        supabase.from('user_points').select('*', { count: 'exact', head: true }),
+        supabase.from('predictions').select('*', { count: 'exact', head: true }),
+      ]);
+      setStats({ users: users || 0, predictions: predictions || 0 });
+      setStatsLoaded(true);
+    };
+    fetchStats();
+  }, []);
+
+  const pointsCards = [
+    { pts: '+10', label: 'نتيجة كاملة', icon: '🎯', desc: 'النتيجة الدقيقة بالأهداف' },
+    { pts: '+5',  label: 'الفائز / تعادل', icon: '✅', desc: 'توقعت مين هيفوز أو تعادل' },
+    { pts: '+3',  label: 'أول هدف', icon: '⚽', desc: 'توقعت أول هداف في الماتش' },
+    { pts: '+2',  label: 'وقت إضافي', icon: '⏱️', desc: 'الماتش راح لوقت إضافي' },
+    { pts: '+2',  label: 'كرت أحمر', icon: '🟥', desc: 'كان فيه كرت أحمر في الماتش' },
+    { pts: '+2',  label: 'ركلة جزاء', icon: '🥅', desc: 'كان فيه بينالتي في الماتش' },
+    { pts: '+2',  label: 'الفريقين سجّلا', icon: '🔄', desc: 'كلا الفريقين سجّل هدفاً' },
+  ];
+
+  const steps = [
+    { n: '01', title: 'سجّل دخولك', desc: 'عن طريق الإيميل أو فيسبوك أو رقم الموبايل' },
+    { n: '02', title: 'توقّع نتائج الماتشات', desc: 'اختار الفائز وسجّل التوقعات قبل صافرة البداية' },
+    { n: '03', title: 'احصد النقاط وتصدّر', desc: 'كل توقع صح بيضيف نقاط وترتفع في الصدارة' },
+  ];
+
   return (
-    <main style={{
-      minHeight: '100vh',
-      background: `
-        radial-gradient(circle at top left, rgba(217,178,95,.12), transparent 30%),
-        radial-gradient(circle at bottom right, rgba(201,58,47,.10), transparent 30%),
-        #070809
-      `,
-      color: '#f4f1e8',
-      fontFamily: "'Cairo', sans-serif",
-      direction: 'rtl',
-    }}>
+    <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-        :root {
-          --bg: #070809;
-          --surface: #111315;
-          --surface-2: #171a1d;
-          --surface-3: #1d2125;
-          --line: rgba(255,255,255,.08);
-          --text: #f4f1e8;
-          --muted: #a8a39a;
-          --gold: #d9b25f;
-          --red: #c93a2f;
-          --green: #27b06e;
-          --shadow: 0 16px 40px rgba(0,0,0,.35);
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+        :root{
+          --bg:#070809;--surface:#111315;--surface-2:#171a1d;--surface-3:#1d2125;
+          --line:rgba(255,255,255,.08);--text:#f4f1e8;--muted:#a8a39a;
+          --gold:#d9b25f;--red:#c93a2f;--green:#27b06e;
         }
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Cairo', sans-serif; }
-        .nav-link {
-          padding: 9px 20px; border-radius: 999px;
-          background: rgba(255,255,255,.06); border: 1px solid var(--line);
-          color: var(--muted); font-weight: 700; text-decoration: none;
-          font-size: 13px; font-family: 'Cairo', sans-serif;
-          transition: all .2s;
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        body{background:var(--bg);color:var(--text);font-family:'Cairo',sans-serif;direction:rtl;min-height:100vh;overflow-x:hidden}
+        a{text-decoration:none;color:inherit}
+
+        @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+        @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+        @keyframes glow{0%,100%{box-shadow:0 0 20px rgba(217,178,95,.15)}50%{box-shadow:0 0 40px rgba(217,178,95,.35)}}
+        @keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+
+        .fade-up{animation:fadeUp .6s ease forwards}
+        .fade-up-d1{animation:fadeUp .6s .1s ease both}
+        .fade-up-d2{animation:fadeUp .6s .2s ease both}
+        .fade-up-d3{animation:fadeUp .6s .3s ease both}
+
+        .cta-btn{
+          display:inline-flex;align-items:center;gap:8px;
+          padding:14px 32px;border-radius:999px;font-family:'Cairo',sans-serif;
+          font-size:15px;font-weight:800;cursor:pointer;border:none;
+          transition:opacity .18s,transform .18s;
         }
-        .nav-link:hover { background: rgba(217,178,95,.1); border-color: rgba(217,178,95,.25); color: #f2d79e; }
-        .btn-primary {
-          padding: 14px 38px; border-radius: 999px;
-          background: linear-gradient(135deg, #e0bc73, #b9892d);
-          color: #211708; font-weight: 800; text-decoration: none;
-          font-size: 16px; font-family: 'Cairo', sans-serif;
-          box-shadow: 0 8px 28px rgba(217,178,95,.28);
-          transition: opacity .2s; display: inline-block;
+        .cta-btn:hover{opacity:.88;transform:translateY(-1px)}
+        .cta-btn.primary{background:linear-gradient(135deg,#d9b25f,#a8761a);color:#0a0800}
+        .cta-btn.secondary{background:transparent;border:1.5px solid rgba(217,178,95,.35);color:var(--gold)}
+        .cta-btn.dashboard{
+          background:linear-gradient(135deg,rgba(39,176,110,.2),rgba(39,176,110,.08));
+          border:1.5px solid rgba(39,176,110,.35);color:#94f0c0;
         }
-        .btn-primary:hover { opacity: .88; }
-        .btn-ghost {
-          padding: 14px 38px; border-radius: 999px;
-          background: rgba(255,255,255,.06); border: 1px solid var(--line);
-          color: var(--muted); font-weight: 800; text-decoration: none;
-          font-size: 16px; font-family: 'Cairo', sans-serif;
-          transition: all .2s; display: inline-block;
+
+        .pts-card{
+          background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
+          border:1px solid var(--line);border-radius:16px;padding:16px;
+          text-align:center;transition:border-color .2s,transform .2s;
         }
-        .btn-ghost:hover { border-color: rgba(217,178,95,.25); color: #f2d79e; }
-        .pts-card {
-          background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
-          border: 1px solid var(--line); border-radius: 22px; padding: 20px 14px;
-          text-align: center; transition: border-color .2s;
+        .pts-card:hover{border-color:rgba(217,178,95,.25);transform:translateY(-2px)}
+
+        .step-card{
+          background:var(--surface);border:1px solid var(--line);
+          border-radius:18px;padding:20px 22px;
+          display:flex;gap:16px;align-items:flex-start;
+          transition:border-color .2s;
         }
-        .pts-card:hover { border-color: rgba(217,178,95,.22); }
-        .step-num {
-          min-width: 34px; height: 34px; border-radius: 50%;
-          background: rgba(217,178,95,.1); border: 1px solid rgba(217,178,95,.22);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 14px; font-weight: 800; color: #f2d79e; flex-shrink: 0;
-        }
-        @media (max-width: 500px) {
-          .pts-grid { grid-template-columns: 1fr 1fr !important; }
-          .cta-btns { flex-direction: column; align-items: stretch; }
-          .cta-btns a { text-align: center; }
+        .step-card:hover{border-color:rgba(217,178,95,.2)}
+
+        /* Skeleton للـ stats */
+        .stat-skeleton{
+          background:linear-gradient(90deg,var(--line) 25%,rgba(255,255,255,.06) 50%,var(--line) 75%);
+          background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;
+          border-radius:8px;display:inline-block;width:52px;height:22px;
         }
       `}</style>
 
-      {/* ── NAV ── */}
+      {/* ══ NAVBAR — يظهر زر الداشبورد للمسجلين فقط ══ */}
       <nav style={{
+        position: 'fixed', top: 0, right: 0, left: 0, zIndex: 100,
+        background: 'rgba(7,8,9,.85)', backdropFilter: 'blur(12px)',
+        borderBottom: '1px solid var(--line)',
+        padding: '10px 20px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '16px 24px', borderBottom: '1px solid var(--line)',
-        background: 'rgba(7,8,9,.8)', backdropFilter: 'blur(12px)',
-        position: 'sticky', top: 0, zIndex: 100,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 12,
-            background: 'linear-gradient(135deg, #f0cf84, #a97b26)',
-            display: 'grid', placeItems: 'center', fontSize: 20,
-            boxShadow: '0 4px 16px rgba(217,178,95,.25)', flexShrink: 0,
-          }}>🏆</div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 15, color: '#f4f1e8' }}>الشمعدان</div>
-            <div style={{ fontSize: 11, color: '#a8a39a' }}>× كأس العالم 2026</div>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <img src="/logo-FF.jpg" alt="الشمعدان" width={32} height={32} loading="eager"
+            style={{ borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(217,178,95,.25)' }} />
+          <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)' }}>الشمعدان</span>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Link href="/leaderboard" className="nav-link">🏁 الصدارة</Link>
-          <Link href="/login" style={{
-            padding: '9px 20px', borderRadius: 999,
-            background: 'linear-gradient(135deg, #e0bc73, #b9892d)',
-            color: '#211708', fontWeight: 800, textDecoration: 'none',
-            fontSize: 13, fontFamily: 'Cairo, sans-serif',
-            boxShadow: '0 4px 14px rgba(217,178,95,.25)',
-          }}>سجّل دلوقتي</Link>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {/* ✅ زر الداشبورد — يظهر بس للمسجلين */}
+          {isLoggedIn ? (
+            <>
+              <Link href="/dashboard" className="cta-btn dashboard" style={{ padding: '8px 18px', fontSize: 13 }}>
+                ← داشبوردي
+              </Link>
+              <Link href="/leaderboard" className="cta-btn secondary" style={{ padding: '8px 18px', fontSize: 13 }}>
+                🏆 الصدارة
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="cta-btn primary" style={{ padding: '8px 18px', fontSize: 13 }}>
+                ابدأ الآن
+              </Link>
+              <Link href="/leaderboard" className="cta-btn secondary" style={{ padding: '8px 18px', fontSize: 13 }}>
+                🏆 الصدارة
+              </Link>
+            </>
+          )}
         </div>
       </nav>
 
-      {/* ── HERO ── */}
-      <section style={{ textAlign: 'center', padding: '70px 20px 50px' }}>
+      {/* ══ HERO ══ */}
+      <section style={{
+        minHeight: '100vh',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: '100px 20px 60px',
+        background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(217,178,95,.08) 0%, transparent 70%), var(--bg)',
+        textAlign: 'center', position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', border: '1px solid rgba(217,178,95,.04)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', width: 400, height: 400, borderRadius: '50%', border: '1px solid rgba(217,178,95,.06)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }} />
 
-        {/* Badge */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '7px 18px', borderRadius: 999,
-          background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.22)',
-          fontSize: 12, marginBottom: 28, color: '#f2d79e', fontWeight: 700,
-        }}>
-          🌍 كأس العالم 2026 — المكسيك · كندا · الولايات المتحدة
+        {/* اللوجو */}
+        <div className="fade-up" style={{ animation: 'logoFloat 4s ease-in-out infinite', marginBottom: 24 }}>
+          <img
+            src="/logo-FF.jpg"
+            alt="شعار الشمعدان"
+            width={130}
+            height={130}
+            loading="eager"
+            style={{
+              borderRadius: '50%',
+              border: '2px solid rgba(217,178,95,.3)',
+              boxShadow: '0 0 40px rgba(217,178,95,.2)',
+              objectFit: 'cover',
+            }}
+          />
         </div>
 
-        {/* Logo + Title */}
-        <div style={{
-          width: 80, height: 80, borderRadius: 24, margin: '0 auto 20px',
-          background: 'linear-gradient(135deg, #f0cf84, #a97b26)',
-          display: 'grid', placeItems: 'center', fontSize: 38,
-          boxShadow: '0 12px 40px rgba(217,178,95,.3)',
-        }}>🏆</div>
+        {/* Title */}
+        <div className="fade-up-d1">
+          <div style={{ fontSize: 'clamp(11px,2.5vw,13px)', color: 'var(--gold)', fontWeight: 700, letterSpacing: 4, textTransform: 'uppercase', marginBottom: 12 }}>
+            الشمعدان × كأس العالم 2026
+          </div>
+          <h1 style={{ fontSize: 'clamp(26px,7vw,54px)', fontWeight: 900, lineHeight: 1.2, marginBottom: 16 }}>
+            توقّع. تنافس.{' '}
+            <span style={{ background: 'linear-gradient(90deg,#d9b25f,#ffe9a0,#d9b25f)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+              تصدّر.
+            </span>
+          </h1>
+          <p style={{ fontSize: 'clamp(14px,2.5vw,16px)', color: 'var(--muted)', maxWidth: 500, margin: '0 auto 32px', lineHeight: 1.9 }}>
+            لعبة توقعات كأس العالم الأكثر إثارة — توقّع نتائج الماتشات واجمع نقاط وتنافس مع أصحابك في ليجات خاصة
+          </p>
+        </div>
 
-        <h1 style={{ fontSize: 'clamp(2.8rem, 9vw, 5.5rem)', fontWeight: 800, margin: '0 0 6px', lineHeight: 1.05, color: '#f4f1e8' }}>
-          الشمعدان
-        </h1>
-        <h2 style={{ fontSize: 'clamp(1rem, 3vw, 1.4rem)', fontWeight: 400, margin: '0 0 20px', color: '#a8a39a' }}>
-          × كأس العالم 2026
-        </h2>
-        <p style={{ fontSize: 'clamp(1rem, 2.5vw, 1.2rem)', color: '#a8a39a', marginBottom: 50, maxWidth: '36ch', margin: '0 auto 50px' }}>
-          أحلى من الماتش.. اللي بيحصل جنبيه 🔥
-        </p>
+        {/* CTA Buttons — تتغير حسب حالة اللوجن */}
+        <div className="fade-up-d2" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 52 }}>
+          {isLoggedIn ? (
+            <>
+              <Link href="/dashboard" className="cta-btn dashboard" style={{ animation: 'glow 3s ease-in-out infinite' }}>
+                ← ادخل داشبوردك
+              </Link>
+              <Link href="/leaderboard" className="cta-btn secondary">
+                🏆 الصدارة
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="cta-btn primary" style={{ animation: 'glow 3s ease-in-out infinite' }}>
+                ⚽ ابدأ التوقعات
+              </Link>
+              <Link href="/leaderboard" className="cta-btn secondary">
+                🏆 الصدارة
+              </Link>
+            </>
+          )}
+        </div>
 
-        {/* Points cards */}
-        <div className="pts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, maxWidth: 620, margin: '0 auto 50px' }}>
+        {/* Stats ديناميكية */}
+        <div className="fade-up-d3" style={{ display: 'flex', gap: 36, flexWrap: 'wrap', justifyContent: 'center' }}>
           {[
-            { icon: '🏆', label: 'نتيجة كاملة', pts: '10' },
-            { icon: '✅', label: 'الفايز صح',   pts: '5'  },
-            { icon: '⚽', label: 'أول هدف',      pts: '+3' },
-            { icon: '🎯', label: 'سؤال المفاجأة', pts: '+5' },
-          ].map(item => (
-            <div key={item.label} className="pts-card">
-              <div style={{ fontSize: 26, marginBottom: 8 }}>{item.icon}</div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#d9b25f', marginBottom: 4, fontVariantNumeric: 'tabular-nums' }}>{item.pts}</div>
-              <div style={{ fontSize: 11, color: '#a8a39a', lineHeight: 1.4 }}>{item.label}</div>
+            { value: stats.users, label: 'متسابق مسجّل', icon: '👥', dynamic: true },
+            { value: stats.predictions, label: 'توقع مقدَّم', icon: '📊', dynamic: true },
+            { value: 48, label: 'منتخب مشارك', icon: '🌍', dynamic: false },
+          ].map((s, i) => (
+            <div key={i} style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 24, marginBottom: 4 }}>{s.icon}</div>
+              <div style={{ fontWeight: 900, fontSize: 22, color: 'var(--gold)', minHeight: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {s.dynamic && !statsLoaded
+                  ? <span className="stat-skeleton" />
+                  : s.value.toLocaleString('ar-EG')
+                }
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>{s.label}</div>
             </div>
           ))}
         </div>
 
-        {/* How it works */}
-        <div style={{ maxWidth: 480, margin: '0 auto 50px', textAlign: 'right' }}>
-          <h3 style={{ textAlign: 'center', marginBottom: 22, fontSize: 17, fontWeight: 800, color: '#f4f1e8' }}>⚡ إزاي اللعبة؟</h3>
-          {[
-            { n: '١', t: 'قبل الماتش تدخل توقعاتك (النتيجة، أول هدف، سؤال مفاجأة)' },
-            { n: '٢', t: 'بعد الماتش بيتحسبلك النقاط أوتوماتيك' },
-            { n: '٣', t: 'اللي بيعمل أعلى نقاط في آخر المونديال هو الشمعدان 🏆' },
-          ].map(s => (
-            <div key={s.n} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 16 }}>
-              <div className="step-num">{s.n}</div>
-              <p style={{ margin: 0, fontSize: 14, color: '#a8a39a', lineHeight: 1.7, paddingTop: 6 }}>{s.t}</p>
-            </div>
-          ))}
+        <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', animation: 'pulse 2s ease-in-out infinite', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>
+          ↓ اكتشف المزيد
         </div>
-
-        {/* CTAs */}
-        <div className="cta-btns" style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link href="/login" className="btn-primary">ابدأ التوقعات دلوقتي 🔥</Link>
-          <Link href="/leaderboard" className="btn-ghost">🏁 شوف الصدارة</Link>
-        </div>
-
-        <p style={{ marginTop: 18, fontSize: 12, color: 'rgba(255,255,255,.2)' }}>
-          مفيش باسورد — رابط على إيميلك وبس 🔐
-        </p>
       </section>
 
-      {/* ── FOOTER ── */}
-      <footer style={{ textAlign: 'center', padding: '24px 20px 40px', borderTop: '1px solid var(--line)', marginTop: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'linear-gradient(135deg, #f0cf84, #a97b26)', display: 'grid', placeItems: 'center', fontSize: 14 }}>🏆</div>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#a8a39a' }}>الشمعدان × كأس العالم 2026</span>
+      {/* ══ POINTS SECTION ══ */}
+      <section style={{ padding: 'clamp(48px,8vw,96px) 20px', maxWidth: 840, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, letterSpacing: 3, marginBottom: 8 }}>نظام النقاط</div>
+          <h2 style={{ fontSize: 'clamp(20px,4vw,28px)', fontWeight: 900, marginBottom: 10 }}>كل توقع صح = نقاط 🎯</h2>
+          <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 420, margin: '0 auto', lineHeight: 1.8 }}>
+            كلما كانت توقعاتك أدق، كلما تصدّرت الصدارة أسرع
+          </p>
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 12 }}>
+          {pointsCards.map((c, i) => (
+            <div key={i} className="pts-card">
+              <div style={{ fontSize: 28, marginBottom: 8 }}>{c.icon}</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--gold)', marginBottom: 4 }}>{c.pts}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>{c.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{c.desc}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ══ HOW IT WORKS ══ */}
+      <section style={{ padding: 'clamp(48px,8vw,96px) 20px', maxWidth: 620, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, letterSpacing: 3, marginBottom: 8 }}>كيف تلعب؟</div>
+          <h2 style={{ fontSize: 'clamp(20px,4vw,28px)', fontWeight: 900 }}>3 خطوات بس 🚀</h2>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {steps.map((s, i) => (
+            <div key={i} className="step-card">
+              <div style={{ fontWeight: 900, fontSize: 28, color: 'rgba(217,178,95,.25)', flexShrink: 0, lineHeight: 1 }}>{s.n}</div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{s.title}</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.7 }}>{s.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ══ FINAL CTA ══ */}
+      <section style={{
+        maxWidth: 580, marginInline: 'auto', margin: '0 auto 80px',
+        background: 'linear-gradient(135deg,rgba(217,178,95,.1),rgba(217,178,95,.04))',
+        border: '1px solid rgba(217,178,95,.2)', borderRadius: 24,
+        padding: 'clamp(32px,6vw,52px) 32px', textAlign: 'center',
+        marginBottom: 80,
+      }}>
+        <img src="/logo-FF.jpg" alt="الشمعدان" width={64} height={64} loading="lazy"
+          style={{ borderRadius: '50%', margin: '0 auto 16px', display: 'block', border: '1px solid rgba(217,178,95,.25)', objectFit: 'cover' }} />
+        <h2 style={{ fontSize: 'clamp(17px,4vw,24px)', fontWeight: 900, marginBottom: 10 }}>
+          جاهز تثبت إنك أحسن محلل؟
+        </h2>
+        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 28, lineHeight: 1.8 }}>
+          سجّل دخولك دلوقتي وابدأ توقعاتك — مجاناً تماماً
+        </p>
+        {isLoggedIn ? (
+          <Link href="/dashboard" className="cta-btn dashboard">← ادخل داشبوردك</Link>
+        ) : (
+          <Link href="/login" className="cta-btn primary">🏆 انضم الآن مجاناً</Link>
+        )}
+      </section>
+
+      {/* ══ FOOTER ══ */}
+      <footer style={{ borderTop: '1px solid var(--line)', padding: '20px', textAlign: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <img src="/logo-FF.jpg" alt="الشمعدان" width={26} height={26} loading="lazy"
+            style={{ borderRadius: '50%', objectFit: 'cover' }} />
+          <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--gold)' }}>الشمعدان</span>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--muted)' }}>© 2026 الشمعدان — كأس العالم</p>
       </footer>
-    </main>
+    </>
   );
 }
