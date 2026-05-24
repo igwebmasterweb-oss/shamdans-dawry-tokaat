@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useNotifications, sendNotification } from '../../lib/useNotifications';
+import { useNotifications, sendNotification, getNotificationText } from '../../lib/useNotifications';
 
 export default function MyLeaguesPage() {
   const [user, setUser] = useState<any>(null);
@@ -35,38 +35,29 @@ export default function MyLeaguesPage() {
         .from('mini_league_members')
         .select('league_id, role')
         .eq('user_id', uid);
-
       if (memberErr) throw memberErr;
-
       if (!memberRows || memberRows.length === 0) {
         setLeagues([]);
         setLoading(false);
         return;
       }
-
       const leagueIds = memberRows.map((r: any) => r.league_id);
       const roleMap = new Map(memberRows.map((r: any) => [r.league_id, r.role]));
-
       const { data: leagueRows, error: lgErr } = await supabase
         .from('mini_leagues')
         .select('*')
         .in('id', leagueIds)
         .order('created_at', { ascending: false });
-
       if (lgErr) throw lgErr;
-
       const { data: allMembers } = await supabase
         .from('mini_league_members')
         .select('league_id, user_id')
         .in('league_id', leagueIds);
-
       const allMemberUserIds = [...new Set((allMembers || []).map((m: any) => m.user_id))];
       const { data: allPoints } = allMemberUserIds.length > 0
         ? await supabase.from('user_points').select('user_id, total_points, full_name, user_email').in('user_id', allMemberUserIds)
         : { data: [] };
-
       const pointsMap = new Map((allPoints || []).map((p: any) => [p.user_id, p]));
-
       const enriched = (leagueRows || []).map((lg: any) => {
         const lgMembers = (allMembers || []).filter((m: any) => m.league_id === lg.id);
         const memberCount = lgMembers.length;
@@ -83,7 +74,6 @@ export default function MyLeaguesPage() {
         }));
         return { ...lg, role: roleMap.get(lg.id) || 'member', memberCount, myRank, members };
       });
-
       setLeagues(enriched);
     } catch (err: any) {
       console.error('loadData error:', err);
@@ -130,15 +120,12 @@ export default function MyLeaguesPage() {
         .select()
         .single();
       if (error) throw error;
-
-      // ✅ FIX: إضافة الـ owner كـ member تلقائياً
       const { error: memberErr } = await supabase.from('mini_league_members').insert({
         league_id: lg.id,
         user_id: user.id,
         role: 'owner',
       });
       if (memberErr) throw memberErr;
-
       setNewLeagueName('');
       setShowCreate(false);
       showMsg(`✅ تم إنشاء "${lg.name}" — كود: ${lg.code}`);
@@ -150,6 +137,7 @@ export default function MyLeaguesPage() {
     }
   };
 
+  // ✅ FIX: 'invite' بدل 'league_invite' ليطابق AppNotification type
   const respondToInvite = async (notif: any, accept: boolean) => {
     const { league_id, league_name, from_user_id } = notif.data;
     try {
@@ -193,7 +181,6 @@ export default function MyLeaguesPage() {
   };
 
   const deleteLeague = async (lg: any) => {
-    // ✅ FIX: Owner Protection — فقط المنشئ يحذف
     if (lg.role !== 'owner') { showMsg('❌ فقط المنشئ يمكنه حذف الليج', 'error'); return; }
     if (!confirm(`هل تريد حذف "${lg.name}" نهائياً؟`)) return;
     await supabase.from('mini_league_invitations').delete().eq('league_id', lg.id);
@@ -211,7 +198,6 @@ export default function MyLeaguesPage() {
     });
   };
 
-  // ✅ FIX: share text بيحتوي على رابط مع league param للانضمام أوتوماتيك
   const getLeagueShareText = (lg: any) =>
     `🏆 انضم لليج "${lg.name}" في الشمعدان × كأس العالم 2026!\n` +
     `سجّل دخولك عن طريق الرابط ده وهتنضم تلقائياً ⬇️\n` +
@@ -222,7 +208,6 @@ export default function MyLeaguesPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(getLeagueShareText(lg))}`, '_blank');
   };
 
-  // ✅ FIX: Facebook share URL صح
   const shareLeagueFacebook = (lg: any) => {
     if (typeof window === 'undefined') return;
     const url = encodeURIComponent('https://worldcup.shamaadan.com/login');
@@ -267,6 +252,8 @@ export default function MyLeaguesPage() {
         .action-btn:hover{opacity:.8}
         .field-input{width:100%;padding:12px 16px;border-radius:12px;background:var(--surface-3);border:1px solid var(--line);color:var(--text);font-family:'Cairo',sans-serif;font-size:14px;outline:none;transition:border-color .2s}
         .field-input:focus{border-color:rgba(217,178,95,.4)}
+        @keyframes notifSlide{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+        .notif-item{animation:notifSlide .2s ease}
       `}</style>
 
       {/* ══ HEADER ══ */}
@@ -279,12 +266,21 @@ export default function MyLeaguesPage() {
           <button onClick={() => setShowCreate(!showCreate)} className="nav-pill gold" disabled={ownedLeagues >= 5}>
             {showCreate ? '✕ إلغاء' : '＋ إنشاء ليج'}
           </button>
-          <button onClick={() => setShowNotif(true)} className="nav-pill" style={{ position: 'relative' }}>
+
+          {/* ✅ FIX: markAllRead عند فتح modal + badge يدعم 9+ */}
+          <button
+            onClick={() => { setShowNotif(true); markAllRead(); }}
+            className="nav-pill"
+            style={{ position: 'relative' }}
+          >
             🔔
             {unreadCount > 0 && (
-              <span style={{ position: 'absolute', top: -4, right: -4, background: '#c93a2f', color: '#fff', borderRadius: 999, width: 16, height: 16, fontSize: 10, fontWeight: 900, display: 'grid', placeItems: 'center' }}>{unreadCount}</span>
+              <span style={{ position: 'absolute', top: -4, right: -4, background: '#c93a2f', color: '#fff', borderRadius: 999, minWidth: 18, height: 18, fontSize: 10, fontWeight: 900, display: 'grid', placeItems: 'center', padding: '0 4px' }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             )}
           </button>
+
           <Link href="/dashboard" className="nav-pill">← الداش</Link>
           <button onClick={handleLogout} className="nav-pill">خروج</button>
         </div>
@@ -292,7 +288,6 @@ export default function MyLeaguesPage() {
 
       {/* ══ MAIN ══ */}
       <main style={{ maxWidth: 700, margin: '0 auto', padding: '20px 16px' }}>
-
         {message && (
           <div style={{ padding: '12px 18px', borderRadius: 14, marginBottom: 14, fontSize: 13, fontWeight: 700, textAlign: 'center', background: msgType === 'success' ? 'rgba(39,176,110,.1)' : 'rgba(201,58,47,.1)', border: `1px solid ${msgType === 'success' ? 'rgba(39,176,110,.2)' : 'rgba(201,58,47,.2)'}`, color: msgType === 'success' ? '#94f0c0' : '#ff9090' }}>
             {message}
@@ -322,8 +317,6 @@ export default function MyLeaguesPage() {
           <div>
             {leagues.map((lg: any) => (
               <div key={lg.id} style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01))', border: '1px solid var(--line)', borderRadius: 18, padding: '18px 20px', marginBottom: 12 }}>
-
-                {/* League header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6 }}>{lg.name}</div>
@@ -333,15 +326,12 @@ export default function MyLeaguesPage() {
                       <span style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 800 }}>📊 ترتيبك: {lg.myRank === '—' ? '—' : `#${lg.myRank}`}</span>
                     </div>
                   </div>
-
-                  {/* ✅ FIX: كود الانضمام */}
                   <div style={{ textAlign: 'center', background: 'var(--surface-3)', border: '1px solid rgba(217,178,95,.15)', borderRadius: 12, padding: '8px 14px', minWidth: 90 }}>
                     <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, marginBottom: 3 }}>كود الانضمام</div>
                     <div style={{ fontWeight: 900, fontSize: 16, color: 'var(--gold)', letterSpacing: 3 }}>{lg.code}</div>
                   </div>
                 </div>
 
-                {/* Members list */}
                 {lg.members && lg.members.length > 0 && (
                   <div style={{ background: 'var(--surface-3)', borderRadius: 12, padding: '10px 14px', marginBottom: 12, border: '1px solid var(--line)' }}>
                     <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>الترتيب داخل الليج</div>
@@ -356,7 +346,6 @@ export default function MyLeaguesPage() {
                   </div>
                 )}
 
-                {/* ✅ FIX: أزرار الدخول والإدارة */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
                   <Link href={`/mini-league/${lg.code}`} className="nav-pill gold" style={{ fontSize: 12, padding: '8px 14px' }}>🏆 دخول الليج</Link>
                   {lg.role === 'owner' && (
@@ -364,7 +353,6 @@ export default function MyLeaguesPage() {
                   )}
                 </div>
 
-                {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   <button onClick={() => copyCode(lg)} className="action-btn" style={{ background: copyFeedback === lg.id ? 'rgba(39,176,110,.2)' : 'rgba(255,255,255,.06)', color: copyFeedback === lg.id ? '#94f0c0' : 'var(--text)' }}>
                     {copyFeedback === lg.id ? '✅ تم النسخ' : '📋 نسخ الكود'}
@@ -380,12 +368,10 @@ export default function MyLeaguesPage() {
                     <button onClick={() => deleteLeague(lg)} className="action-btn" style={{ background: 'rgba(201,58,47,.1)', border: '1px solid rgba(201,58,47,.2)', color: '#ff9c91', marginRight: 'auto' }}>🗑️ حذف</button>
                   )}
                 </div>
-
               </div>
             ))}
           </div>
         )}
-
       </main>
 
       {/* ══ SHARE MODAL ══ */}
@@ -409,27 +395,70 @@ export default function MyLeaguesPage() {
       {/* ══ NOTIFICATIONS MODAL ══ */}
       {showNotif && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setShowNotif(false)}>
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 24, padding: 24, width: '100%', maxWidth: 420, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div style={{ fontWeight: 800, fontSize: 15 }}>🔔 الإشعارات</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {unreadCount > 0 && <button onClick={markAllRead} className="action-btn" style={{ fontSize: 11 }}>قراءة الكل</button>}
-                <button onClick={() => setShowNotif(false)} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center' }}>✕</button>
-              </div>
+              <button onClick={() => setShowNotif(false)} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center' }}>✕</button>
             </div>
+
+            {/* Empty state */}
             {notifications.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px', color: 'var(--muted)', fontWeight: 700 }}>لا توجد إشعارات</div>
-            ) : notifications.map((n: any) => (
-              <div key={n.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--line)', opacity: n.read ? 0.6 : 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: n.type === 'league_invite' && !n.read ? 8 : 0 }}>{n.message || n.type}</div>
-                {n.type === 'league_invite' && !n.read && (
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => respondToInvite(n, true)} className="action-btn" style={{ background: 'rgba(39,176,110,.15)', border: '1px solid rgba(39,176,110,.25)', color: '#94f0c0' }}>✅ قبول</button>
-                    <button onClick={() => respondToInvite(n, false)} className="action-btn" style={{ background: 'rgba(201,58,47,.1)', border: '1px solid rgba(201,58,47,.2)', color: '#ff9c91' }}>❌ رفض</button>
-                  </div>
-                )}
+              <div style={{ textAlign: 'center', padding: '36px 0', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>🔔</div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>لا توجد إشعارات بعد</div>
+                <div style={{ fontSize: 12, marginTop: 6, color: 'var(--muted)', opacity: .7 }}>هتظهر هنا لما حد يدعوك لليج أو يقبل دعوتك</div>
               </div>
-            ))}
+            ) : (
+              notifications.map((n: any) => (
+                <div key={n.id} className="notif-item" style={{
+                  padding: '14px 0',
+                  borderBottom: '1px solid var(--line)',
+                  opacity: n.is_read ? 0.5 : 1,
+                  transition: 'opacity .25s',
+                }}>
+                  {/* ✅ FIX: getNotificationText بدل n.message || n.type */}
+                  <div style={{
+                    fontSize: 13,
+                    fontWeight: n.is_read ? 600 : 800,
+                    lineHeight: 1.65,
+                    color: n.is_read ? 'var(--muted)' : 'var(--text)',
+                    marginBottom: 5,
+                  }}>
+                    {getNotificationText(n)}
+                  </div>
+
+                  {/* وقت الإشعار */}
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: n.type === 'invite' && !n.is_read ? 10 : 0 }}>
+                    {new Date(n.created_at).toLocaleDateString('ar-EG', {
+                      month: 'short', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </div>
+
+                  {/* ✅ FIX: n.type === 'invite' (مش 'league_invite') + n.is_read (مش n.read) */}
+                  {n.type === 'invite' && !n.is_read && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => respondToInvite(n, true)}
+                        className="action-btn"
+                        style={{ background: 'rgba(39,176,110,.15)', border: '1px solid rgba(39,176,110,.25)', color: '#94f0c0', borderRadius: 12, padding: '8px 20px', fontSize: 13 }}
+                      >
+                        ✅ قبول
+                      </button>
+                      <button
+                        onClick={() => respondToInvite(n, false)}
+                        className="action-btn"
+                        style={{ background: 'rgba(201,58,47,.1)', border: '1px solid rgba(201,58,47,.2)', color: '#ff9c91', borderRadius: 12, padding: '8px 20px', fontSize: 13 }}
+                      >
+                        ❌ رفض
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
