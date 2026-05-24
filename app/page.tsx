@@ -114,7 +114,7 @@ export default function HomePage() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="/logo-FF.jpg" alt="الشمعدان" width={32} height={32} loading="eager"
+          <img src="/logo-FF.png" alt="الشمعدان" width={32} height={32} loading="eager"
             style={{ borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(217,178,95,.25)' }} />
           <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)' }}>الشمعدان</span>
         </div>
@@ -157,7 +157,7 @@ export default function HomePage() {
         {/* اللوجو */}
         <div className="fade-up" style={{ animation: 'logoFloat 4s ease-in-out infinite', marginBottom: 24 }}>
           <img
-            src="/logo-FF.jpg"
+            src="/logo-FF.png"
             alt="شعار الشمعدان"
             width={130}
             height={130}
@@ -283,7 +283,7 @@ export default function HomePage() {
         padding: 'clamp(32px,6vw,52px) 32px', textAlign: 'center',
         marginBottom: 80,
       }}>
-        <img src="/logo-FF.jpg" alt="الشمعدان" width={64} height={64} loading="lazy"
+        <img src="/logo-FF.png" alt="الشمعدان" width={64} height={64} loading="lazy"
           style={{ borderRadius: '50%', margin: '0 auto 16px', display: 'block', border: '1px solid rgba(217,178,95,.25)', objectFit: 'cover' }} />
         <h2 style={{ fontSize: 'clamp(17px,4vw,24px)', fontWeight: 900, marginBottom: 10 }}>
           جاهز تثبت إنك أحسن محلل؟
@@ -301,7 +301,7 @@ export default function HomePage() {
       {/* ══ FOOTER ══ */}
       <footer style={{ borderTop: '1px solid var(--line)', padding: '20px', textAlign: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <img src="/logo-FF.jpg" alt="الشمعدان" width={26} height={26} loading="lazy"
+          <img src="/logo-FF.png" alt="الشمعدان" width={26} height={26} loading="lazy"
             style={{ borderRadius: '50%', objectFit: 'cover' }} />
           <span style={{ fontWeight: 800, fontSize: 13, color: 'var(--gold)' }}>الشمعدان</span>
         </div>
