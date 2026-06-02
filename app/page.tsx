@@ -81,7 +81,6 @@ export default function HomePage() {
           border:1.5px solid rgba(39,176,110,.35);color:#94f0c0;
         }
 
-        /* ✅ Logo container — مربع مع padding يخلي الصورة كاملة */
         .logo-hero-wrap{
           position:relative;
           width:160px;height:160px;
@@ -106,10 +105,8 @@ export default function HomePage() {
         }
         .logo-hero-img{
           position:relative;z-index:2;
-          /* ✅ contain بدل cover عشان اللوجو الطولي يظهر كامل */
           width:130px;height:130px;
           object-fit:contain;
-          /* خلفية شفافة تناسب اللوجو */
           background:transparent;
           border-radius:50%;
           padding:8px;
@@ -146,7 +143,6 @@ export default function HomePage() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* ✅ في الـ Navbar: صورة صغيرة contain مع خلفية شفافة */}
           <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', border: '1px solid rgba(217,178,95,.25)', background: 'rgba(217,178,95,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <img src="/logo-FF.png" alt="الشمعدان" width={28} height={28} loading="eager"
               style={{ objectFit: 'contain', width: 26, height: 26 }} />
@@ -180,7 +176,6 @@ export default function HomePage() {
         <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', border: '1px solid rgba(217,178,95,.04)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', width: 400, height: 400, borderRadius: '50%', border: '1px solid rgba(217,178,95,.06)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }} />
 
-        {/* ✅ اللوجو الكبير — contain + padding داخلي + border دوّار */}
         <div className="fade-up logo-hero-wrap">
           <img
             src="/logo-FF.png"
@@ -282,7 +277,6 @@ export default function HomePage() {
         border: '1px solid rgba(217,178,95,.2)', borderRadius: 24,
         padding: 'clamp(32px,6vw,52px) 32px', textAlign: 'center',
       }}>
-        {/* ✅ اللوجو في الـ CTA — contain مع padding */}
         <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'rgba(217,178,95,.06)', border: '1px solid rgba(217,178,95,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
           <img src="/logo-FF.png" alt="الشمعدان" width={56} height={56} loading="lazy"
             style={{ objectFit: 'contain', width: 52, height: 52 }} />
