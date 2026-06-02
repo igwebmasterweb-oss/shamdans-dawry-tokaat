@@ -1,9 +1,5 @@
-const CACHE_NAME = 'shamdan-worldcup-v1';
-const APP_SHELL = [
-  '/',
-  '/logo-FF.png',
-  '/manifest.webmanifest'
-];
+const CACHE_NAME = 'shamdan-wc26-v1';
+const APP_SHELL = ['/', '/logo-FF.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -16,9 +12,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
       )
     )
   );
@@ -26,24 +20,27 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
+  if (event.request.method !== 'GET') return;
 
-  if (request.method !== 'GET') return;
+  // تجاهل طلبات Supabase وAPIs الخارجية
+  const url = new URL(event.request.url);
+  if (!url.origin.includes('shamaadan.com') && !url.pathname.startsWith('/')) return;
+  if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase')) return;
 
   event.respondWith(
-    caches.match(request).then((cached) => {
+    caches.match(event.request).then((cached) => {
       if (cached) return cached;
 
-      return fetch(request)
+      return fetch(event.request)
         .then((response) => {
-          const cloned = response.clone();
-
-          if (request.url.startsWith(self.location.origin)) {
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, cloned);
-            });
+          if (
+            response.ok &&
+            event.request.url.startsWith(self.location.origin) &&
+            !event.request.url.includes('_next/webpack-hmr')
+          ) {
+            const cloned = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
           }
-
           return response;
         })
         .catch(() => caches.match('/'));
