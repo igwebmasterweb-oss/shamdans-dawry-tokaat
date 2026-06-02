@@ -1,4 +1,4 @@
-import type { MetadataRoute } from 'next'
+import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -9,35 +9,30 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#0f172a',
-    theme_color: '#f59e0b',
+    background_color: '#070809',
+    theme_color: '#d9b25f',
     lang: 'ar',
     dir: 'rtl',
+    categories: ['games', 'sports'],
     icons: [
       {
         src: '/logo-FF.png',
         sizes: '192x192',
         type: 'image/png',
-        purpose: 'any'
+        purpose: 'any',
       },
       {
         src: '/logo-FF.png',
         sizes: '512x512',
         type: 'image/png',
-        purpose: 'any'
-      },
-      {
-        src: '/logo-FF.png',
-        sizes: '192x192',
-        type: 'image/png',
-        purpose: 'maskable'
+        purpose: 'any',
       },
       {
         src: '/logo-FF.png',
         sizes: '512x512',
         type: 'image/png',
-        purpose: 'maskable'
-      }
-    ]
-  }
+        purpose: 'maskable',
+      },
+    ],
+  };
 }
