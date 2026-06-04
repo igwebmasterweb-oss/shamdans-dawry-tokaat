@@ -17,7 +17,7 @@ export default function AdminPage() {
   const [loading, setLoading]         = useState(true);
   // ① loadError ✅
   const [loadError, setLoadError]     = useState(false);
-  const [activeTab, setActiveTab]     = useState<'matches'|'predictions'|'leaderboard'|'leagues'>('matches');
+  const [activeTab, setActiveTab]     = useState<'matches'|'predictions'|'leaderboard'|'leagues'|'prizes'>('matches');
   const [activeRound, setActiveRound] = useState('Group Stage - 1');
   // ⑦ فلتر التوقعات بالجولة
   const [predRoundFilter, setPredRoundFilter] = useState<string>('all');
@@ -39,6 +39,15 @@ export default function AdminPage() {
   const [bothTeams,  setBothTeams]  = useState(false);
   // ① savingResult moved to top ✅
   const [savingResult, setSavingResult] = useState(false);
+  // ── Prize Phases & Daily ──
+  const [prizePhases, setPrizePhases]           = useState<any[]>([]);
+  const [prizeWinners, setPrizeWinners]         = useState<any[]>([]);
+  const [dailyScorers, setDailyScorers]         = useState<any[]>([]);
+  const [phaseLeaderboard, setPhaseLeaderboard] = useState<any[]>([]);
+  const [selectedPhase, setSelectedPhase]       = useState<any>(null);
+  const [showPrizeModal, setShowPrizeModal]     = useState(false);
+  const [prizeModalLoading, setPrizeModalLoading] = useState(false);
+  const [savingWinner, setSavingWinner]         = useState(false);
 
   const autoIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const router = useRouter();
@@ -125,6 +134,23 @@ export default function AdminPage() {
     } catch (err) { console.error('loadLeagues:', err); }
   }, []);
 
+  const loadPrizes = useCallback(async () => {
+    try {
+      const [{ data: phases }, { data: winners }, { data: daily }] = await Promise.all([
+        supabase.from('prize_phases').select('*').order('id'),
+        supabase.from('prize_winners')
+          .select('*, profiles(full_name)').order('phase_id').order('rank'),
+        supabase.rpc('get_daily_top_scorers', {
+          p_date: new Date().toISOString().split('T')[0],
+          p_limit: 10,
+        }),
+      ]);
+      setPrizePhases(phases || []);
+      setPrizeWinners(winners || []);
+      setDailyScorers(daily || []);
+    } catch (err) { console.error('loadPrizes:', err); }
+  }, []);
+
   const silentUpdateResults = useCallback(async () => {
     if (updating) return;
     setAutoUpdating(true);
@@ -144,9 +170,9 @@ export default function AdminPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user || !ADMIN_EMAILS.includes(data.user.email||'')) { router.push('/dashboard'); return; }
       setUser(data.user);
-      loadMatches(); loadPredictions(); loadLeaderboard(); loadLeagues();
+      loadMatches(); loadPredictions(); loadLeaderboard(); loadLeagues(); loadPrizes();
     });
-  }, [router, loadMatches, loadPredictions, loadLeaderboard, loadLeagues]);
+  }, [router, loadMatches, loadPredictions, loadLeaderboard, loadLeagues, loadPrizes]);
 
   useEffect(() => {
     if (!user) return;
@@ -453,6 +479,7 @@ export default function AdminPage() {
           {id:'predictions', label:`📋 التوقعات (${predictions.length})`},
           {id:'leaderboard', label:`🏆 الصدارة (${leaderboard.length})`},
           {id:'leagues',     label:`🏅 الليجات (${leagues.length})`},
+          {id:'prizes',      label:`🥇 الجوائز (${prizePhases.length})`},
         ] as const).map(({id,label})=>(
           <button key={id} className={`tab-btn${activeTab===id?' active':''}`} onClick={()=>setActiveTab(id)}>{label}</button>
         ))}
@@ -672,6 +699,106 @@ export default function AdminPage() {
       </div>
 
       {/* ══ RESULT MODAL ══ */}
+
+        {activeTab==='prizes' && (
+          <div>
+
+            {/* ── أكثر نقاط اليوم ── */}
+            <div style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:18,padding:'18px 20px',marginBottom:20}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+                <div style={{fontWeight:800,fontSize:15,color:'var(--gold)'}}>🌟 أكثر نقاط اليوم</div>
+                <button onClick={loadPrizes} style={{fontSize:12,padding:'4px 12px',borderRadius:8,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--muted)',cursor:'pointer',fontFamily:'Cairo,sans-serif'}}>🔄 تحديث</button>
+              </div>
+              {dailyScorers.length === 0
+                ? <div style={{color:'var(--muted)',fontSize:13,textAlign:'center',padding:'16px 0'}}>لا توجد نقاط مسجلة اليوم بعد</div>
+                : dailyScorers.map((s: any, i: number) => (
+                  <div key={s.user_id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',background:'var(--surface-2)',borderRadius:12,marginBottom:8}}>
+                    <div style={{fontWeight:900,fontSize:18,minWidth:28,textAlign:'center'}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`}</div>
+                    <div style={{flex:1,fontWeight:700,fontSize:14}}>{s.full_name || 'مجهول'}</div>
+                    <div style={{fontWeight:900,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{s.daily_points} نقطة</div>
+                    <div style={{fontSize:12,color:'var(--muted)',background:'var(--surface-3)',borderRadius:8,padding:'2px 8px'}}>{s.preds_count} توقع</div>
+                  </div>
+                ))
+              }
+            </div>
+
+            {/* ── مراحل الجوائز ── */}
+            <div style={{fontWeight:800,fontSize:15,marginBottom:14}}>🏆 مراحل الجوائز (5 مراحل)</div>
+            {prizePhases.map((phase: any) => {
+              const phaseWins  = prizeWinners.filter((w: any) => w.phase_id === phase.id);
+              const today      = new Date().toISOString().split('T')[0];
+              const isFinished = phaseWins.length > 0;
+              const isPast     = phase.end_date < today;
+              const isActive   = !isFinished && phase.start_date <= today && phase.end_date >= today;
+              const prizes     = [phase.prize_label, phase.prize_label_2, phase.prize_label_3].filter(Boolean);
+              const badge      = isFinished
+                ? { bg:'rgba(39,176,110,.12)', bd:'rgba(39,176,110,.25)', c:'#5effa8',  t:'✅ مكتملة' }
+                : isActive
+                  ? { bg:'rgba(217,178,95,.12)',bd:'rgba(217,178,95,.25)',c:'var(--gold)',t:'🔴 نشطة' }
+                  : isPast
+                    ? { bg:'rgba(201,58,47,.1)', bd:'rgba(201,58,47,.2)', c:'#ff9c91',  t:'⏳ انتهت' }
+                    : { bg:'rgba(255,255,255,.04)',bd:'var(--line)',        c:'var(--muted)',t:'⏰ قادمة' };
+              return (
+                <div key={phase.id} style={{background:'var(--surface)',border:`1px solid ${isFinished?'rgba(39,176,110,.3)':isActive?'rgba(217,178,95,.3)':'var(--line)'}`,borderRadius:18,padding:'18px 20px',marginBottom:12}}>
+                  <div style={{display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap'}}>
+                    <div style={{flex:1,minWidth:200}}>
+                      <div style={{fontWeight:800,fontSize:15,marginBottom:6}}>{phase.name}</div>
+                      <div style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>
+                        📅 {new Date(phase.start_date+'T12:00:00').toLocaleDateString('ar-EG',{month:'long',day:'numeric'})}
+                        {' — '}
+                        {new Date(phase.end_date+'T12:00:00').toLocaleDateString('ar-EG',{month:'long',day:'numeric',year:'numeric'})}
+                        {'  ·  '}
+                        <span style={{color:phase.is_cumulative?'var(--gold)':'var(--muted)'}}>
+                          {phase.is_cumulative ? '📊 تراكمي' : '📋 غير تراكمي'}
+                        </span>
+                      </div>
+                      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                        {prizes.map((p: string, i: number) => (
+                          <span key={i} style={{background:'rgba(217,178,95,.1)',border:'1px solid rgba(217,178,95,.2)',borderRadius:999,padding:'4px 14px',fontSize:12,fontWeight:700,color:'#ffe3a6'}}>
+                            {prizes.length > 1 ? ['🥇','🥈','🥉'][i]+' ' : ''}{p}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:8}}>
+                      <span style={{fontSize:11,padding:'4px 12px',borderRadius:999,fontWeight:700,whiteSpace:'nowrap',background:badge.bg,color:badge.c,border:`1px solid ${badge.bd}`}}>{badge.t}</span>
+                      {(isPast || isActive) && !isFinished && (
+                        <button
+                          onClick={async () => {
+                            setSelectedPhase(phase);
+                            setShowPrizeModal(true);
+                            setPrizeModalLoading(true);
+                            setPhaseLeaderboard([]);
+                            const { data } = await supabase.rpc('get_phase_leaderboard', { p_phase_key: phase.phase_key });
+                            setPhaseLeaderboard((data || []).slice(0, phase.winner_count || 1));
+                            setPrizeModalLoading(false);
+                          }}
+                          style={{padding:'8px 16px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#e0bc73,#b9892d)',color:'#1a0a00',fontWeight:800,fontSize:12,fontFamily:'Cairo,sans-serif',cursor:'pointer'}}
+                        >
+                          🏅 إعلان الفائز
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {isFinished && (
+                    <div style={{marginTop:14,borderTop:'1px solid var(--line)',paddingTop:14}}>
+                      <div style={{fontSize:12,color:'var(--gold)',fontWeight:700,marginBottom:10}}>الفائزون المُعلنون:</div>
+                      {phaseWins.map((w: any) => (
+                        <div key={w.id} style={{display:'flex',alignItems:'center',gap:12,padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.05)'}}>
+                          <span style={{fontSize:20}}>{['🥇','🥈','🥉'][w.rank - 1] || '🏅'}</span>
+                          <span style={{fontWeight:700,flex:1}}>{w.profiles?.full_name || '—'}</span>
+                          <span style={{color:'var(--gold)',fontWeight:800,fontVariantNumeric:'tabular-nums'}}>{w.points} نقطة</span>
+                          <span style={{fontSize:11,color:'#ffe3a6',background:'rgba(217,178,95,.1)',borderRadius:8,padding:'2px 8px'}}>{prizes[w.rank - 1] || ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
       {showModal && selectedMatch && (
         <div onClick={()=>setShowModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',backdropFilter:'blur(6px)',display:'grid',placeItems:'center',zIndex:1000,padding:16}}>
           <div onClick={e=>e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:24,padding:28,width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}}>
@@ -722,6 +849,73 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+        {/* ── Modal إعلان الفائز ── */}
+        {showPrizeModal && selectedPhase && (
+          <div onClick={() => setShowPrizeModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',backdropFilter:'blur(8px)',display:'grid',placeItems:'center',zIndex:1001,padding:16}}>
+            <div onClick={e => e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid rgba(217,178,95,.25)',borderRadius:24,padding:28,width:'100%',maxWidth:500,maxHeight:'90vh',overflowY:'auto'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+                <div>
+                  <div style={{fontWeight:900,fontSize:17,color:'var(--gold)'}}>🏅 إعلان فائز</div>
+                  <div style={{fontSize:13,color:'var(--muted)',marginTop:3}}>{selectedPhase.name}</div>
+                </div>
+                <button onClick={() => setShowPrizeModal(false)} style={{background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center'}}>✕</button>
+              </div>
+              {prizeModalLoading
+                ? <div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>⏳ جاري تحميل الليدربورد...</div>
+                : phaseLeaderboard.length === 0
+                  ? <div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>لا توجد نقاط مسجلة في هذه المرحلة بعد</div>
+                  : <>
+                    <div style={{background:'rgba(217,178,95,.08)',border:'1px solid rgba(217,178,95,.15)',borderRadius:12,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#ffe3a6'}}>
+                      سيتم إعلان أعلى {selectedPhase.winner_count || 1} مشارك كفائز في هذه المرحلة
+                    </div>
+                    {phaseLeaderboard.map((row: any, i: number) => {
+                      const prizeLabels = [selectedPhase.prize_label, selectedPhase.prize_label_2, selectedPhase.prize_label_3];
+                      return (
+                        <div key={row.user_id} style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'rgba(217,178,95,.06)',border:'1px solid rgba(217,178,95,.15)',borderRadius:14,marginBottom:8}}>
+                          <span style={{fontSize:24}}>{['🥇','🥈','🥉'][i] || String(i + 1)}</span>
+                          <div style={{flex:1}}>
+                            <div style={{fontWeight:800,fontSize:15}}>{row.full_name || 'مجهول'}</div>
+                            <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{row.phase_points} نقطة في المرحلة</div>
+                          </div>
+                          {prizeLabels[i] && (
+                            <div style={{fontSize:13,color:'#ffe3a6',fontWeight:700,background:'rgba(217,178,95,.1)',borderRadius:8,padding:'4px 10px'}}>{prizeLabels[i]}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <button
+                      disabled={savingWinner}
+                      onClick={async () => {
+                        setSavingWinner(true);
+                        try {
+                          for (let i = 0; i < phaseLeaderboard.length; i++) {
+                            await supabase.from('prize_winners').insert({
+                              phase_id: selectedPhase.id,
+                              user_id:  phaseLeaderboard[i].user_id,
+                              rank:     i + 1,
+                              points:   Number(phaseLeaderboard[i].phase_points),
+                            });
+                          }
+                          await supabase.from('prize_phases').update({ status: 'completed' }).eq('id', selectedPhase.id);
+                          await loadPrizes();
+                          setShowPrizeModal(false);
+                          showMsg('✅ تم إعلان الفائزين بنجاح!', 'success');
+                        } catch (err: any) {
+                          showMsg('❌ ' + (err?.message || 'خطأ في الحفظ'), 'error');
+                        }
+                        setSavingWinner(false);
+                      }}
+                      style={{width:'100%',padding:14,borderRadius:14,border:'none',background:savingWinner?'rgba(217,178,95,.3)':'linear-gradient(135deg,#e0bc73,#b9892d)',color:'#1a0a00',fontWeight:900,fontSize:15,fontFamily:'Cairo,sans-serif',cursor:savingWinner?'not-allowed':'pointer',marginTop:16}}
+                    >
+                      {savingWinner ? '⏳ جاري الحفظ...' : '✅ تأكيد وإعلان الفائزين'}
+                    </button>
+                  </>
+              }
+            </div>
+          </div>
+        )}
+
     </>
   );
 }
