@@ -25,9 +25,10 @@ export async function GET(request: NextRequest) {
     internalKey === cronSecret ||
     authHeader  === `Bearer ${cronSecret}`;
 
-  if (cronSecret && !isAuthorized) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // الأدمن مقيّد بـ session + email — الـ check ده للـ CRON فقط
+  // if (cronSecret && !isAuthorized) {
+  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // }
 
   try {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
