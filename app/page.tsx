@@ -202,7 +202,7 @@ export default function HomePage() {
           position:absolute;
           bottom:0; left:50%; transform:translateX(-50%);
           width:min(420px,80vw);
-          opacity:0.04;
+          opacity:0.12;
           pointer-events:none;
           user-select:none;
           filter:grayscale(1);
