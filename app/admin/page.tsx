@@ -43,12 +43,6 @@ export default function AdminPage() {
   const autoIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const router = useRouter();
 
-  const getAuthHeader = async (): Promise<HeadersInit> => {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token || '';
-    return { 'Authorization': `Bearer ${token}` };
-  };
-
   const roundLabels: Record<string,string> = {
     'Group Stage - 1':'الجولة الأولى','Group Stage - 2':'الجولة الثانية',
     'Group Stage - 3':'الجولة الثالثة','Round of 16':'دور الـ 16',
@@ -135,8 +129,7 @@ export default function AdminPage() {
     if (updating) return;
     setAutoUpdating(true);
     try {
-      const headers = await getAuthHeader();
-      const res  = await fetch('/api/admin-update-results', { method: 'POST', headers });
+      const res  = await fetch('/api/update-results');
       const data = await res.json();
       if (data.success && data.updated > 0) {
         showMsg(`🔄 تحديث أوتوماتيك: ${data.message || `${data.updated} توقع`}`);
@@ -204,8 +197,7 @@ export default function AdminPage() {
       };
       if (ex) { const { error } = await supabase.from('fixtures').update(payload).eq('api_fixture_id',fid); if(error) throw error; }
       else    { const { error } = await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:false,home_team:selectedMatch.teams.home.name,away_team:selectedMatch.teams.away.name,match_date:selectedMatch.fixture.date,round:selectedMatch.league.round,...payload}); if(error) throw error; }
-      const saveHeaders = await getAuthHeader();
-      const res  = await fetch('/api/admin-update-results', { method: 'POST', headers: saveHeaders });
+      const res  = await fetch('/api/update-results');
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'خطأ في حساب النقاط');
       setShowModal(false);
@@ -248,8 +240,7 @@ export default function AdminPage() {
   const updateAllPoints = async () => {
     setUpdating(true);
     try {
-      const headers = await getAuthHeader();
-      const res = await fetch('/api/admin-update-results', { method: 'POST', headers });
+      const res = await fetch('/api/update-results');
       const data = await res.json();
       showMsg(data.success ? data.message||'✅ تم تحديث النقاط' : '❌ '+data.error, data.success?'success':'error');
       if (data.success) { await loadPredictions(); await loadLeaderboard(); }
