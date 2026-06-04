@@ -42,6 +42,55 @@ export default function HomePage() {
     { n: '03', title: 'احصد النقاط وتصدّر', desc: 'كل توقع صح بيضيف نقاط وترتفع في الصدارة' },
   ];
 
+  const prizes = [
+    {
+      phase: 'المرحلة الأولى',
+      date: '17 يونيو 2026',
+      desc: 'نهاية الجولة الأولى في المجموعات',
+      note: 'أعلى نقاط في المرحلة',
+      reward: '5,000 جنيه',
+      icon: '🏅',
+      color: 'rgba(217,178,95,.15)',
+      borderColor: 'rgba(217,178,95,.3)',
+    },
+    {
+      phase: 'المرحلة الثانية',
+      date: '23 يونيو 2026',
+      desc: 'نهاية الجولة الثانية في المجموعات',
+      note: 'أعلى نقاط في المرحلة (غير تراكمية)',
+      reward: '5,000 جنيه',
+      icon: '🏅',
+      color: 'rgba(217,178,95,.15)',
+      borderColor: 'rgba(217,178,95,.3)',
+    },
+    {
+      phase: 'المرحلة الثالثة',
+      date: '27 يونيو 2026',
+      desc: 'نهاية دور المجموعات',
+      note: 'أعلى نقاط في المرحلة (غير تراكمية)',
+      reward: '5,000 جنيه',
+      icon: '🏅',
+      color: 'rgba(217,178,95,.15)',
+      borderColor: 'rgba(217,178,95,.3)',
+    },
+    {
+      phase: 'دور الـ 32',
+      date: '3 يوليو 2026',
+      desc: 'نهاية دور الـ 32',
+      note: 'أعلى نقاط في المرحلة (غير تراكمية)',
+      reward: '5,000 جنيه',
+      icon: '🏅',
+      color: 'rgba(217,178,95,.15)',
+      borderColor: 'rgba(217,178,95,.3)',
+    },
+  ];
+
+  const grandPrizes = [
+    { rank: '🥇 المركز الأول', reward: '3 سبائك ذهب', sub: '3 جرام ذهب', color: '#d9b25f', glow: 'rgba(217,178,95,.35)' },
+    { rank: '🥈 المركز الثاني', reward: '2 سبيكة ذهب', sub: '2 جرام ذهب', color: '#b0b8c1', glow: 'rgba(176,184,193,.2)' },
+    { rank: '🥉 المركز الثالث', reward: '1 سبيكة ذهب', sub: '1 جرام ذهب', color: '#cd7f32', glow: 'rgba(205,127,50,.2)' },
+  ];
+
   return (
     <>
       <style>{`
@@ -61,6 +110,7 @@ export default function HomePage() {
         @keyframes glow{0%,100%{box-shadow:0 0 20px rgba(217,178,95,.15)}50%{box-shadow:0 0 40px rgba(217,178,95,.35)}}
         @keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
         @keyframes rotateBorder{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes goldPulse{0%,100%{box-shadow:0 0 20px rgba(217,178,95,.2)}50%{box-shadow:0 0 50px rgba(217,178,95,.5)}}
 
         .fade-up{animation:fadeUp .6s ease forwards}
         .fade-up-d1{animation:fadeUp .6s .1s ease both}
@@ -132,6 +182,32 @@ export default function HomePage() {
           background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;
           border-radius:8px;display:inline-block;width:52px;height:22px;
         }
+
+        .prize-phase-card{
+          background:linear-gradient(135deg,rgba(217,178,95,.08),rgba(217,178,95,.03));
+          border:1px solid rgba(217,178,95,.2);
+          border-radius:16px;padding:18px 20px;
+          display:flex;align-items:center;gap:16px;
+          transition:border-color .2s,transform .2s;
+        }
+        .prize-phase-card:hover{border-color:rgba(217,178,95,.4);transform:translateY(-2px)}
+
+        .grand-prize-card{
+          border-radius:20px;padding:28px 20px;text-align:center;
+          transition:transform .2s;
+        }
+        .grand-prize-card:hover{transform:translateY(-4px)}
+
+        .wc-bg-img{
+          position:absolute;
+          bottom:0; left:50%; transform:translateX(-50%);
+          width:min(420px,80vw);
+          opacity:0.04;
+          pointer-events:none;
+          user-select:none;
+          filter:grayscale(1);
+          z-index:0;
+        }
       `}</style>
 
       {/* ══ NAVBAR ══ */}
@@ -173,18 +249,23 @@ export default function HomePage() {
         background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(217,178,95,.08) 0%, transparent 70%), var(--bg)',
         textAlign: 'center', position: 'relative', overflow: 'hidden',
       }}>
-        <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', border: '1px solid rgba(217,178,95,.04)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', width: 400, height: 400, borderRadius: '50%', border: '1px solid rgba(217,178,95,.06)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }} />
+        {/* World Cup Trophy background image */}
+        <img
+          src="https://upload.wikimedia.org/wikipedia/en/thumb/6/67/2026_FIFA_World_Cup_logo.svg/800px-2026_FIFA_World_Cup_logo.svg.png"
+          alt=""
+          aria-hidden="true"
+          className="wc-bg-img"
+          loading="lazy"
+        />
 
-        <div className="fade-up logo-hero-wrap">
-          <img
-            src="/logo-FF.png"
-            alt="شعار الشمعدان"
-            className="logo-hero-img"
-          />
+        <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', border: '1px solid rgba(217,178,95,.04)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none', zIndex: 1 }} />
+        <div style={{ position: 'absolute', width: 400, height: 400, borderRadius: '50%', border: '1px solid rgba(217,178,95,.06)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none', zIndex: 1 }} />
+
+        <div className="fade-up logo-hero-wrap" style={{ position: 'relative', zIndex: 2 }}>
+          <img src="/logo-FF.png" alt="شعار الشمعدان" className="logo-hero-img" />
         </div>
 
-        <div className="fade-up-d1">
+        <div className="fade-up-d1" style={{ position: 'relative', zIndex: 2 }}>
           <div style={{ fontSize: 'clamp(11px,2.5vw,13px)', color: 'var(--gold)', fontWeight: 700, letterSpacing: 4, textTransform: 'uppercase', marginBottom: 12 }}>
             الشمعدان × كأس العالم 2026
           </div>
@@ -199,7 +280,7 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="fade-up-d2" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 52 }}>
+        <div className="fade-up-d2" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 52, position: 'relative', zIndex: 2 }}>
           {isLoggedIn ? (
             <>
               <Link href="/dashboard" className="cta-btn dashboard" style={{ animation: 'glow 3s ease-in-out infinite' }}>← ادخل داشبوردك</Link>
@@ -213,7 +294,7 @@ export default function HomePage() {
           )}
         </div>
 
-        <div className="fade-up-d3" style={{ display: 'flex', gap: 36, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <div className="fade-up-d3" style={{ display: 'flex', gap: 36, flexWrap: 'wrap', justifyContent: 'center', position: 'relative', zIndex: 2 }}>
           {[
             { value: stats.users, label: 'متسابق مسجّل', icon: '👥', dynamic: true },
             { value: stats.predictions, label: 'توقع مقدَّم', icon: '📊', dynamic: true },
@@ -229,7 +310,7 @@ export default function HomePage() {
           ))}
         </div>
 
-        <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', animation: 'pulse 2s ease-in-out infinite', color: 'var(--muted)', fontSize: 12, fontWeight: 700 }}>↓ اكتشف المزيد</div>
+        <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', animation: 'pulse 2s ease-in-out infinite', color: 'var(--muted)', fontSize: 12, fontWeight: 700, zIndex: 2 }}>↓ اكتشف المزيد</div>
       </section>
 
       {/* ══ POINTS SECTION ══ */}
@@ -248,6 +329,82 @@ export default function HomePage() {
               <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{c.desc}</div>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ══ PRIZES SECTION ══ */}
+      <section style={{ padding: 'clamp(48px,8vw,96px) 20px', maxWidth: 860, margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: 48 }}>
+          <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, letterSpacing: 3, marginBottom: 8 }}>🏆 جوائز دوري التوقعات</div>
+          <h2 style={{ fontSize: 'clamp(20px,4vw,28px)', fontWeight: 900, marginBottom: 10 }}>العب وافوز بجوائز حقيقية</h2>
+          <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 460, margin: '0 auto', lineHeight: 1.8 }}>
+            جوائز نقدية في كل مرحلة + سبائك ذهب للفائزين بالترتيب الكلي في نهاية البطولة
+          </p>
+        </div>
+
+        {/* Phase Prizes */}
+        <div style={{ marginBottom: 48 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+            <div style={{ height: 1, flex: 1, background: 'var(--line)' }} />
+            <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, letterSpacing: 2, whiteSpace: 'nowrap' }}>جوائز المراحل — 5,000 جنيه لكل مرحلة</span>
+            <div style={{ height: 1, flex: 1, background: 'var(--line)' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 12 }}>
+            {prizes.map((p, i) => (
+              <div key={i} className="prize-phase-card">
+                <div style={{ fontSize: 32, flexShrink: 0 }}>{p.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 900, fontSize: 14 }}>{p.phase}</span>
+                    <span style={{ fontSize: 11, color: 'var(--gold)', fontWeight: 700, background: 'rgba(217,178,95,.1)', padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>{p.date}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, lineHeight: 1.5 }}>{p.desc}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(217,178,95,.6)', marginBottom: 6 }}>{p.note}</div>
+                  <div style={{ fontWeight: 900, fontSize: 18, color: 'var(--gold)' }}>{p.reward}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Grand Prize */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+            <div style={{ height: 1, flex: 1, background: 'var(--line)' }} />
+            <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, letterSpacing: 2, whiteSpace: 'nowrap' }}>الجائزة الكبرى — 19 يوليو 2026 — نهاية البطولة</span>
+            <div style={{ height: 1, flex: 1, background: 'var(--line)' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+            {grandPrizes.map((g, i) => (
+              <div
+                key={i}
+                className="grand-prize-card"
+                style={{
+                  background: `linear-gradient(160deg,rgba(255,255,255,.04),rgba(255,255,255,.01))`,
+                  border: `1px solid ${g.color}44`,
+                  boxShadow: i === 0 ? `0 0 40px ${g.glow}` : 'none',
+                  animation: i === 0 ? 'goldPulse 3s ease-in-out infinite' : 'none',
+                }}
+              >
+                <div style={{ fontSize: i === 0 ? 44 : 36, marginBottom: 10 }}>
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 10 }}>{g.rank.replace(/🥇|🥈|🥉/g, '').trim()}</div>
+                <div style={{
+                  fontSize: i === 0 ? 20 : 17,
+                  fontWeight: 900,
+                  color: g.color,
+                  marginBottom: 4,
+                  lineHeight: 1.3,
+                }}>{g.reward}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{g.sub}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 16 }}>
+            <span style={{ fontSize: 12, color: 'rgba(217,178,95,.5)', fontWeight: 700 }}>* الجائزة الكبرى تراكمية — مجموع النقاط من بداية البطولة حتى نهايتها</span>
+          </div>
         </div>
       </section>
 
