@@ -101,7 +101,17 @@ export default function HomePage() {
           --gold:#d9b25f;--red:#c93a2f;--green:#27b06e;
         }
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        body{background:var(--bg);color:var(--text);font-family:'Cairo',sans-serif;direction:rtl;min-height:100vh;overflow-x:hidden}
+       body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Cairo',sans-serif;
+  direction:rtl;
+  min-height:100vh;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+}
         a{text-decoration:none;color:inherit}
 
         @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
@@ -199,15 +209,17 @@ export default function HomePage() {
         .grand-prize-card:hover{transform:translateY(-4px)}
 
         .wc-bg-img{
-          position:absolute;
-          bottom:0; left:50%; transform:translateX(-50%);
-          width:min(420px,80vw);
-          opacity:0.12;
-          pointer-events:none;
-          user-select:none;
-          filter:grayscale(1);
-          z-index:0;
-        }
+  position:absolute;
+  bottom:0; left:50%; transform:translateX(-50%);
+  width:min(420px,80vw);
+  opacity:0.15;
+  pointer-events:none;
+  user-select:none;
+  filter:grayscale(1);
+  z-index:0;
+  will-change:transform;
+  -webkit-transform:translateX(-50%);
+}
       `}</style>
 
       {/* ══ NAVBAR ══ */}
