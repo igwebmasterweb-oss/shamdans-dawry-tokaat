@@ -16,19 +16,19 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ['games', 'sports'],
     icons: [
       {
-        src: '/logo-FF.png',
+        src: '/Shedan_logo.png',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/logo-FF.png',
+        src: '/Shedan_logo.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/logo-FF.png',
+        src: '/Shedan_logo.png',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
