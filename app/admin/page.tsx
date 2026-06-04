@@ -696,9 +696,6 @@ export default function AdminPage() {
             })}
           </>
         )}
-      </div>
-
-      {/* ══ RESULT MODAL ══ */}
 
         {activeTab==='prizes' && (
           <div>
@@ -798,6 +795,10 @@ export default function AdminPage() {
             })}
           </div>
         )}
+
+      </div>
+
+      {/* ══ RESULT MODAL ══ */}
 
       {showModal && selectedMatch && (
         <div onClick={()=>setShowModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',backdropFilter:'blur(6px)',display:'grid',placeItems:'center',zIndex:1000,padding:16}}>
