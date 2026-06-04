@@ -251,7 +251,7 @@ export default function HomePage() {
       }}>
         {/* World Cup Trophy background image */}
         <img
-          src="https://upload.wikimedia.org/wikipedia/en/thumb/6/67/2026_FIFA_World_Cup_logo.svg/800px-2026_FIFA_World_Cup_logo.svg.png"
+          src="/2026_FIFA_World_Cup_emblem.svg"
           alt=""
           aria-hidden="true"
           className="wc-bg-img"
