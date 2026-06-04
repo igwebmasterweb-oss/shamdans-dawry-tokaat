@@ -12,6 +12,27 @@ interface Player {
   profile_completed: boolean;
 }
 
+interface PrizePhase {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  prize_label: string | null;
+  prize_label_2: string | null;
+  prize_label_3: string | null;
+  winner_count: number;
+  is_cumulative: boolean;
+  status: string;
+}
+
+interface PrizeWinner {
+  phase_id: number;
+  user_id: string;
+  rank: number;
+  points: number;
+  profiles?: { full_name: string | null };
+}
+
 const PAGE_SIZE = 20;
 
 export default function LeaderboardPage() {
@@ -25,43 +46,51 @@ export default function LeaderboardPage() {
   const [myPoints, setMyPoints] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [prizePhases, setPrizePhases] = useState<PrizePhase[]>([]);
+  const [prizeWinners, setPrizeWinners] = useState<PrizeWinner[]>([]);
+  const [prizesLoading, setPrizesLoading] = useState(true);
   const maxPoints = useRef(1);
   const listRef = useRef<HTMLDivElement>(null);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  // الـ search تعمل على كل البيانات المحملة (بس في أول صفحة)
-  // لو في search نجيب كل البيانات، لو مفيش نعمل pagination server-side
   const isSearching = searchQuery.trim().length > 0;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUser(data.user || null));
     loadMyRank();
     loadPage(1);
+    loadPrizes();
   }, []);
 
-  // لما يبحث، جيب كل البيانات مرة واحدة
   useEffect(() => {
-    if (isSearching) {
-      loadAllForSearch();
-    } else {
-      loadPage(currentPage);
-    }
+    if (isSearching) loadAllForSearch();
+    else loadPage(currentPage);
   }, [isSearching]);
+
+  const loadPrizes = async () => {
+    setPrizesLoading(true);
+    try {
+      const [{ data: phases }, { data: winners }] = await Promise.all([
+        supabase.from('prize_phases').select('*').order('id'),
+        supabase.from('prize_winners').select('*, profiles(full_name)').order('phase_id').order('rank'),
+      ]);
+      setPrizePhases(phases || []);
+      setPrizeWinners(winners || []);
+    } catch (err) {
+      console.error('loadPrizes:', err);
+    }
+    setPrizesLoading(false);
+  };
 
   const loadMyRank = async () => {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) return;
-    // اجيب ترتيبه: عدد اللي عندهم نقاط أكثر منه + 1
     const { data: myData } = await supabase
-      .from('user_points')
-      .select('total_points')
-      .eq('user_id', authData.user.id)
-      .single();
+      .from('user_points').select('total_points').eq('user_id', authData.user.id).single();
     if (!myData) return;
     setMyPoints(myData.total_points || 0);
     const { count } = await supabase
-      .from('user_points')
-      .select('*', { count: 'exact', head: true })
+      .from('user_points').select('*', { count: 'exact', head: true })
       .gt('total_points', myData.total_points);
     setMyRank((count || 0) + 1);
   };
@@ -70,59 +99,41 @@ export default function LeaderboardPage() {
     if (page !== 1) setPageLoading(true);
     const from = (page - 1) * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
-
     const { data, count } = await supabase
-      .from('user_points')
-      .select('*', { count: 'exact' })
-      .order('total_points', { ascending: false })
-      .range(from, to);
-
+      .from('user_points').select('*', { count: 'exact' })
+      .order('total_points', { ascending: false }).range(from, to);
     if (data) {
-      if (page === 1 && data.length > 0) {
-        maxPoints.current = data[0].total_points || 1;
-      }
-      const mapped: Player[] = data.map((row: any) => ({
-        user_id: row.user_id,
-        user_email: row.user_email,
-        display_name: row.full_name || null,
-        total_points: row.total_points || 0,
-        predictions_count: row.predictions_count || 0,
-        profile_completed: row.profile_completed || false,
-      }));
-      setPlayers(mapped);
-      if (count !== null) setTotalCount(count);
-    }
-    setLoading(false);
-    setPageLoading(false);
-    setAnimated(false);
-    setTimeout(() => setAnimated(true), 80);
-  };
-
-  // بيانات كاملة للـ search فقط
-  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
-  const loadAllForSearch = async () => {
-    if (allPlayers.length > 0) return; // cached
-    const { data } = await supabase
-      .from('user_points')
-      .select('*')
-      .order('total_points', { ascending: false });
-    if (data) {
-      setAllPlayers(data.map((row: any) => ({
-        user_id: row.user_id,
-        user_email: row.user_email,
+      if (page === 1 && data.length > 0) maxPoints.current = data[0].total_points || 1;
+      setPlayers(data.map((row: any) => ({
+        user_id: row.user_id, user_email: row.user_email,
         display_name: row.full_name || null,
         total_points: row.total_points || 0,
         predictions_count: row.predictions_count || 0,
         profile_completed: row.profile_completed || false,
       })));
+      if (count !== null) setTotalCount(count);
     }
+    setLoading(false); setPageLoading(false);
+    setAnimated(false);
+    setTimeout(() => setAnimated(true), 80);
+  };
+
+  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  const loadAllForSearch = async () => {
+    if (allPlayers.length > 0) return;
+    const { data } = await supabase.from('user_points').select('*').order('total_points', { ascending: false });
+    if (data) setAllPlayers(data.map((row: any) => ({
+      user_id: row.user_id, user_email: row.user_email,
+      display_name: row.full_name || null,
+      total_points: row.total_points || 0,
+      predictions_count: row.predictions_count || 0,
+      profile_completed: row.profile_completed || false,
+    })));
   };
 
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
-    setCurrentPage(page);
-    loadPage(page);
-    // Scroll للقائمة
+    setCurrentPage(page); loadPage(page);
     listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -130,37 +141,44 @@ export default function LeaderboardPage() {
   const getInitials = (p: Player) => getName(p).slice(0, 2);
   const medals = ['🥇', '🥈', '🥉'];
 
-  // اللي يتعرض: لو بيبحث من allPlayers، لو لأ من players (الصفحة الحالية)
   const sourceList = isSearching ? allPlayers : players;
   const filteredPlayers = isSearching
     ? sourceList.filter(p =>
         getName(p).toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.user_email?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+        p.user_email?.toLowerCase().includes(searchQuery.toLowerCase()))
     : sourceList;
 
-  // الـ global rank: لو بنعرض صفحة معينة، الـ rank = (page-1)*PAGE_SIZE + index+1
-  const getGlobalRank = (index: number) =>
-    isSearching
-      ? (players.findIndex(p => p.user_id === filteredPlayers[index].user_id) >= 0
-          ? players.findIndex(p => p.user_id === filteredPlayers[index].user_id) + (currentPage - 1) * PAGE_SIZE + 1
-          : index + 1)
-      : (currentPage - 1) * PAGE_SIZE + index + 1;
-
-  // Pagination — أرقام الصفحات
   const getPageNumbers = () => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const pages: (number | '...')[] = [1];
     if (currentPage > 3) pages.push('...');
-    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-      pages.push(i);
-    }
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
     if (currentPage < totalPages - 2) pages.push('...');
     pages.push(totalPages);
     return pages;
   };
 
-  const top3 = players.slice(0, 3); // دايماً من أول صفحة
+  const top3 = players.slice(0, 3);
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const getPhaseStatus = (phase: PrizePhase) => {
+    const winners = prizeWinners.filter(w => w.phase_id === phase.id);
+    if (winners.length > 0) return 'completed';
+    if (phase.end_date < today) return 'past';
+    if (phase.start_date <= today && phase.end_date >= today) return 'active';
+    return 'upcoming';
+  };
+
+  const statusConfig: Record<string, { label: string; color: string; bg: string; bd: string }> = {
+    completed: { label: '✅ مكتملة', color: '#5effa8', bg: 'rgba(39,176,110,.12)', bd: 'rgba(39,176,110,.25)' },
+    active:    { label: '🔴 نشطة',  color: '#d9b25f', bg: 'rgba(217,178,95,.12)', bd: 'rgba(217,178,95,.28)' },
+    past:      { label: '⏳ انتهت', color: '#ff9c91', bg: 'rgba(201,58,47,.08)',  bd: 'rgba(201,58,47,.2)'  },
+    upcoming:  { label: '⏰ قادمة', color: '#a8a39a', bg: 'rgba(255,255,255,.04)', bd: 'rgba(255,255,255,.08)' },
+  };
+
+  const grandPhase = prizePhases.find(p => p.is_cumulative && p.winner_count >= 1);
+  const nonGrandPhases = prizePhases.filter(p => !(p.is_cumulative && p.winner_count >= 1) || p !== grandPhase);
 
   return (
     <>
@@ -172,7 +190,13 @@ export default function LeaderboardPage() {
           --gold:#d9b25f;--red:#c93a2f;--green:#27b06e;
         }
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:'Cairo',sans-serif;background:radial-gradient(circle at top right,rgba(201,58,47,.08),transparent 26%),radial-gradient(circle at top left,rgba(217,178,95,.08),transparent 28%),#070809;color:var(--text);direction:rtl;min-height:100vh;}
+        body{
+          font-family:'Cairo',sans-serif;
+          background:radial-gradient(circle at top right,rgba(201,58,47,.08),transparent 26%),
+                      radial-gradient(circle at top left,rgba(217,178,95,.08),transparent 28%),#070809;
+          color:var(--text);direction:rtl;min-height:100vh;
+          -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+        }
         a{text-decoration:none;color:inherit}
         @keyframes barGrow{from{width:0% !important}}
         @keyframes rowIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
@@ -181,6 +205,8 @@ export default function LeaderboardPage() {
         @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
         @keyframes logoFloat{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-8px) rotate(2deg)}}
         @keyframes rotateBorder{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes goldPulse{0%,100%{box-shadow:0 0 20px rgba(217,178,95,.2)}50%{box-shadow:0 0 40px rgba(217,178,95,.45)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         .player-row{opacity:0;animation:rowIn 0.4s cubic-bezier(0.16,1,0.3,1) forwards}
         .bar-fill{animation:barGrow 0.9s cubic-bezier(0.16,1,0.3,1) forwards}
         .top-float{animation:float 3.5s ease-in-out infinite}
@@ -192,18 +218,10 @@ export default function LeaderboardPage() {
         .search-box{width:100%;padding:13px 18px;border-radius:16px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);font-family:'Cairo',sans-serif;font-size:14px;font-weight:600;outline:none;transition:border-color .2s;direction:rtl}
         .search-box:focus{border-color:rgba(217,178,95,.4)}
         .search-box::placeholder{color:var(--muted)}
-        /* Pagination */
-        .pg-btn{
-          min-width:36px;height:36px;border-radius:10px;border:1px solid var(--line);
-          background:var(--surface-2);color:var(--muted);font-family:'Cairo',sans-serif;
-          font-weight:800;font-size:13px;cursor:pointer;
-          display:inline-flex;align-items:center;justify-content:center;
-          transition:all .18s;
-        }
+        .pg-btn{min-width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--muted);font-family:'Cairo',sans-serif;font-weight:800;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .18s;}
         .pg-btn:hover:not(:disabled){border-color:rgba(217,178,95,.3);color:var(--gold);background:rgba(217,178,95,.06)}
         .pg-btn.active{background:linear-gradient(135deg,#d9b25f,#a8761a);color:#211708;border-color:transparent}
         .pg-btn:disabled{opacity:.3;cursor:not-allowed}
-        /* Logo */
         .logo-wrap{position:relative;width:72px;height:72px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
         .logo-wrap::before{content:'';position:absolute;inset:-2px;border-radius:50%;background:conic-gradient(rgba(217,178,95,.5),rgba(217,178,95,.08),rgba(217,178,95,.5));animation:rotateBorder 4s linear infinite}
         .logo-wrap::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--surface)}
@@ -212,10 +230,19 @@ export default function LeaderboardPage() {
         .logo-hero-wrap::before{content:'';position:absolute;inset:-3px;border-radius:50%;background:conic-gradient(rgba(217,178,95,.6),rgba(217,178,95,.1),rgba(217,178,95,.6));animation:rotateBorder 4s linear infinite;z-index:0}
         .logo-hero-wrap::after{content:'';position:absolute;inset:0;border-radius:50%;background:var(--bg);z-index:1}
         .logo-hero-wrap img{position:relative;z-index:2;object-fit:contain;padding:10px;width:90px;height:90px;border-radius:50%}
+        .prize-phase-card{background:linear-gradient(135deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border-radius:16px;padding:16px;transition:border-color .2s,transform .2s;}
+        .prize-phase-card:hover{transform:translateY(-2px)}
+        .grand-card{border-radius:20px;padding:24px 16px;text-align:center;transition:transform .2s;background:linear-gradient(160deg,rgba(255,255,255,.04),rgba(255,255,255,.01));}
+        .grand-card:hover{transform:translateY(-4px)}
+        .grand-card.gold-pulse{animation:goldPulse 3s ease-in-out infinite}
+        .divider-line{height:1px;flex:1;background:var(--line)}
+        .divider-label{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:2px;white-space:nowrap;padding:0 12px}
+        .winner-row{display:flex;align-items:center;gap:10;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line);margin-top:8px}
+        .prize-skel{background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.06) 50%,rgba(255,255,255,.03) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:16px}
       `}</style>
 
       {/* ══ HEADER ══ */}
-      <header style={{position:'sticky',top:0,zIndex:100,background:'rgba(7,8,9,.9)',backdropFilter:'blur(12px)',borderBottom:'1px solid var(--line)',padding:'12px 20px',display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
+      <header style={{position:'sticky',top:0,zIndex:100,background:'rgba(7,8,9,.92)',backdropFilter:'blur(14px)',borderBottom:'1px solid var(--line)',padding:'12px 20px',display:'flex',alignItems:'center',gap:14}}>
         <div className="logo-wrap">
           <img src="/logo-FF.png" alt="الشمعدان" width={60} height={60} loading="eager" />
         </div>
@@ -245,7 +272,7 @@ export default function LeaderboardPage() {
         </p>
       </div>
 
-      {/* ══ PODIUM — يتحمّل بس في الصفحة الأولى ══ */}
+      {/* ══ PODIUM ══ */}
       {!loading && currentPage === 1 && !isSearching && top3.length >= 3 && (
         <div style={{display:'flex',justifyContent:'center',alignItems:'flex-end',gap:12,padding:'0 20px 40px',maxWidth:500,margin:'0 auto'}}>
           {[1,0,2].map((rank) => {
@@ -275,6 +302,136 @@ export default function LeaderboardPage() {
         </div>
       )}
 
+      {/* ══ PRIZES SECTION ══ */}
+      <section style={{maxWidth:700,margin:'0 auto',padding:'0 16px 48px',animation:'fadeUp .6s cubic-bezier(0.16,1,0.3,1) forwards'}}>
+
+        {/* Section Header */}
+        <div style={{textAlign:'center',marginBottom:28}}>
+          <div style={{fontSize:11,color:'var(--gold)',fontWeight:700,letterSpacing:3,marginBottom:6}}>🏆 جوائز دوري التوقعات</div>
+          <h2 style={{fontSize:'clamp(18px,4vw,24px)',fontWeight:900,marginBottom:6}}>العب وافوز بجوائز حقيقية</h2>
+          <p style={{color:'var(--muted)',fontSize:13,lineHeight:1.8}}>جوائز مرحلية وجوائز كبرى للفائزين الكليين</p>
+        </div>
+
+        {prizesLoading ? (
+          /* Skeleton */
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))',gap:10,marginBottom:32}}>
+            {[1,2,3,4].map(i => <div key={i} className="prize-skel" style={{height:88}} />)}
+          </div>
+        ) : prizePhases.length === 0 ? null : (
+          <>
+            {/* ── Phase Prizes (non-cumulative or non-grand) ── */}
+            {nonGrandPhases.length > 0 && (
+              <>
+                <div style={{display:'flex',alignItems:'center',gap:0,marginBottom:16}}>
+                  <div className="divider-line" />
+                  <span className="divider-label">جوائز المراحل</span>
+                  <div className="divider-line" />
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))',gap:10,marginBottom:32}}>
+                  {nonGrandPhases.map((phase) => {
+                    const status = getPhaseStatus(phase);
+                    const cfg = statusConfig[status];
+                    const phaseWinners = prizeWinners.filter(w => w.phase_id === phase.id);
+                    const prizes = [phase.prize_label, phase.prize_label_2, phase.prize_label_3].filter(Boolean);
+                    const mainPrize = prizes[0] || '—';
+                    return (
+                      <div key={phase.id} className="prize-phase-card" style={{border:`1px solid ${cfg.bd}`,background:`linear-gradient(135deg,${cfg.bg},rgba(255,255,255,.01))`}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,gap:8,flexWrap:'wrap'}}>
+                          <span style={{fontWeight:900,fontSize:13}}>{phase.name}</span>
+                          <span style={{fontSize:10,color:cfg.color,fontWeight:700,background:`${cfg.bg}`,border:`1px solid ${cfg.bd}`,padding:'2px 8px',borderRadius:999,whiteSpace:'nowrap'}}>{cfg.label}</span>
+                        </div>
+                        <div style={{fontSize:11,color:'var(--muted)',marginBottom:8}}>
+                          📅 {new Date(phase.start_date+'T12:00:00').toLocaleDateString('ar-EG',{month:'short',day:'numeric'})}
+                          {' — '}
+                          {new Date(phase.end_date+'T12:00:00').toLocaleDateString('ar-EG',{month:'short',day:'numeric',year:'numeric'})}
+                        </div>
+                        <div style={{fontWeight:900,fontSize:17,color:'var(--gold)',marginBottom: phaseWinners.length > 0 ? 10 : 0}}>{mainPrize}</div>
+                        {/* Winners if announced */}
+                        {phaseWinners.length > 0 && (
+                          <div style={{borderTop:'1px solid rgba(255,255,255,.06)',paddingTop:8}}>
+                            {phaseWinners.map((w) => (
+                              <div key={w.rank} style={{display:'flex',alignItems:'center',gap:8,marginTop:4}}>
+                                <span style={{fontSize:13}}>{medals[w.rank-1] || `#${w.rank}`}</span>
+                                <span style={{flex:1,fontSize:12,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                                  {(w as any).profiles?.full_name || '—'}
+                                </span>
+                                <span style={{fontSize:11,color:'var(--gold)',fontWeight:700,flexShrink:0}}>{w.points} نقطة</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* ── Grand Prize (cumulative) ── */}
+            {grandPhase && (() => {
+              const status = getPhaseStatus(grandPhase);
+              const cfg = statusConfig[status];
+              const grandWinners = prizeWinners.filter(w => w.phase_id === grandPhase.id);
+              const prizes = [grandPhase.prize_label, grandPhase.prize_label_2, grandPhase.prize_label_3].filter(Boolean);
+              const grandColors = [
+                { color: '#d9b25f', glow: 'rgba(217,178,95,.4)', border: 'rgba(217,178,95,.35)' },
+                { color: '#b0b8c1', glow: 'rgba(176,184,193,.2)', border: 'rgba(176,184,193,.25)' },
+                { color: '#cd7f32', glow: 'rgba(205,127,50,.2)',  border: 'rgba(205,127,50,.25)' },
+              ];
+              return (
+                <>
+                  <div style={{display:'flex',alignItems:'center',gap:0,marginBottom:16}}>
+                    <div className="divider-line" />
+                    <span className="divider-label">
+                      الجائزة الكبرى — {new Date(grandPhase.end_date+'T12:00:00').toLocaleDateString('ar-EG',{month:'long',day:'numeric',year:'numeric'})}
+                    </span>
+                    <div className="divider-line" />
+                  </div>
+                  {/* Status badge */}
+                  <div style={{textAlign:'center',marginBottom:14}}>
+                    <span style={{fontSize:11,color:cfg.color,fontWeight:700,background:cfg.bg,border:`1px solid ${cfg.bd}`,padding:'4px 14px',borderRadius:999}}>{cfg.label}</span>
+                  </div>
+
+                  {prizes.length > 0 && (
+                    <div style={{display:'grid',gridTemplateColumns:`repeat(${Math.min(prizes.length,3)},1fr)`,gap:10,marginBottom:8}}>
+                      {prizes.slice(0, 3).map((prize, i) => {
+                        const gc = grandColors[i];
+                        const winner = grandWinners.find(w => w.rank === i + 1);
+                        return (
+                          <div
+                            key={i}
+                            className={`grand-card${i===0?' gold-pulse':''}`}
+                            style={{border:`1px solid ${gc.border}`,boxShadow:i===0?`0 0 30px ${gc.glow}`:'none'}}
+                          >
+                            <div style={{fontSize:i===0?38:30,marginBottom:8}}>{medals[i]}</div>
+                            <div style={{fontSize:11,color:'var(--muted)',fontWeight:700,marginBottom:8}}>المركز {['الأول','الثاني','الثالث'][i]}</div>
+                            <div style={{fontSize:i===0?16:13,fontWeight:900,color:gc.color,lineHeight:1.4,marginBottom:4}}>{prize}</div>
+                            {winner ? (
+                              <div style={{marginTop:10,borderTop:'1px solid rgba(255,255,255,.07)',paddingTop:8}}>
+                                <div style={{fontSize:11,color:'var(--muted)',fontWeight:700,marginBottom:2}}>الفائز</div>
+                                <div style={{fontSize:12,fontWeight:800,color:gc.color}}>{(winner as any).profiles?.full_name || '—'}</div>
+                                <div style={{fontSize:10,color:'var(--muted)'}}>{winner.points} نقطة</div>
+                              </div>
+                            ) : (
+                              <div style={{fontSize:10,color:'var(--muted)',marginTop:8}}>لم يُعلن بعد</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div style={{textAlign:'center',marginBottom:4}}>
+                    <span style={{fontSize:11,color:'rgba(217,178,95,.45)',fontWeight:700}}>
+                      * الجائزة الكبرى تراكمية — مجموع النقاط من بداية البطولة حتى نهايتها
+                    </span>
+                  </div>
+                </>
+              );
+            })()}
+          </>
+        )}
+      </section>
+
       {/* ══ MAIN LIST ══ */}
       <div ref={listRef} style={{maxWidth:700,margin:'0 auto',padding:'0 16px 80px',scrollMarginTop:80}}>
 
@@ -287,7 +444,6 @@ export default function LeaderboardPage() {
               <div style={{fontWeight:900,fontSize:15}}>المركز #{myRank}</div>
             </div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
-              {/* زر الانتقال لصفحة الترتيب */}
               {!isSearching && myRank > PAGE_SIZE && (
                 <button className="nav-pill" onClick={() => goToPage(Math.ceil(myRank / PAGE_SIZE))} style={{padding:'6px 14px',fontSize:12}}>
                   اعرض ترتيبي
@@ -320,9 +476,7 @@ export default function LeaderboardPage() {
             }
           </div>
           {!isSearching && totalPages > 1 && (
-            <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>
-              صفحة {currentPage} / {totalPages}
-            </div>
+            <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>صفحة {currentPage} / {totalPages}</div>
           )}
         </div>
 
@@ -350,15 +504,12 @@ export default function LeaderboardPage() {
           const delay = `${Math.min(index, 10) * 0.04}s`;
           return (
             <div key={player.user_id} className="player-row" style={{animationDelay:delay,background:isMe?'linear-gradient(135deg,rgba(217,178,95,.1),rgba(217,178,95,.04))':'linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01))',border:`1px solid ${isMe?'rgba(217,178,95,.25)':'var(--line)'}`,borderRadius:16,padding:'12px 16px',marginBottom:8,display:'flex',alignItems:'center',gap:12}}>
-              {/* Rank */}
               <div style={{width:32,textAlign:'center',fontWeight:900,fontSize:globalRank<=3?18:13,color:globalRank<=3?'var(--gold)':'var(--muted)',flexShrink:0}}>
                 {globalRank<=3 ? medals[globalRank-1] : `#${globalRank}`}
               </div>
-              {/* Avatar */}
               <div style={{width:38,height:38,borderRadius:'50%',background:isMe?'linear-gradient(135deg,rgba(217,178,95,.3),rgba(217,178,95,.1))':'var(--surface-3)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:13,color:isMe?'var(--gold)':'var(--muted)',flexShrink:0,border:isMe?'1px solid rgba(217,178,95,.3)':'1px solid var(--line)'}}>
                 {getInitials(player)}
               </div>
-              {/* Name + bar */}
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:5}}>
                   <span style={{fontWeight:800,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{getName(player)}</span>
@@ -367,48 +518,36 @@ export default function LeaderboardPage() {
                   <span style={{fontSize:10,color:'var(--muted)',fontWeight:700,marginRight:'auto'}}>{player.predictions_count} توقع</span>
                 </div>
                 <div style={{height:4,borderRadius:999,background:'rgba(255,255,255,.06)',overflow:'hidden'}}>
-                  <div className={animated?'bar-fill':''} style={{height:'100%',borderRadius:999,background:isMe?'linear-gradient(90deg,#d9b25f,#a8761a)':'linear-gradient(90deg,rgba(217,178,95,.5),rgba(217,178,95,.2))',width:animated?`${pct}%`:'0%',animationDelay:delay}} />
+                  <div className={animated?'bar-fill':''} style={{height:'100%',borderRadius:999,background:isMe?'linear-gradient(90deg,#d9b25f,#a8761a)':'rgba(255,255,255,.15)',width:`${pct}%`}} />
                 </div>
               </div>
-              {/* Points */}
               <div style={{textAlign:'center',flexShrink:0}}>
-                <div style={{fontWeight:900,fontSize:16,color:isMe?'var(--gold)':'var(--text)',fontVariantNumeric:'tabular-nums'}}>{player.total_points}</div>
+                <div style={{fontWeight:900,fontSize:17,color:isMe?'var(--gold)':'var(--text)',fontVariantNumeric:'tabular-nums'}}>{player.total_points}</div>
                 <div style={{fontSize:10,color:'var(--muted)',fontWeight:700}}>نقطة</div>
               </div>
             </div>
           );
         })}
 
-        {/* ══ PAGINATION ══ */}
+        {/* PAGINATION */}
         {!loading && !isSearching && totalPages > 1 && (
-          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,marginTop:28,flexWrap:'wrap'}}>
-            {/* السابق */}
-            <button className="pg-btn" onClick={()=>goToPage(currentPage-1)} disabled={currentPage===1} title="الصفحة السابقة">
-              ›
-            </button>
-
-            {/* أرقام */}
+          <div style={{display:'flex',justifyContent:'center',gap:6,marginTop:24,flexWrap:'wrap'}}>
+            <button className="pg-btn" onClick={()=>goToPage(currentPage-1)} disabled={currentPage===1}>›</button>
             {getPageNumbers().map((pg, i) =>
               pg === '...'
-                ? <span key={`dot-${i}`} style={{color:'var(--muted)',fontSize:13,padding:'0 4px'}}>…</span>
-                : <button key={pg} className={`pg-btn ${currentPage===pg?'active':''}`} onClick={()=>goToPage(pg as number)}>
-                    {pg}
-                  </button>
+                ? <span key={`d${i}`} className="pg-btn" style={{cursor:'default'}}>…</span>
+                : <button key={pg} className={`pg-btn${currentPage===pg?' active':''}`} onClick={()=>goToPage(pg as number)}>{pg}</button>
             )}
-
-            {/* التالي */}
-            <button className="pg-btn" onClick={()=>goToPage(currentPage+1)} disabled={currentPage===totalPages} title="الصفحة التالية">
-              ‹
-            </button>
+            <button className="pg-btn" onClick={()=>goToPage(currentPage+1)} disabled={currentPage===totalPages}>‹</button>
           </div>
         )}
 
-        {/* ✅ CTA للزوار */}
+        {/* CTA للزوار */}
         {!loading && !currentUser && totalCount > 0 && (
-          <div style={{textAlign:'center',marginTop:32,padding:'28px 24px',background:'linear-gradient(135deg,rgba(217,178,95,.08),rgba(217,178,95,.03))',border:'1px solid rgba(217,178,95,.15)',borderRadius:20}}>
-            <div style={{fontSize:38,marginBottom:10}}>🏆</div>
-            <div style={{fontWeight:800,fontSize:15,marginBottom:8}}>انضم وتنافس معهم!</div>
-            <div style={{color:'var(--muted)',fontSize:13,marginBottom:20,lineHeight:1.7}}>سجّل دخولك وابدأ توقعاتك مجاناً</div>
+          <div style={{marginTop:40,background:'linear-gradient(135deg,rgba(217,178,95,.1),rgba(217,178,95,.04))',border:'1px solid rgba(217,178,95,.2)',borderRadius:20,padding:'28px 20px',textAlign:'center'}}>
+            <div style={{fontSize:36,marginBottom:12}}>🏆</div>
+            <div style={{fontWeight:900,fontSize:17,marginBottom:8}}>انضم وتنافس معهم!</div>
+            <div style={{color:'var(--muted)',fontSize:13,marginBottom:20,lineHeight:1.8}}>سجّل دخولك وابدأ توقعاتك مجاناً</div>
             <Link href="/login" className="nav-pill primary">🔑 سجّل دخولك الآن</Link>
           </div>
         )}
