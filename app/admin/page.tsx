@@ -129,7 +129,7 @@ export default function AdminPage() {
     if (updating) return;
     setAutoUpdating(true);
     try {
-      const res  = await fetch('/api/update-results');
+      const res  = await fetch('/api/admin-update-results', { method: 'POST' });
       const data = await res.json();
       if (data.success && data.updated > 0) {
         showMsg(`🔄 تحديث أوتوماتيك: ${data.message || `${data.updated} توقع`}`);
@@ -197,7 +197,7 @@ export default function AdminPage() {
       };
       if (ex) { const { error } = await supabase.from('fixtures').update(payload).eq('api_fixture_id',fid); if(error) throw error; }
       else    { const { error } = await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:false,home_team:selectedMatch.teams.home.name,away_team:selectedMatch.teams.away.name,match_date:selectedMatch.fixture.date,round:selectedMatch.league.round,...payload}); if(error) throw error; }
-      const res  = await fetch('/api/update-results');
+      const res  = await fetch('/api/admin-update-results', { method: 'POST' });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'خطأ في حساب النقاط');
       setShowModal(false);
@@ -240,7 +240,7 @@ export default function AdminPage() {
   const updateAllPoints = async () => {
     setUpdating(true);
     try {
-      const res = await fetch('/api/update-results');
+      const res = await fetch('/api/admin-update-results', { method: 'POST' });
       const data = await res.json();
       showMsg(data.success ? data.message||'✅ تم تحديث النقاط' : '❌ '+data.error, data.success?'success':'error');
       if (data.success) { await loadPredictions(); await loadLeaderboard(); }
