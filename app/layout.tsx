@@ -12,7 +12,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'الشمعدان × كأس العالم 2026',
   description: 'توقع نتايج كأس العالم مع الشمعدان',
-  applicationName: 'دوري توقعات الشمعدان',
+  applicationName: 'دوري الشمعدان',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
@@ -26,8 +26,8 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'الشمعدان × كأس العالم 2026',
     description: 'توقع نتايج كأس العالم مع الشمعدان',
-    url: 'https://worldcup.shamaadan.com',
-    siteName: 'دوري توقعات الشمعدان',
+    url: 'https://worldcup.elshamadan.net/',
+    siteName: 'دوري الشمعدان',
     locale: 'ar_SA',
     type: 'website',
   },
