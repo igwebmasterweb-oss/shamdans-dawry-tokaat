@@ -1,3 +1,4 @@
+
 import { NextResponse, NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -16,23 +17,17 @@ function normalizeName(s: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  // ✅ نفس security check الأصلي — لم يتغير
   const internalKey = request.headers.get('x-internal-key');
-  const authHeader  = request.headers.get('authorization');
-  const cronSecret  = process.env.CRON_SECRET || '';
+  const authHeader = request.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET || '';
 
   const isAuthorized =
     internalKey === cronSecret ||
-    authHeader  === `Bearer ${cronSecret}`;
-
-  // الأدمن مقيّد بـ session + email — الـ check ده للـ CRON فقط
-  // if (cronSecret && !isAuthorized) {
-  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // }
+    authHeader === `Bearer ${cronSecret}`;
 
   try {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // STEP 1: جلب كل fixtures عندها نتيجة — query واحدة
+    // STEP 1: جلب كل fixtures عندها نتيجة
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const { data: fixtures, error: fixError } = await supabaseAdmin
       .from('fixtures')
@@ -44,12 +39,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'لا توجد ماتشات بها نتائج بعد', updated: 0 });
     }
 
-    // map سريع: api_fixture_id → fixture data (بحث O(1) بدل nested loop)
     const fixtureMap = new Map(fixtures.map(f => [f.api_fixture_id, f]));
     const fixtureIds = fixtures.map(f => f.api_fixture_id);
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // STEP 2: جلب كل predictions غير المحسوبة — query واحدة بدل N queries
+    // STEP 2: جلب كل predictions غير المحسوبة
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const { data: preds, error: predError } = await supabaseAdmin
       .from('predictions')
@@ -63,7 +57,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // STEP 3: حساب النقاط — نفس اللوجيك الأصلي بالضبط
+    // STEP 3: حساب النقاط
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const predictionUpdates: {
       id: number;
@@ -87,38 +81,30 @@ export async function GET(request: NextRequest) {
       let points = 0;
       const actualHome: number = fixture.actual_home_score;
       const actualAway: number = fixture.actual_away_score;
-      const predHome: number   = pred.predicted_home_score;
-      const predAway: number   = pred.predicted_away_score;
+      const predHome: number = pred.predicted_home_score;
+      const predAway: number = pred.predicted_away_score;
 
-      // +10 نتيجة كاملة
       if (predHome === actualHome && predAway === actualAway) {
         points += 10;
       } else {
-        // +5 فائز / تعادل
         const actualWinner = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw';
-        const predWinner   = predHome   > predAway   ? 'home' : predAway   > predHome   ? 'away' : 'draw';
+        const predWinner = predHome > predAway ? 'home' : predAway > predHome ? 'away' : 'draw';
         if (actualWinner === predWinner) points += 5;
       }
 
-      // +3 أول هداف — مطابقة مرنة مع normalizeName
       if (fixture.first_scorer && pred.predicted_first_scorer) {
-        const actual    = normalizeName(fixture.first_scorer);
+        const actual = normalizeName(fixture.first_scorer);
         const predicted = normalizeName(pred.predicted_first_scorer);
         if (actual === predicted || actual.includes(predicted) || predicted.includes(actual)) {
           points += 3;
         }
       }
 
-      // +2 وقت إضافي
       if (fixture.went_extra_time === true && pred.predicted_extra_time === true) points += 2;
-      // +2 بطاقة حمراء
-      if (fixture.red_card_in_match === true && pred.predicted_red_card === true)  points += 2;
-      // +2 ركلة جزاء
-      if (fixture.penalty_in_match === true && pred.predicted_penalty === true)    points += 2;
-      // +2 BTTS
+      if (fixture.red_card_in_match === true && pred.predicted_red_card === true) points += 2;
+      if (fixture.penalty_in_match === true && pred.predicted_penalty === true) points += 2;
       if (fixture.both_teams_scored === true && pred.predicted_both_teams === true) points += 2;
 
-      // جمع للـ batch arrays
       predictionUpdates.push({
         id: pred.id,
         points,
@@ -143,8 +129,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // STEP 4: Bulk upsert predictions — call واحد بدل N calls
-    // onConflict: 'id' يضمن UPDATE لكل صف موجود
+    // STEP 4: Bulk upsert predictions
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (predictionUpdates.length > 0) {
       const { error: upsertError } = await supabaseAdmin
@@ -154,7 +139,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // STEP 5: Bulk insert social_feed — call واحد بدل N calls
+    // STEP 5: Bulk insert social_feed
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if (socialFeedInserts.length > 0) {
       const { error: feedError } = await supabaseAdmin
@@ -164,23 +149,23 @@ export async function GET(request: NextRequest) {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // STEP 6: Batch refresh user_points — RPC واحد بدل N calls
-    // يستخدم الدالة الجديدة refresh_users_points_batch
-    // Fallback تلقائي للدالة القديمة لو الـ migration لم يُنفَّذ بعد
+    // STEP 6: Batch refresh user_points — ✅ أسماء صح
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const affectedUsersArray = Array.from(affectedUsers);
-    const { error: batchRefreshError } = await supabaseAdmin
-      .rpc('refresh_users_points_batch', { p_user_ids: affectedUsersArray });
 
-    if (batchRefreshError) {
-      // Fallback: الدالة الجديدة مش موجودة بعد
-      console.warn('refresh_users_points_batch not found — falling back to per-user refresh');
-      for (const userId of affectedUsers) {
-        await supabaseAdmin.rpc('refresh_user_points', { p_user_id: userId });
+    if (affectedUsersArray.length > 0) {
+      const { error: batchRefreshError } = await supabaseAdmin
+        .rpc('refreshuserspointsbatch', { p_userids: affectedUsersArray });
+
+      if (batchRefreshError) {
+        // Fallback per-user
+        console.warn('refreshuserspointsbatch failed — falling back to per-user refresh', batchRefreshError.message);
+        for (const userId of affectedUsers) {
+          await supabaseAdmin.rpc('refreshuserpoints', { p_userid: userId });
+        }
       }
     }
 
-    // ✅ نفس response shape الأصلي تماماً — لا يتأثر auto-sync أو admin
     return NextResponse.json({
       success: true,
       message: `✅ تم تحديث ${predictionUpdates.length} توقع لـ ${affectedUsers.size} مستخدم`,
