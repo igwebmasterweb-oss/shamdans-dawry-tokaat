@@ -1,5 +1,5 @@
 const CACHE_NAME = 'shamdan-wc26-v1';
-const APP_SHELL = ['/', '/logo-FF.png', '/manifest.webmanifest'];
+const APP_SHELL = ['/', '/Shedan_logo.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
