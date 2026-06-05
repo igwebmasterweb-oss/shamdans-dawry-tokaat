@@ -527,7 +527,7 @@ export default function Dashboard() {
       })));
 
       const breakdown = (userPreds || [])
-        .filter((p: any) => p.actual_home_score !== null && p.points > 0)
+        .filter((p: any) => p.points !== null && p.points > 0)
         .sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
         .slice(0, 10);
       setPointsBreakdown(breakdown);
