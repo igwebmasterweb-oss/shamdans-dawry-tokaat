@@ -1,4 +1,5 @@
-const CACHE_NAME = 'shamdan-wc26-v1';
+const CACHE_NAME = 'elshamadan-wc26-v2'; // ← غيّرنا الاسم
+
 const APP_SHELL = ['/', '/Shedan_logo.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -22,9 +23,9 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
-  // تجاهل طلبات Supabase وAPIs الخارجية
   const url = new URL(event.request.url);
-  if (!url.origin.includes('shamaadan.com') && !url.pathname.startsWith('/')) return;
+  
+  // ← حذفنا السطر القديم بالدومين الغلط
   if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase')) return;
 
   event.respondWith(
@@ -47,6 +48,7 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
 // ══ PUSH NOTIFICATIONS ══
 
 self.addEventListener('push', (event) => {
