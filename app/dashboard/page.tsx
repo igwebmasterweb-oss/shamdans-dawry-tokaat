@@ -663,9 +663,9 @@ export default function Dashboard() {
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
   const handlePushSubscribe = async () => {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    alert('المتصفح ده مش بيدعم الإشعارات. استخدم Chrome أو Edge');
-    return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('المتصفح ده مش بيدعم الإشعارات. استخدم Chrome أو Edge');
+      return;
     }
     setPushLoading(true);
     try {
@@ -939,6 +939,33 @@ export default function Dashboard() {
           {leagueJoinMsg} <Link href="/my-leagues" style={{ color: '#5effa8', marginRight: 8 }}>اضغط هنا لرؤية الليج ←</Link>
         </div>
       )}
+      {/* Push Notification Banner — يظهر لو لم يفعّل الإشعارات بعد */}
+      {!pushEnabled && (
+        <div
+          className="alert-banner"
+          onClick={handlePushSubscribe}
+          style={{
+            background: 'rgba(59,130,246,.07)',
+            borderBottom: '1px solid rgba(59,130,246,.18)',
+            padding: '10px 20px',
+            color: '#93c5fd',
+            cursor: 'pointer',
+            fontFamily: 'Cairo, sans-serif',
+            fontSize: 13,
+            fontWeight: 700,
+            textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+        >
+          {pushLoading
+            ? '⏳ جاري تفعيل الإشعارات...'
+            : '🔔 فعّل الإشعارات — احصل على تنبيه قبل كل مباراة بـ 5 ساعات'}
+        </div>
+      )}
+
       {upcomingAlert && (
         <div className="alert-banner pulse" style={{ background: 'rgba(59,130,246,.08)', borderBottom: '1px solid rgba(59,130,246,.2)', padding: '10px 20px', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#93c5fd', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <span>⚡</span>
