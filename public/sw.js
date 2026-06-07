@@ -47,3 +47,35 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+// ══ PUSH NOTIFICATIONS ══
+
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() ?? {};
+  event.waitUntil(
+    self.registration.showNotification(data.title || '⚽ دوري الشمعدان', {
+      body: data.body || 'لديك توقعات لم تكملها!',
+      icon: '/Shedan_logo.png',
+      badge: '/Shedan_logo.png',
+      dir: 'rtl',
+      lang: 'ar',
+      data: { url: data.url || '/dashboard' },
+      actions: [
+        { action: 'open', title: '⚽ توقع الآن' },
+        { action: 'dismiss', title: 'لاحقاً' }
+      ]
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  if (event.action === 'dismiss') return;
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const url = event.notification.data?.url || '/dashboard';
+      const existing = list.find((c) => c.url.includes('/dashboard'));
+      if (existing) return existing.focus();
+      return clients.openWindow(url);
+    })
+  );
+});
