@@ -201,7 +201,7 @@ export default function MyLeaguesPage() {
   const getLeagueShareText = (lg: any) =>
     `🏆 انضم لليج "${lg.name}" في الشمعدان × كأس العالم 2026!\n` +
     `سجّل دخولك عن طريق الرابط ده وهتنضم تلقائياً ⬇️\n` +
-    `https://worldcup.shamaadan.com/login?league=${lg.code}`;
+    `https://worldcup.elshamadan.net/login?league=${lg.code}`;
 
   const shareLeagueWhatsApp = (lg: any) => {
     if (typeof window === 'undefined') return;
@@ -210,20 +210,20 @@ export default function MyLeaguesPage() {
 
   const shareLeagueFacebook = (lg: any) => {
     if (typeof window === 'undefined') return;
-    const url = encodeURIComponent('https://worldcup.shamaadan.com/login');
+    const url = encodeURIComponent('https://worldcup.elshamadan.net/login');
     const quote = encodeURIComponent(`🏆 انضم لليج "${lg.name}" في الشمعدان! الكود: ${lg.code}`);
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}&quote=${quote}`, '_blank', 'width=600,height=400');
   };
 
   const shareLeagueMessenger = (lg: any) => {
     if (typeof window === 'undefined') return;
-    const url = encodeURIComponent('https://worldcup.shamaadan.com/login');
+    const url = encodeURIComponent('https://worldcup.elshamadan.net/login');
     window.open(`https://www.facebook.com/dialog/send?link=${url}&app_id=1302682795390354&redirect_uri=${url}`, '_blank');
   };
 
   const openShareModal = (lg: any) => {
     if (typeof navigator !== 'undefined' && navigator.share) {
-      navigator.share({ title: `ليج ${lg.name}`, text: getLeagueShareText(lg), url: 'https://worldcup.shamaadan.com/login' });
+      navigator.share({ title: `ليج ${lg.name}`, text: getLeagueShareText(lg), url: 'https://worldcup.elshamadan.net/login' });
     } else {
       setShareLeague(lg);
     }
