@@ -663,7 +663,10 @@ export default function Dashboard() {
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
   const handlePushSubscribe = async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    alert('المتصفح ده مش بيدعم الإشعارات. استخدم Chrome أو Edge');
+    return;
+    }
     setPushLoading(true);
     try {
       const reg = await navigator.serviceWorker.ready;
