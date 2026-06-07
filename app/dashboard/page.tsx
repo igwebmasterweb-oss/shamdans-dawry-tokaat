@@ -326,6 +326,16 @@ export default function Dashboard() {
   const [upcomingAlert, setUpcomingAlert]   = useState<any | null>(null);
   const [pushEnabled, setPushEnabled]     = useState(false);
   const [pushLoading, setPushLoading]     = useState(false);
+
+  // تحقق من حالة الاشتراك عند تحميل الصفحة
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    navigator.serviceWorker.ready.then(reg => {
+      reg.pushManager.getSubscription().then(sub => {
+        if (sub) setPushEnabled(true);
+      });
+    });
+  }, []);
   const router = useRouter();
   const animatedPoints = useCountUp(myTotalPoints); // ✨ animated points
   const countdown = useCountdown(upcomingAlert?.fixture?.date ?? null); // ✨ countdown
@@ -872,7 +882,7 @@ export default function Dashboard() {
       {/* ══ HEADER ══ */}
       <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01))', borderBottom: '1px solid var(--line)', padding: '14px 20px' }}>
         <div style={{ maxWidth: 760, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'nowrap', overflowX: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', overflowX: 'auto' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ fontSize: 28 }}>
                 {/* ③ لوجو بدل emoji */}
@@ -929,44 +939,18 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {profileIncomplete && (
-        <div onClick={() => setShowProfileModal(true)} style={{ background: 'linear-gradient(90deg,rgba(217,178,95,.1),rgba(217,178,95,.04))', borderBottom: '1px solid rgba(217,178,95,.18)', padding: '10px 20px', cursor: 'pointer', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#f2d79e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          🎁 أكمل ملفك الشخصي (اسم + تليفون) واحصل على 5 نقاط مجاناً! <strong>اضغط هنا</strong>
-        </div>
-      )}
+
       {leagueJoinMsg && (
         <div style={{ background: 'rgba(39,176,110,.1)', borderBottom: '1px solid rgba(39,176,110,.2)', padding: '10px 20px', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#5effa8' }}>
           {leagueJoinMsg} <Link href="/my-leagues" style={{ color: '#5effa8', marginRight: 8 }}>اضغط هنا لرؤية الليج ←</Link>
         </div>
       )}
-      {/* Push Notification Banner — يظهر لو لم يفعّل الإشعارات بعد */}
-      {!pushEnabled && (
-        <div
-          className="alert-banner"
-          onClick={handlePushSubscribe}
-          style={{
-            background: 'rgba(59,130,246,.07)',
-            borderBottom: '1px solid rgba(59,130,246,.18)',
-            padding: '10px 20px',
-            color: '#93c5fd',
-            cursor: 'pointer',
-            fontFamily: 'Cairo, sans-serif',
-            fontSize: 13,
-            fontWeight: 700,
-            textAlign: 'center',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-          }}
-        >
-          {pushLoading
-            ? '⏳ جاري تفعيل الإشعارات...'
-            : '🔔 فعّل الإشعارات — احصل على تنبيه قبل كل مباراة بـ 5 ساعات'}
+      {/* ══ BANNERS — أولوية: Profile → upcomingAlert → Push ══ */}
+      {profileIncomplete ? (
+        <div onClick={() => setShowProfileModal(true)} style={{ background: 'linear-gradient(90deg,rgba(217,178,95,.1),rgba(217,178,95,.04))', borderBottom: '1px solid rgba(217,178,95,.18)', padding: '10px 20px', cursor: 'pointer', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#f2d79e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          🎁 أكمل ملفك الشخصي (اسم + تليفون) واحصل على 5 نقاط مجاناً! <strong>اضغط هنا</strong>
         </div>
-      )}
-
-      {upcomingAlert && (
+      ) : upcomingAlert ? (
         <div className="alert-banner pulse" style={{ background: 'rgba(59,130,246,.08)', borderBottom: '1px solid rgba(59,130,246,.2)', padding: '10px 20px', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#93c5fd', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <span>⚡</span>
           <span>
@@ -975,7 +959,15 @@ export default function Dashboard() {
           </span>
           <button onClick={() => { setActiveTab('predict'); setActiveRound(upcomingAlert.league.round); setUpcomingAlert(null); }} style={{ padding: '4px 12px', borderRadius: 999, background: 'rgba(59,130,246,.2)', border: '1px solid rgba(59,130,246,.3)', color: '#93c5fd', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>توقع الآن</button>
         </div>
-      )}
+      ) : !pushEnabled ? (
+        <div
+          className="alert-banner"
+          onClick={handlePushSubscribe}
+          style={{ background: 'rgba(59,130,246,.07)', borderBottom: '1px solid rgba(59,130,246,.18)', padding: '10px 20px', color: '#93c5fd', cursor: 'pointer', fontFamily: 'Cairo, sans-serif', fontSize: 13, fontWeight: 700, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+        >
+          {pushLoading ? '⏳ جاري تفعيل الإشعارات...' : '🔔 فعّل الإشعارات — احصل على تنبيه قبل كل مباراة بـ 5 ساعات'}
+        </div>
+      ) : null}
 
       {/* ══ PROFILE MODAL ══ */}
       {showProfileModal && (
@@ -1062,16 +1054,16 @@ export default function Dashboard() {
         {/* Stats Row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
           {[
-            { label: 'نقاطي',        value: animatedPoints,                                  color: 'var(--gold)',  icon: '🏅' },
-            { label: 'ترتيبي',       value: myRank > 0 ? `#${myRank}` : '—',          color: 'var(--text)',  icon: '📊' },
+            { label: 'نقاطي',        value: animatedPoints,                                  color: 'var(--gold)',  icon: '🏅', big: true },
+            { label: 'ترتيبي',       value: myRank > 0 ? `#${myRank}` : '—',          color: 'var(--text)',  icon: '📊', big: true },
             { label: 'توقعاتي',      value: predictions.length,                        color: '#8ae0b3',      icon: '⚽' },
             { label: 'المتسابقون',   value: leaderboard.length,                        color: '#7db1ff',      icon: '👥' },
             { label: 'دقة التوقع',     value: resolvedPreds.length > 0 ? `${accuracyPct}%` : '—', color: '#c084fc', icon: '🎯' },
             { label: 'الجولات',        value: streakCount > 0 ? `${streakCount} 🔥` : '—',        color: '#f97316', icon: '📅' },
-          ].map(s => (
+          ].map((s: any) => (
             <div key={s.label} className="stat-card" style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+              <div style={{ fontSize: s.big ? 28 : 22, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{s.label}</div>
             </div>
           ))}
