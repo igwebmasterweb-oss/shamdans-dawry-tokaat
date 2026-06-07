@@ -70,7 +70,7 @@ export default function MiniLeaguePage() {
     if (!league) return;
     const txt = `🏆 انضم لليج "${league.name}" في الشمعدان × كأس العالم 2026!\n` +
       `سجّل دخولك عن طريق الرابط ده وهتنضم تلقائياً ⬇️\n` +
-      `https://worldcup.shamaadan.com/login?league=${league.code}`;
+      `https://worldcup.elshamadan.net/login?league=${league.code}`;
     navigator.clipboard.writeText(txt).then(() => {
       setCopyFeedback(true);
       setTimeout(() => setCopyFeedback(false), 2000);
