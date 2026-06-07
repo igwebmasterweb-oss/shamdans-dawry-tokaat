@@ -324,6 +324,8 @@ export default function Dashboard() {
   const [leagueJoining, setLeagueJoining]   = useState(false);
   const [leagueQuickMsg, setLeagueQuickMsg] = useState('');
   const [upcomingAlert, setUpcomingAlert]   = useState<any | null>(null);
+  const [pushEnabled, setPushEnabled]     = useState(false);
+  const [pushLoading, setPushLoading]     = useState(false);
   const router = useRouter();
   const animatedPoints = useCountUp(myTotalPoints); // ✨ animated points
   const countdown = useCountdown(upcomingAlert?.fixture?.date ?? null); // ✨ countdown
@@ -660,6 +662,31 @@ export default function Dashboard() {
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
+  const handlePushSubscribe = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) { setPushEnabled(true); setPushLoading(false); return; }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') { setPushLoading(false); return; }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+      });
+      await fetch('/api/push-subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user?.id, subscription: sub }),
+      });
+      setPushEnabled(true);
+    } catch (err) {
+      console.error('Push error:', err);
+    }
+    setPushLoading(false);
+  };
+
   const feedEventLabel = (type: string, data: any) => {
     switch (type) {
       case 'invite_friend':    return '🎉 دعا صديقاً جديداً وربح نقاط!';
@@ -873,6 +900,23 @@ export default function Dashboard() {
               <button onClick={() => setShowReferral(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(39,176,110,.3)', background: 'rgba(39,176,110,.08)', color: '#5effa8', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 🎁 ادعُ صديق
                 {referralCount > 0 && <span style={{ background: 'rgba(39,176,110,.2)', borderRadius: 999, padding: '1px 7px', fontSize: 11 }}>{referralCount}</span>}
+              </button>
+              <button
+                onClick={handlePushSubscribe}
+                disabled={pushEnabled || pushLoading}
+                style={{
+                  padding: '9px 16px', borderRadius: 12,
+                  border: pushEnabled ? '1px solid rgba(39,176,110,.3)' : '1px solid rgba(255,255,255,.12)',
+                  background: pushEnabled ? 'rgba(39,176,110,.08)' : 'var(--surface-2)',
+                  color: pushEnabled ? '#5effa8' : 'var(--muted)',
+                  cursor: pushEnabled ? 'default' : 'pointer',
+                  fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  opacity: pushLoading ? 0.6 : 1,
+                  transition: 'all .2s',
+                }}
+              >
+                {pushEnabled ? '🔔 مفعّل' : pushLoading ? '...' : '🔔 إشعارات'}
               </button>
               <button onClick={handleLogout} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(201,58,47,.3)', background: 'rgba(201,58,47,.08)', color: '#ff9e9e', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>
                 خروج

@@ -27,18 +27,18 @@ export async function GET(req: Request) {
   // جيب الماتشات اللي بعد 5 ساعات بالظبط (± 5 دقايق)
   const { data: fixtures } = await supabase
     .from('fixtures')
-    .select('api_fixture_id, home_team, away_team, match_date')
-    .gte('match_date', in5Hours.toISOString())
-    .lte('match_date', in5Hours10.toISOString())
+    .select('api_fixture_id, home_team_name, away_team_name, date')
+    .gte('date', in5Hours.toISOString())
+    .lte('date', in5Hours10.toISOString())
     .eq('is_open', true);
 
   if (!fixtures || fixtures.length === 0) {
     return NextResponse.json({ sent: 0, message: 'لا توجد مباريات خلال 5 ساعات' });
   }
 
-  // اعمل نص الرسالة
+  // نص الرسالة
   const matchList = fixtures
-    .map((f: any) => `${f.home_team} 🆚 ${f.away_team}`)
+    .map((f: any) => `${f.home_team_name} 🆚 ${f.away_team_name}`)
     .join('\n');
 
   // جيب كل المشتركين
@@ -52,8 +52,8 @@ export async function GET(req: Request) {
 
   const payload = JSON.stringify({
     title: '⚽ تذكير بالتوقعات!',
-    body: `${matchList}\nبعد 5 ساعات — توقع الآن!`,
-    url: '/dashboard'
+    body:  `${matchList}\nبعد 5 ساعات — توقع الآن!`,
+    url:   '/dashboard',
   });
 
   let sent = 0;
@@ -63,15 +63,11 @@ export async function GET(req: Request) {
     subscriptions.map(async (sub: any) => {
       try {
         await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: { p256dh: sub.p256dh, auth: sub.auth }
-          },
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           payload
         );
         sent++;
       } catch (err: any) {
-        // subscription منتهية أو غير صالحة
         if (err.statusCode === 410 || err.statusCode === 404) {
           expired.push(sub.endpoint);
         }
@@ -87,9 +83,5 @@ export async function GET(req: Request) {
       .in('endpoint', expired);
   }
 
-  return NextResponse.json({
-    sent,
-    expired: expired.length,
-    matches: fixtures.length
-  });
+  return NextResponse.json({ sent, expired: expired.length, matches: fixtures.length });
 }
