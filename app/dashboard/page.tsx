@@ -569,6 +569,7 @@ export default function Dashboard() {
       });
       setLeagueQuickMsg(`🎉 انضممت لـ "${lgData.name}" بنجاح!`);
       setLeagueCode('');
+      await loadData(user.id); // ✅ تحديث البيانات فوراً
     } catch { setLeagueQuickMsg('❌ حدث خطأ، حاول مجدداً'); }
     setLeagueJoining(false);
   };
@@ -589,7 +590,12 @@ export default function Dashboard() {
       return;
     }
     try {
+      // ✅ نجيب البيانات الموجودة أول عشان ما نمسحش referral_code
+      const { data: currentProfile } = await supabase
+        .from('profiles').select('referral_code, facebook_bonus_awarded')
+        .eq('id', user.id).maybeSingle();
       const updates: any = {
+        id:                   user.id,
         full_name:            profileForm.display_name.trim(),
         phone:                profileForm.phone.trim() || null,
         facebook_url:         fbUrl,
@@ -597,8 +603,10 @@ export default function Dashboard() {
         bonus_points_awarded: true,
         bonus_points:         5,
         updated_at:           new Date().toISOString(),
+        referral_code:        currentProfile?.referral_code ?? null,
+        facebook_bonus_awarded: currentProfile?.facebook_bonus_awarded ?? false,
       };
-      const { error } = await supabase.from('profiles').upsert({ id: user.id, ...updates });
+      const { error } = await supabase.from('profiles').upsert(updates);
       if (error) throw error;
       if (!profile?.bonus_points_awarded) {
         await supabase.from('social_feed').insert({
@@ -1067,19 +1075,15 @@ export default function Dashboard() {
                   const roundFixtureIds = matches
                     .filter((m: any) => m.league.round === activeRound)
                     .map((m: any) => m.fixture.id);
-                  const roundScores = leaderboard.map((p: any) => {
-                    const pts = predictions
-                      .filter((pr: any) => pr.user_id === p.user_id && roundFixtureIds.includes(pr.fixture_id))
-                      .reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
-                    return { user_id: p.user_id, pts };
-                  }).sort((a: any, b: any) => b.pts - a.pts);
-                  const myRoundRank = roundScores.findIndex((p: any) => p.user_id === user?.id) + 1;
-                  const myRoundPts  = roundScores.find((p: any) => p.user_id === user?.id)?.pts ?? 0;
-                  return myRoundRank > 0 ? (
+                  // ✅ predictions فيها بيانات المستخدم الحالي فقط — صح!
+                  const myRoundPts = predictions
+                    .filter((pr: any) => roundFixtureIds.includes(pr.fixture_id))
+                    .reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
+                  return roundFixtureIds.length > 0 ? (
                     <>
-                      <div style={{ fontSize: 32, fontWeight: 800, color: '#93c5fd', fontVariantNumeric: 'tabular-nums' }}>#{myRoundRank}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>من {roundScores.length} متسابق</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: '#bfdbfe', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{myRoundPts} نقطة</div>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: '#93c5fd', fontVariantNumeric: 'tabular-nums' }}>{myRoundPts}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>نقطة في هذه الجولة</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>من {roundFixtureIds.length} مباراة</div>
                     </>
                   ) : (
                     <div style={{ fontSize: 24, color: 'var(--muted)', marginTop: 16 }}>—</div>
