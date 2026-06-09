@@ -23,14 +23,23 @@ export async function GET(request: NextRequest) {
 
   try {
     // STEP 1: جلب fixtures عندها نتيجة
-    const { data: fixtures, error: fixError } = await supabaseAdmin
+    const { data: fixturesRaw, error: fixError } = await supabaseAdmin
       .from('fixtures')
-      .select(
-        'api_fixture_id, actual_home_score, actual_away_score, first_scorer, went_extra_time, red_card_in_match, penalty_in_match, both_teams_scored, round'
-      )
+      .select('api_fixture_id, actual_home_score, actual_away_score, first_scorer, went_extra_time, red_card_in_match, penalty_in_match, both_teams_scored, round')
       .not('actual_home_score', 'is', null);
 
     if (fixError) throw fixError;
+    const fixtures = fixturesRaw as Array<{
+      api_fixture_id: number;
+      actual_home_score: number;
+      actual_away_score: number;
+      first_scorer: string | null;
+      went_extra_time: boolean;
+      red_card_in_match: boolean;
+      penalty_in_match: boolean;
+      both_teams_scored: boolean;
+      round: string | null;
+    }>;
     if (!fixtures || fixtures.length === 0) {
       return NextResponse.json({ success: true, message: 'لا توجد ماتشات بها نتائج بعد', updated: 0 });
     }
@@ -39,18 +48,27 @@ export async function GET(request: NextRequest) {
     const fixtureIds = fixtures.map(f => f.api_fixture_id);
 
     // STEP 2: جلب predictions غير المحسوبة
-    const { data: preds, error: predError } = await supabaseAdmin
+    const { data: predsRaw, error: predError } = await supabaseAdmin
       .from('predictions')
-      .select(
-        'id, user_id, fixture_id,' +
-        'predicted_home_score, predicted_away_score, predicted_first_scorer,' +
-        'predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams,' +
-        'home_team, away_team'
-      )
+      .select('id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team')
       .in('fixture_id', fixtureIds)
       .is('points', null);
 
     if (predError) throw predError;
+    const preds = predsRaw as Array<{
+      id: number;
+      user_id: string;
+      fixture_id: number;
+      predicted_home_score: number;
+      predicted_away_score: number;
+      predicted_first_scorer: string | null;
+      predicted_extra_time: boolean;
+      predicted_red_card: boolean;
+      predicted_penalty: boolean;
+      predicted_both_teams: boolean;
+      home_team: string;
+      away_team: string;
+    }>;
     if (!preds || preds.length === 0) {
       return NextResponse.json({ success: true, message: 'لا توجد توقعات تحتاج تحديث', updated: 0 });
     }
