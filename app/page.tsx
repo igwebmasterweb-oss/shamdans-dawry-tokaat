@@ -282,9 +282,9 @@ export default function HomePage() {
             الشمعدان × كأس العالم 2026
           </div>
           <h1 style={{ fontSize: 'clamp(26px,7vw,54px)', fontWeight: 900, lineHeight: 1.2, marginBottom: 16 }}>
-            توقّع. تنافس.{' '}
+            سجل. توقع.{' '}
             <span style={{ background: 'linear-gradient(90deg,#d9b25f,#ffe9a0,#d9b25f)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-              تصدّر.
+              تصدّر اجمع نقاط و.
             </span>
           </h1>
           <p style={{ fontSize: 'clamp(14px,2.5vw,16px)', color: 'var(--muted)', maxWidth: 500, margin: '0 auto 32px', lineHeight: 1.9 }}>
@@ -349,7 +349,7 @@ export default function HomePage() {
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, letterSpacing: 3, marginBottom: 8 }}>🏆 جوائز دوري التوقعات</div>
-          <h2 style={{ fontSize: 'clamp(20px,4vw,28px)', fontWeight: 900, marginBottom: 10 }}>العب وافوز بجوائز حقيقية</h2>
+          <h2 style={{ fontSize: 'clamp(20px,4vw,28px)', fontWeight: 900, marginBottom: 10 }}>العب واكسب جوائز حقيقية</h2>
           <p style={{ color: 'var(--muted)', fontSize: 14, maxWidth: 460, margin: '0 auto', lineHeight: 1.8 }}>
             جوائز نقدية في كل مرحلة + سبائك ذهب للفائزين بالترتيب الكلي في نهاية البطولة
           </p>
