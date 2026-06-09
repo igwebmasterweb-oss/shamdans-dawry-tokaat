@@ -24,6 +24,7 @@ export default function AdminPage() {
   const [predStatusFilter, setPredStatusFilter] = useState<'all'|'ungraded'>('all');
   const [updating, setUpdating]       = useState(false);
   const [syncing, setSyncing]         = useState(false);
+  const [syncingSquads, setSyncingSquads] = useState(false);
   const [autoUpdating, setAutoUpdating] = useState(false);
   const [lastAutoUpdate, setLastAutoUpdate] = useState('');
   const [message, setMessage]         = useState('');
@@ -285,6 +286,16 @@ export default function AdminPage() {
     setSyncing(false);
   };
 
+
+  const syncSquads = async () => {
+    setSyncingSquads(true);
+    try {
+      const res = await fetch('/api/sync-squads');
+      const data = await res.json();
+      showMsg(data.success ? `✅ ${data.message}` : '❌ '+data.error, data.success?'success':'error');
+    } catch { showMsg('❌ خطأ في تحديث السكواد','error'); }
+    setSyncingSquads(false);
+  };
   const adminDeleteLeague = async (lg: any) => {
     if (!confirm(`حذف ليج "${lg.name}" نهائياً؟`)) return;
     try {
@@ -437,6 +448,9 @@ export default function AdminPage() {
         <a href="/leaderboard" style={{color:'var(--gold)',textDecoration:'none',fontSize:13,fontWeight:700}}>🏁 الصدارة</a>
         <button onClick={syncFixtures} disabled={syncing} className="action-btn" style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',fontSize:12}}>
           {syncing?'⏳ مزامنة...':'🔄 مزامنة'}
+        </button>
+        <button onClick={syncSquads} disabled={syncingSquads} className="action-btn" style={{background:'linear-gradient(135deg,#6366f1,#4338ca)',fontSize:12}}>
+          {syncingSquads ? '⏳ جاري التحديث...' : '👥 تحديث السكواد'}
         </button>
         <button onClick={updateAllPoints} disabled={updating} className="action-btn" style={{background:'linear-gradient(135deg,var(--gold),#a8761a)',fontSize:12}}>
           {updating?'⏳ جاري...':'⚡ تحديث النقاط'}
