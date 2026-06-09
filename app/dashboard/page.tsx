@@ -880,61 +880,40 @@ export default function Dashboard() {
       `}</style>
 
       {/* ══ HEADER ══ */}
-      <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01))', borderBottom: '1px solid var(--line)', padding: '14px 20px' }}>
+      <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01))', borderBottom: '1px solid var(--line)', padding: '12px 16px' }}>
         <div style={{ maxWidth: 760, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', overflowX: 'auto' }}>
+          {/* السطر الأول: لوجو + اسم المستخدم + زر الخروج */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 28 }}>
-                {/* ③ لوجو بدل emoji */}
-                <img src="/logo-FF.png" alt="شامدان دوري" width={40} height={40} style={{ objectFit: 'contain', display: 'block' }} />
-              </div>
+              <img src="/logo-FF.png" alt="شامدان دوري" width={36} height={36} style={{ objectFit: 'contain', display: 'block' }} />
               <div>
-                <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--gold)' }}>الشمعدان × كأس العالم</div>
-                <div style={{ fontSize: 13, color: 'var(--muted)' }}>أهلاً {displayName}! 👋</div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--gold)', lineHeight: 1.2 }}>الشمعدان × كأس العالم</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>أهلاً {displayName}! 👋</div>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(217,178,95,.08)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '7px 14px', fontSize: 14, fontWeight: 800 }}>
-                <span>🏅</span>
-                <span style={{ color: 'var(--gold)' }}>{animatedPoints}</span>
-                <span style={{ color: 'var(--muted)', fontSize: 12 }}>نقطة</span>
-                {myRank > 0 && (
-                  <span style={{ background: 'rgba(217,178,95,.15)', borderRadius: 8, padding: '2px 8px', fontSize: 12, color: '#ffe3a6', marginRight: 4 }}>
-                    #{myRank} ترتيب
-                  </span>
-                )}
-              </div>
-              <button onClick={() => setShowProfileModal(true)} style={{ padding: '9px 16px', borderRadius: 12, cursor: 'pointer', border: profileIncomplete ? '1px solid rgba(217,178,95,.35)' : '1px solid var(--line)', background: profileIncomplete ? 'rgba(217,178,95,.08)' : 'var(--surface-2)', color: profileIncomplete ? '#f2d79e' : 'var(--text)', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'flex', alignItems: 'center', gap: 6 }}>
-                {profileIncomplete ? '🎁 أكمل ملفك +5 نقاط' : `✏️ ${displayName}`}
-              </button>
-              <Link href="/my-leagues" style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(59,130,246,.3)', background: 'rgba(59,130,246,.08)', color: '#93c5fd', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                🏆 ليجاتي
-              </Link>
-              <button onClick={() => setShowReferral(true)} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(39,176,110,.3)', background: 'rgba(39,176,110,.08)', color: '#5effa8', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                🎁 ادعُ صديق
-                {referralCount > 0 && <span style={{ background: 'rgba(39,176,110,.2)', borderRadius: 999, padding: '1px 7px', fontSize: 11 }}>{referralCount}</span>}
-              </button>
-              <button
-                onClick={handlePushSubscribe}
-                disabled={pushEnabled || pushLoading}
-                style={{
-                  padding: '9px 16px', borderRadius: 12,
-                  border: pushEnabled ? '1px solid rgba(39,176,110,.3)' : '1px solid rgba(255,255,255,.12)',
-                  background: pushEnabled ? 'rgba(39,176,110,.08)' : 'var(--surface-2)',
-                  color: pushEnabled ? '#5effa8' : 'var(--muted)',
-                  cursor: pushEnabled ? 'default' : 'pointer',
-                  fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif',
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  opacity: pushLoading ? 0.6 : 1,
-                  transition: 'all .2s',
-                }}
-              >
-                {pushEnabled ? '🔔 مفعّل' : pushLoading ? '...' : '🔔 إشعارات'}
-              </button>
-              <button onClick={handleLogout} style={{ padding: '9px 16px', borderRadius: 12, border: '1px solid rgba(201,58,47,.3)', background: 'rgba(201,58,47,.08)', color: '#ff9e9e', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif' }}>
-                خروج
-              </button>
-            </div>
+            <button onClick={handleLogout} style={{ padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(201,58,47,.3)', background: 'rgba(201,58,47,.08)', color: '#ff9e9e', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', flexShrink: 0 }}>
+              خروج
+            </button>
+          </div>
+          {/* السطر الثاني: الأزرار — تلتف تلقائياً على موبايل */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => setShowProfileModal(true)} style={{ padding: '8px 14px', borderRadius: 12, cursor: 'pointer', border: profileIncomplete ? '1px solid rgba(217,178,95,.35)' : '1px solid var(--line)', background: profileIncomplete ? 'rgba(217,178,95,.08)' : 'var(--surface-2)', color: profileIncomplete ? '#f2d79e' : 'var(--text)', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {profileIncomplete ? '🎁 أكمل ملفك +5 نقاط' : `✏️ ${displayName}`}
+            </button>
+            <Link href="/my-leagues" style={{ padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(59,130,246,.3)', background: 'rgba(59,130,246,.08)', color: '#93c5fd', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              🏆 ليجاتي
+            </Link>
+            <button onClick={() => setShowReferral(true)} style={{ padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(39,176,110,.3)', background: 'rgba(39,176,110,.08)', color: '#5effa8', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              🎁 ادعُ صديق
+              {referralCount > 0 && <span style={{ background: 'rgba(39,176,110,.2)', borderRadius: 999, padding: '1px 7px', fontSize: 11 }}>{referralCount}</span>}
+            </button>
+            <button
+              onClick={handlePushSubscribe}
+              disabled={pushEnabled || pushLoading}
+              style={{ padding: '8px 14px', borderRadius: 12, border: pushEnabled ? '1px solid rgba(39,176,110,.3)' : '1px solid rgba(255,255,255,.12)', background: pushEnabled ? 'rgba(39,176,110,.08)' : 'var(--surface-2)', color: pushEnabled ? '#5effa8' : 'var(--muted)', cursor: pushEnabled ? 'default' : 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: pushLoading ? 0.6 : 1, transition: 'all .2s' }}
+            >
+              {pushEnabled ? '🔔 مفعّل' : pushLoading ? '...' : '🔔 إشعارات'}
+            </button>
           </div>
         </div>
       </div>
@@ -1052,32 +1031,74 @@ export default function Dashboard() {
       {/* ══ MAIN ══ */}
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
         {/* Stats Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 16 }}>
           {[
-            { label: 'نقاطي',        value: animatedPoints,                                  color: 'var(--gold)',  icon: '🏅', big: true },
-            { label: 'ترتيبي',       value: myRank > 0 ? `#${myRank}` : '—',          color: 'var(--text)',  icon: '📊', big: true },
-            { label: 'توقعاتي',      value: predictions.length,                        color: '#8ae0b3',      icon: '⚽' },
-            { label: 'المتسابقون',   value: leaderboard.length,                        color: '#7db1ff',      icon: '👥' },
-            { label: 'دقة التوقع',     value: resolvedPreds.length > 0 ? `${accuracyPct}%` : '—', color: '#c084fc', icon: '🎯' },
-            { label: 'الجولات',        value: streakCount > 0 ? `${streakCount} 🔥` : '—',        color: '#f97316', icon: '📅' },
+            { label: 'توقعاتي',    value: predictions.length,                                        color: '#8ae0b3', icon: '⚽' },
+            { label: 'المتسابقون', value: leaderboard.length,                                        color: '#7db1ff', icon: '👥' },
+            { label: 'دقة التوقع', value: resolvedPreds.length > 0 ? `${accuracyPct}%` : '—',        color: '#c084fc', icon: '🎯' },
+            { label: 'الجولات',    value: streakCount > 0 ? `${streakCount} 🔥` : '—',               color: '#f97316', icon: '📅' },
           ].map((s: any) => (
             <div key={s.label} className="stat-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 22, marginBottom: 6 }}>{s.icon}</div>
-              <div style={{ fontSize: s.big ? 28 : 22, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{s.label}</div>
             </div>
           ))}
         </div>
 
+        {/* ══ بطاقة الترتيب الشخصي ══ */}
+        {myRank > 0 && (
+          <div style={{ background: 'linear-gradient(135deg,rgba(217,178,95,.1),rgba(217,178,95,.04))', border: '1px solid rgba(217,178,95,.25)', borderRadius: 20, padding: '16px 20px', marginBottom: 24 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 12 }}>📊 ترتيبك</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {/* الترتيب الإجمالي */}
+              <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px', textAlign: 'center', border: '1px solid rgba(217,178,95,.2)' }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>الترتيب الإجمالي</div>
+                <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>#{myRank}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>من {leaderboard.length} متسابق</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{animatedPoints} نقطة</div>
+              </div>
+              {/* ترتيب الجولة الحالية */}
+              <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px', textAlign: 'center', border: '1px solid rgba(59,130,246,.2)' }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>
+                  {roundLabels[activeRound] || activeRound || 'الجولة الحالية'}
+                </div>
+                {(() => {
+                  const roundFixtureIds = matches
+                    .filter((m: any) => m.league.round === activeRound)
+                    .map((m: any) => m.fixture.id);
+                  const roundScores = leaderboard.map((p: any) => {
+                    const pts = predictions
+                      .filter((pr: any) => pr.user_id === p.user_id && roundFixtureIds.includes(pr.fixture_id))
+                      .reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
+                    return { user_id: p.user_id, pts };
+                  }).sort((a: any, b: any) => b.pts - a.pts);
+                  const myRoundRank = roundScores.findIndex((p: any) => p.user_id === user?.id) + 1;
+                  const myRoundPts  = roundScores.find((p: any) => p.user_id === user?.id)?.pts ?? 0;
+                  return myRoundRank > 0 ? (
+                    <>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: '#93c5fd', fontVariantNumeric: 'tabular-nums' }}>#{myRoundRank}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>من {roundScores.length} متسابق</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#bfdbfe', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{myRoundPts} نقطة</div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 24, color: 'var(--muted)', marginTop: 16 }}>—</div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Quick Join League */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: '16px 20px', marginBottom: 24 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 12 }}>🏆 انضم لليج بكود سريع</div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input type="text" value={leagueCode} onChange={e => setLeagueCode(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && quickJoinLeague()} placeholder="أدخل كود الليج..." className="quick-input" maxLength={8} />
-            <button onClick={quickJoinLeague} disabled={leagueJoining} style={{ padding: '12px 20px', borderRadius: 14, background: 'linear-gradient(135deg,#e0bc73,#b9892d)', border: 'none', color: '#211708', fontWeight: 800, fontSize: 14, fontFamily: 'Cairo, sans-serif', cursor: 'pointer' }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <input type="text" value={leagueCode} onChange={e => setLeagueCode(e.target.value.toUpperCase())} onKeyDown={e => e.key === 'Enter' && quickJoinLeague()} placeholder="أدخل كود الليج..." className="quick-input" maxLength={8} style={{ minWidth: 0, flex: '1 1 120px' }} />
+            <button onClick={quickJoinLeague} disabled={leagueJoining} style={{ padding: '12px 20px', borderRadius: 14, background: 'linear-gradient(135deg,#e0bc73,#b9892d)', border: 'none', color: '#211708', fontWeight: 800, fontSize: 14, fontFamily: 'Cairo, sans-serif', cursor: 'pointer', flexShrink: 0 }}>
               {leagueJoining ? '⏳' : 'انضم'}
             </button>
-            <Link href="/my-leagues" style={{ padding: '12px 20px', borderRadius: 14, border: '1px solid rgba(59,130,246,.3)', background: 'rgba(59,130,246,.08)', color: '#93c5fd', fontWeight: 700, fontSize: 14, fontFamily: 'Cairo, sans-serif', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            <Link href="/my-leagues" style={{ padding: '12px 20px', borderRadius: 14, border: '1px solid rgba(59,130,246,.3)', background: 'rgba(59,130,246,.08)', color: '#93c5fd', fontWeight: 700, fontSize: 14, fontFamily: 'Cairo, sans-serif', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap', flexShrink: 0 }}>
               عرض ليجاتي
             </Link>
           </div>
@@ -1242,18 +1263,22 @@ export default function Dashboard() {
                         />
                       </div>
 
-                      {/* ✅ التوقعات الإضافية — 2×2 grid */}
+                      {/* ✅ التوقعات الإضافية */}
                       <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '14px 16px', marginBottom: 12 }}>
-                        <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                           توقعات إضافية
-                          <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: '#ffe3a6', border: '1px solid rgba(217,178,95,.2)' }}>+2 نقطة لكل إجابة صح</span>
+                          <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: '#ffe3a6', border: '1px solid rgba(217,178,95,.2)' }}>+2 لكل صح</span>
+                        </div>
+                        {/* ⚠️ تحذير الخصم */}
+                        <div style={{ fontSize: 12, color: '#fdba74', background: 'rgba(251,146,60,.08)', border: '1px solid rgba(251,146,60,.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 12 }}>
+                          ⚠️ خد بالك، اختياراتك الغلط هنا هتخسرك نقاط لأن كل توقع غلط بـ -1 😉
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                           {[
-                            { key: 'extraTime',            label: '⏱️ وقت إضافي؟' },
-                            { key: 'predicted_red_card',   label: '🟥 بطاقة حمراء؟' },
-                            { key: 'predicted_penalty',    label: '⚽ ركلة جزاء؟' },
-                            { key: 'predicted_both_teams', label: '🎯 الفريقان يسجّلان؟' },
+                            // وقت إضافي فقط في الأدوار الإقصائية (مش Group Stage)
+                            ...(!match.league?.round?.startsWith('Group Stage') ? [{ key: 'extraTime', label: '⏱️ وقت إضافي؟' }] : []),
+                            { key: 'predicted_red_card', label: '🟥 بطاقة حمراء؟' },
+                            { key: 'predicted_penalty',  label: '⚽ ركلة جزاء؟' },
                           ].map(({ key, label }) => (
                             <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', borderRadius: 12, background: form[key] ? 'rgba(217,178,95,.08)' : 'var(--surface-3)', border: `1px solid ${form[key] ? 'rgba(217,178,95,.25)' : 'var(--line)'}`, transition: 'all .2s' }}>
                               <input
