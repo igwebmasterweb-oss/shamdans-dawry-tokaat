@@ -1,5 +1,4 @@
 'use client';
-
 import { useEffect, useState } from 'react';
 
 type BeforeInstallPromptEvent = Event & {
@@ -10,8 +9,9 @@ type BeforeInstallPromptEvent = Event & {
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(true); // ابدأ بـ true لتفادي flash
   const [dismissed, setDismissed] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const ua = window.navigator.userAgent.toLowerCase();
@@ -22,12 +22,12 @@ export default function InstallPrompt() {
 
     setIsIos(ios);
     setIsStandalone(standalone);
+    setReady(true);
 
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
-
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
@@ -39,6 +39,8 @@ export default function InstallPrompt() {
     setDeferredPrompt(null);
   };
 
+  // انتظر حتى يتم فحص البيئة أولاً
+  if (!ready) return null;
   if (isStandalone || dismissed) return null;
   if (!deferredPrompt && !isIos) return null;
 
@@ -67,19 +69,24 @@ export default function InstallPrompt() {
         }
         @keyframes slideUp {
           from { opacity: 0; transform: translate(-50%, 20px); }
-          to   { opacity: 1; transform: translate(-50%, 0);    }
+          to   { opacity: 1; transform: translate(-50%, 0); }
         }
-        .pwa-banner img { width: 40px; height: 40px; object-fit: contain; flex-shrink: 0; }
+        .pwa-banner img {
+          width: 40px; height: 40px; object-fit: contain; flex-shrink: 0;
+        }
         .pwa-banner-text { flex: 1; }
-        .pwa-banner-title { font-size: 13px; font-weight: 800; color: #f4f1e8; margin-bottom: 2px; }
-        .pwa-banner-sub   { font-size: 11px; color: #a8a39a; line-height: 1.5; }
-        .pwa-install-btn  {
+        .pwa-banner-title {
+          font-size: 13px; font-weight: 800; color: #f4f1e8; margin-bottom: 2px;
+        }
+        .pwa-banner-sub {
+          font-size: 11px; color: #a8a39a; line-height: 1.5;
+        }
+        .pwa-install-btn {
           background: linear-gradient(135deg,#d9b25f,#a8761a);
           color: #0a0800; border: none; border-radius: 10px;
           padding: 8px 14px; font-size: 12px; font-weight: 800;
           cursor: pointer; white-space: nowrap; flex-shrink: 0;
-          font-family: 'Cairo', sans-serif;
-          transition: opacity .15s;
+          font-family: 'Cairo', sans-serif; transition: opacity .15s;
         }
         .pwa-install-btn:hover { opacity: .85; }
         .pwa-dismiss-btn {
@@ -89,23 +96,30 @@ export default function InstallPrompt() {
         }
       `}</style>
 
-      <div className="pwa-banner" role="banner" aria-label="تثبيت التطبيق">
+      <div className="pwa-banner">
         <img src="/logo-FF.png" alt="الشمعدان" />
         <div className="pwa-banner-text">
           <div className="pwa-banner-title">ثبّت دوري توقعات الشمعدان</div>
-          {isIos ? (
-            <div className="pwa-banner-sub">
-              اضغط <strong>مشاركة ↑</strong> ثم<br />
-              <strong>&ldquo;إضافة إلى الشاشة الرئيسية&rdquo;</strong>
-            </div>
-          ) : (
-            <div className="pwa-banner-sub">ثبّته على موبايلك للوصول السريع 🚀</div>
-          )}
+          <div className="pwa-banner-sub">
+            {isIos ? (
+              <>اضغط <strong>مشاركة ↑</strong> ثم <strong>&quot;إضافة إلى الشاشة الرئيسية&quot;</strong></>
+            ) : (
+              <>ثبّته على موبايلك للوصول السريع 🚀</>
+            )}
+          </div>
         </div>
         {!isIos && (
-          <button className="pwa-install-btn" onClick={handleInstall}>تثبيت</button>
+          <button className="pwa-install-btn" onClick={handleInstall}>
+            تثبيت
+          </button>
         )}
-        <button className="pwa-dismiss-btn" onClick={() => setDismissed(true)} aria-label="إغلاق">×</button>
+        <button
+          className="pwa-dismiss-btn"
+          onClick={() => setDismissed(true)}
+          aria-label="إغلاق"
+        >
+          ×
+        </button>
       </div>
     </>
   );
