@@ -28,12 +28,9 @@ export default function HomePage() {
 
   const pointsCards = [
     { pts: '+10', label: 'نتيجة كاملة', icon: '🎯', desc: 'النتيجة الدقيقة بالأهداف' },
-    { pts: '+5',  label: 'الفائز / تعادل', icon: '✅', desc: 'توقعت مين هيفوز أو تعادل' },
     { pts: '+3',  label: 'أول هدف', icon: '⚽', desc: 'توقعت أول هداف في الماتش' },
-    { pts: '+2',  label: 'وقت إضافي', icon: '⏱️', desc: 'الماتش راح لوقت إضافي' },
     { pts: '+2',  label: 'كرت أحمر', icon: '🟥', desc: 'كان فيه كرت أحمر في الماتش' },
     { pts: '+2',  label: 'ركلة جزاء', icon: '🥅', desc: 'كان فيه بينالتي في الماتش' },
-    { pts: '+2',  label: 'الفريقين سجّلا', icon: '🔄', desc: 'كلا الفريقين سجّل هدفاً' },
   ];
 
   const steps = [
