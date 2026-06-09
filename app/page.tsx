@@ -86,9 +86,9 @@ export default function HomePage() {
   ];
 
   const grandPrizes = [
-    { rank: '🥇 المركز الأول', reward: '3 سبائك ذهب', sub: '3 جرام ذهب', color: '#d9b25f', glow: 'rgba(217,178,95,.35)' },
-    { rank: '🥈 المركز الثاني', reward: '2 سبيكة ذهب', sub: '2 جرام ذهب', color: '#b0b8c1', glow: 'rgba(176,184,193,.2)' },
-    { rank: '🥉 المركز الثالث', reward: '1 سبيكة ذهب', sub: '1 جرام ذهب', color: '#cd7f32', glow: 'rgba(205,127,50,.2)' },
+    { rank: '🥇 المركز الأول', reward: '3 سبائك ذهب', sub: '', color: '#d9b25f', glow: 'rgba(217,178,95,.35)' },
+    { rank: '🥈 المركز الثاني', reward: '2 سبيكة ذهب', sub: '', color: '#b0b8c1', glow: 'rgba(176,184,193,.2)' },
+    { rank: '🥉 المركز الثالث', reward: '1 سبيكة ذهب', sub: '', color: '#cd7f32', glow: 'rgba(205,127,50,.2)' },
   ];
 
   return (
