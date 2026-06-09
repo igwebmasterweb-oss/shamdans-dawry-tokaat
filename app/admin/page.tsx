@@ -50,6 +50,11 @@ export default function AdminPage() {
   const [prizeModalLoading, setPrizeModalLoading] = useState(false);
   const [savingWinner, setSavingWinner]         = useState(false);
 
+  // ── Breakdown Modal ──
+  const [breakdownUser, setBreakdownUser]   = useState<any>(null);
+  const [breakdownPreds, setBreakdownPreds] = useState<any[]>([]);
+  const [showBreakdown, setShowBreakdown]   = useState(false);
+
   const autoIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const router = useRouter();
 
@@ -110,8 +115,15 @@ export default function AdminPage() {
     try {
       const { data } = await supabase.from('user_points').select('*').order('total_points',{ascending:false});
       setLeaderboard((data || []).map((row: any) => ({
-        user_id: row.user_id, user_email: row.user_email,
-        full_name: row.full_name, total: row.total_points || 0, count: row.predictions_count || 0,
+        user_id:              row.user_id,
+        user_email:           row.user_email,
+        full_name:            row.full_name,
+        total:                row.total_points || 0,
+        count:                row.predictions_count || 0,
+        referral_count:       row.referral_count || 0,
+        bonus_points_awarded: row.bonus_points_awarded || 0,
+        facebook_bonus:       row.facebook_bonus || 0,
+        google_bonus:         row.google_bonus || 0,
       })));
     } catch (err) { console.error('loadLeaderboard:', err); }
   }, []);
@@ -342,6 +354,42 @@ export default function AdminPage() {
     const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `leaderboard-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  };
+
+  const openBreakdown = (p: any) => {
+    const userPreds = predictions
+      .filter(pr => pr.user_id === p.user_id && pr.actual_home_score !== null)
+      .map(pr => {
+        const items: { icon: string; label: string; pts: number }[] = [];
+        const isExact = pr.predicted_home_score === pr.actual_home_score
+                     && pr.predicted_away_score === pr.actual_away_score;
+        if (isExact) {
+          items.push({ icon:'🎯', label:'نتيجة كاملة', pts:10 });
+        } else {
+          const homeWin  = pr.actual_home_score > pr.actual_away_score;
+          const awayWin  = pr.actual_away_score > pr.actual_home_score;
+          const isDraw   = pr.actual_home_score === pr.actual_away_score;
+          const pHomeWin = pr.predicted_home_score > pr.predicted_away_score;
+          const pAwayWin = pr.predicted_away_score > pr.predicted_home_score;
+          const pDraw    = pr.predicted_home_score === pr.predicted_away_score;
+          const correctOutcome = (homeWin&&pHomeWin)||(awayWin&&pAwayWin)||(isDraw&&pDraw);
+          if (correctOutcome) items.push({ icon:'✅', label:'فائز/تعادل صح', pts:5 });
+        }
+        if (pr.predicted_first_scorer && pr.first_scorer_actual &&
+            pr.predicted_first_scorer.trim().toLowerCase() === pr.first_scorer_actual.trim().toLowerCase())
+          items.push({ icon:'⚽', label:'أول هدف صح', pts:3 });
+        if (pr.predicted_red_card   && pr.red_card_in_match)  items.push({ icon:'🟥', label:'كرت أحمر صح',   pts: 2 });
+        if (pr.predicted_penalty    && pr.penalty_in_match)   items.push({ icon:'🥅', label:'ركلة جزاء صح',  pts: 2 });
+        if (pr.predicted_extra_time && pr.went_extra_time)    items.push({ icon:'⏱️', label:'وقت إضافي صح',  pts: 2 });
+        if (pr.predicted_both_teams && pr.both_teams_scored)  items.push({ icon:'🔄', label:'الفريقين سجلا', pts: 2 });
+        if (!pr.red_card_in_match   && pr.predicted_red_card)   items.push({ icon:'🟥', label:'كرت أحمر غلط',  pts:-1 });
+        if (!pr.penalty_in_match    && pr.predicted_penalty)    items.push({ icon:'🥅', label:'ركلة جزاء غلط', pts:-1 });
+        if (!pr.went_extra_time     && pr.predicted_extra_time) items.push({ icon:'⏱️', label:'وقت إضافي غلط', pts:-1 });
+        return { ...pr, items, calcTotal: Math.max(0, items.reduce((s,i)=>s+i.pts,0)) };
+      });
+    setBreakdownUser(p);
+    setBreakdownPreds(userPreds);
+    setShowBreakdown(true);
   };
 
   // ─── Render states ─────────────────────────────────────
@@ -626,7 +674,7 @@ export default function AdminPage() {
             </div>
             <div style={{overflowX:'auto'}}>
               <table>
-                <thead><tr><th>#</th><th>اللاعب</th><th>الإيميل</th><th>النقاط</th><th>التوقعات</th></tr></thead>
+                <thead><tr><th>#</th><th>اللاعب</th><th>الإيميل</th><th>النقاط</th><th>التوقعات</th><th></th></tr></thead>
                 <tbody>
                   {leaderboard.length===0 ? (
                     <tr><td colSpan={5} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
@@ -637,6 +685,12 @@ export default function AdminPage() {
                       <td style={{color:'var(--muted)',fontSize:12}}>{p.user_email}</td>
                       <td style={{color:'var(--gold)',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{p.total}</td>
                       <td style={{color:'var(--muted)'}}>{p.count}</td>
+                      <td>
+                        <button
+                          onClick={()=>openBreakdown(p)}
+                          style={{padding:'5px 12px',borderRadius:8,border:'1px solid rgba(217,178,95,.3)',background:'rgba(217,178,95,.08)',color:'var(--gold)',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'Cairo,sans-serif',whiteSpace:'nowrap'}}
+                        >🔍 تفاصيل</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -934,6 +988,107 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+      {/* ══ BREAKDOWN MODAL ══ */}
+      {showBreakdown && breakdownUser && (
+        <div onClick={()=>setShowBreakdown(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',display:'grid',placeItems:'center',zIndex:2000,padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:24,padding:24,width:'100%',maxWidth:580,maxHeight:'88vh',overflowY:'auto',direction:'rtl'}}>
+
+            {/* Header */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+              <div>
+                <div style={{fontWeight:900,fontSize:16,color:'var(--gold)'}}>
+                  {breakdownUser.full_name || breakdownUser.user_email?.split('@')[0] || '—'}
+                </div>
+                <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{breakdownUser.user_email}</div>
+              </div>
+              <button onClick={()=>setShowBreakdown(false)} style={{background:'var(--surface-3)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center'}}>✕</button>
+            </div>
+
+            {/* ملخص الإجمالي */}
+            <div style={{background:'linear-gradient(135deg,rgba(217,178,95,.12),rgba(217,178,95,.04))',border:'1px solid rgba(217,178,95,.25)',borderRadius:16,padding:'14px 18px',marginBottom:20}}>
+              <div style={{fontSize:13,color:'var(--muted)',fontWeight:700,marginBottom:12}}>📊 مصادر النقاط</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10}}>
+                {/* نقاط التوقعات */}
+                {(() => {
+                  const predPts = breakdownPreds.reduce((s,p)=>s+(p.points||0),0);
+                  return (
+                    <div style={{background:'var(--surface-2)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
+                      <div style={{fontSize:11,color:'var(--muted)',marginBottom:4}}>🎯 التوقعات</div>
+                      <div style={{fontWeight:900,fontSize:20,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{predPts}</div>
+                      <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{breakdownPreds.length} ماتش محسوب</div>
+                    </div>
+                  );
+                })()}
+                {/* نقاط الدعوات */}
+                <div style={{background:'var(--surface-2)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
+                  <div style={{fontSize:11,color:'var(--muted)',marginBottom:4}}>🤝 الدعوات</div>
+                  <div style={{fontWeight:900,fontSize:20,color:'#5effa8',fontVariantNumeric:'tabular-nums'}}>{(breakdownUser.referral_count||0)*5}</div>
+                  <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{breakdownUser.referral_count||0} دعوة × 5</div>
+                </div>
+                {/* نقاط البروفايل */}
+                {(breakdownUser.bonus_points_awarded||0)+(breakdownUser.facebook_bonus||0)+(breakdownUser.google_bonus||0) > 0 && (
+                  <div style={{background:'var(--surface-2)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
+                    <div style={{fontSize:11,color:'var(--muted)',marginBottom:4}}>✅ البروفايل</div>
+                    <div style={{fontWeight:900,fontSize:20,color:'#60c3ff',fontVariantNumeric:'tabular-nums'}}>
+                      {(breakdownUser.bonus_points_awarded||0)+(breakdownUser.facebook_bonus||0)+(breakdownUser.google_bonus||0)}
+                    </div>
+                    <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>
+                      {breakdownUser.facebook_bonus>0?'FB ':''}
+                      {breakdownUser.google_bonus>0?'Google ':''}
+                      {breakdownUser.bonus_points_awarded>0?'إكمال':''}
+                    </div>
+                  </div>
+                )}
+                {/* الإجمالي */}
+                <div style={{background:'rgba(217,178,95,.1)',border:'1px solid rgba(217,178,95,.25)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
+                  <div style={{fontSize:11,color:'var(--gold)',fontWeight:700,marginBottom:4}}>🏆 الإجمالي</div>
+                  <div style={{fontWeight:900,fontSize:22,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{breakdownUser.total}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* تفاصيل كل توقع */}
+            <div style={{fontSize:13,color:'var(--muted)',fontWeight:700,marginBottom:12}}>📋 تفصيل التوقعات ({breakdownPreds.length})</div>
+            {breakdownPreds.length === 0 ? (
+              <div style={{textAlign:'center',color:'var(--muted)',padding:32,fontSize:13}}>لا توجد توقعات محسوبة بعد</div>
+            ) : breakdownPreds.map((pr, idx) => (
+              <div key={idx} style={{background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:14,padding:'12px 14px',marginBottom:10}}>
+                {/* اسم الماتش */}
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,flexWrap:'wrap',gap:6}}>
+                  <div style={{fontWeight:800,fontSize:13}}>{pr.home_team} × {pr.away_team}</div>
+                  <div style={{fontWeight:900,fontSize:15,color:(pr.points||0)>0?'var(--gold)':'var(--muted)',fontVariantNumeric:'tabular-nums'}}>
+                    {pr.points||0} نقطة
+                  </div>
+                </div>
+                {/* توقع vs فعلي */}
+                <div style={{display:'flex',gap:16,fontSize:12,color:'var(--muted)',marginBottom:8,flexWrap:'wrap'}}>
+                  <span>🔮 توقع: <strong style={{color:'var(--text)'}}>{pr.predicted_home_score} - {pr.predicted_away_score}</strong></span>
+                  <span>✅ فعلي: <strong style={{color:'var(--text)'}}>{pr.actual_home_score} - {pr.actual_away_score}</strong></span>
+                  {pr.first_scorer_actual && <span>⚽ أول هدف: <strong style={{color:'var(--text)'}}>{pr.first_scorer_actual}</strong></span>}
+                </div>
+                {/* البنود */}
+                {pr.items.length > 0 ? (
+                  <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                    {pr.items.map((item: any, ii: number) => (
+                      <span key={ii} style={{
+                        fontSize:11,padding:'3px 10px',borderRadius:999,fontWeight:700,
+                        background: item.pts>0 ? 'rgba(39,176,110,.12)' : 'rgba(201,58,47,.12)',
+                        border: `1px solid ${item.pts>0 ? 'rgba(39,176,110,.25)' : 'rgba(201,58,47,.25)'}`,
+                        color: item.pts>0 ? '#5effa8' : '#ff9c91',
+                      }}>
+                        {item.icon} {item.label} ({item.pts>0?'+':''}{item.pts})
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{fontSize:11,color:'var(--muted)'}}>— لا نقاط من هذا الماتش</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
     </>
   );
