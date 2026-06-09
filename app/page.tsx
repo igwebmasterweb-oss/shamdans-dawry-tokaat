@@ -284,7 +284,7 @@ export default function HomePage() {
           <h1 style={{ fontSize: 'clamp(26px,7vw,54px)', fontWeight: 900, lineHeight: 1.2, marginBottom: 16 }}>
             سجل. توقع.{' '}
             <span style={{ background: 'linear-gradient(90deg,#d9b25f,#ffe9a0,#d9b25f)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-              تصدّر اجمع نقاط و.
+              اجمع نقاط واتصدّر.
             </span>
           </h1>
           <p style={{ fontSize: 'clamp(14px,2.5vw,16px)', color: 'var(--muted)', maxWidth: 500, margin: '0 auto 32px', lineHeight: 1.9 }}>
