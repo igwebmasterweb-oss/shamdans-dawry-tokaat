@@ -286,7 +286,6 @@ export default function AdminPage() {
     setSyncing(false);
   };
 
-
   const syncSquads = async () => {
     setSyncingSquads(true);
     try {
@@ -296,6 +295,7 @@ export default function AdminPage() {
     } catch { showMsg('❌ خطأ في تحديث السكواد','error'); }
     setSyncingSquads(false);
   };
+
   const adminDeleteLeague = async (lg: any) => {
     if (!confirm(`حذف ليج "${lg.name}" نهائياً؟`)) return;
     try {
@@ -385,6 +385,8 @@ export default function AdminPage() {
         / (leaderboard.length * filteredMatches.length)) * 100) : 0;
   const ungradedCount   = predictions.filter(p => p.actual_home_score === null).length;
   const noResultCount   = matches.filter(m => m.actual_home_score === null && !m.is_open).length;
+  const topScore        = leaderboard.length > 0 ? Math.max(...leaderboard.map((p:any) => p.total)) : 0;
+  const zeroPointsCount = leaderboard.filter((p:any) => p.total === 0).length;
 
   // ⑦ filtered predictions ✅
   const visiblePredictions = predictions.filter(p => {
@@ -478,6 +480,8 @@ export default function AdminPage() {
           {label:'ميني ليجات',        value:leagues.length,         color:'#a78bfa'},
           {label:'أعضاء ميني ليج',   value:totalLeagueMembers,     color:'#38bdf8'},
           {label:'دعوات معلقة',       value:totalPending,           color:'#fb923c'},
+          {label:'أعلى نقاط',           value:topScore,               color:'#4ade80'},
+          {label:'صفر نقاط',            value:zeroPointsCount,        color:'#f87171'},
         ].map(s=>(
           <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:16,padding:'12px 14px',textAlign:'center'}}>
             <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,fontWeight:700}}>{s.label}</div>
@@ -629,7 +633,7 @@ export default function AdminPage() {
                   ) : leaderboard.map((p,i)=>(
                     <tr key={i}>
                       <td style={{fontWeight:800,color:i<3?'var(--gold)':'var(--muted)'}}>{i<3?medals[i]:`#${i+1}`}</td>
-                      <td style={{fontWeight:700}}>{p.full_name||'—'}</td>
+                      <td style={{fontWeight:700}}>{p.full_name || p.user_email?.split('@')[0] || '—'}</td>
                       <td style={{color:'var(--muted)',fontSize:12}}>{p.user_email}</td>
                       <td style={{color:'var(--gold)',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{p.total}</td>
                       <td style={{color:'var(--muted)'}}>{p.count}</td>
