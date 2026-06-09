@@ -19,79 +19,81 @@ export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const internalKey = request.headers.get('x-internal-key');
   const secret = process.env.CRON_SECRET || '';
-
-  const isAuthorized =
-    authHeader === `Bearer ${secret}` || internalKey === secret;
-
- if (secret && !isAuthorized) {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
- }
+  const isAuthorized = authHeader === `Bearer ${secret}` || internalKey === secret;
+  if (secret && !isAuthorized) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   try {
     const LEAGUE_ID = process.env.NEXT_PUBLIC_LEAGUE_ID || '1';
-    const SEASON    = process.env.NEXT_PUBLIC_SEASON    || '2026';
+    const SEASON = process.env.NEXT_PUBLIC_SEASON || '2026';
 
-    // ① جيب كل الفرق المشاركة في البطولة
+    // ① جيب كل الفرق
     const teamsData = await apiFetch(`/teams?league=${LEAGUE_ID}&season=${SEASON}`);
     const teams: any[] = teamsData.response || [];
 
     if (teams.length === 0) {
-      return NextResponse.json({ success: false, error: 'لا توجد فرق — تحقق من LEAGUE_ID و SEASON' });
+      return NextResponse.json({ success: false, error: 'لا توجد فرق' });
     }
 
-    let totalInserted = 0;
-    let totalSkipped  = 0;
-    let apiCalls      = 1; // teams call
+    let totalUpserted = 0;
+    let totalDeleted = 0;
+    let apiCalls = 1;
 
     for (const teamEntry of teams) {
-      const teamId   = teamEntry.team.id;
+      const teamId = teamEntry.team.id;
       const teamName = teamEntry.team.name;
 
-      // ② شوف لو السكواد موجود بالفعل → تخطّى
-      const { count } = await supabaseAdmin
-        .from('team_players')
-        .select('id', { count: 'exact', head: true })
-        .eq('team_id', teamId);
+      await sleep(300);
 
-      if ((count ?? 0) > 0) {
-        totalSkipped++;
-        continue;
-      }
-
-      await sleep(300); // rate limit
+      // ② جيب السكواد الحالي من API دايمًا (مش skip)
       const squadData = await apiFetch(`/players/squads?team=${teamId}`);
       apiCalls++;
 
       const squadResponse: any[] = squadData.response || [];
-      if (squadResponse.length === 0) continue;
-
       const players: any[] = squadResponse[0]?.players || [];
+
       if (players.length === 0) continue;
 
+      // ③ الـ player IDs الحاليين من API
+      const currentPlayerIds = players.map((p: any) => p.id);
+
+      // ④ احذف اللاعبين اللي مش في السكواد الحالي (المستبعدين)
+      const { data: deletedRows } = await supabaseAdmin
+        .from('team_players')
+        .delete()
+        .eq('team_id', teamId)
+        .not('player_id', 'in', `(${currentPlayerIds.join(',')})`)
+        .select('id');
+
+      totalDeleted += deletedRows?.length ?? 0;
+
+      // ⑤ upsert السكواد الكامل الحالي
       const rows = players.map((p: any) => ({
-        team_id:     teamId,
-        team_name:   teamName,
-        player_id:   p.id,
+        team_id: teamId,
+        team_name: teamName,
+        player_id: p.id,
         player_name: p.name,
-        position:    p.position ?? null,
-        number:      p.number   ?? null,
+        position: p.position ?? null,
+        number: p.number ?? null,
       }));
 
       const { error } = await supabaseAdmin
         .from('team_players')
         .upsert(rows, { onConflict: 'team_id,player_id' });
 
-      if (!error) totalInserted += rows.length;
+      if (!error) totalUpserted += rows.length;
     }
 
     return NextResponse.json({
       success: true,
-      teams:   teams.length,
-      skipped: totalSkipped,
-      players: totalInserted,
+      teams: teams.length,
+      players_upserted: totalUpserted,
+      players_deleted: totalDeleted,
       apiCalls,
-      message: `✅ تم حفظ ${totalInserted} لاعب من ${teams.length - totalSkipped} فريق جديد`,
+      message: `✅ تم تحديث ${totalUpserted} لاعب وحذف ${totalDeleted} مستبعد`,
     });
+
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
