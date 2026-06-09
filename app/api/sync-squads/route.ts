@@ -1,4 +1,4 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseAdmin = createClient(
@@ -15,15 +15,7 @@ async function apiFetch(path: string) {
   return res.json();
 }
 
-export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
-  const internalKey = request.headers.get('x-internal-key');
-  const secret = process.env.CRON_SECRET || '';
-  const isAuthorized = authHeader === `Bearer ${secret}` || internalKey === secret;
-  if (secret && !isAuthorized) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function GET() {
   try {
     const LEAGUE_ID = process.env.NEXT_PUBLIC_LEAGUE_ID || '1';
     const SEASON = process.env.NEXT_PUBLIC_SEASON || '2026';
