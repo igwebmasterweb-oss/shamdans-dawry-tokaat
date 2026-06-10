@@ -200,8 +200,27 @@ export default function AdminPage() {
     try {
       const { data: ex, error: se } = await supabase.from('fixtures').select('id').eq('api_fixture_id',fid).maybeSingle();
       if (se) throw se;
-      if (ex) { const { error } = await supabase.from('fixtures').update({is_open:newStatus}).eq('api_fixture_id',fid); if(error) throw error; }
-      else    { const { error } = await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:newStatus,home_team:match.teams.home.name,away_team:match.teams.away.name,match_date:match.fixture.date,round:match.league.round}); if(error) throw error; }
+      if (ex) {
+        const { error } = await supabase.from('fixtures').update({is_open:newStatus}).eq('api_fixture_id',fid);
+        if(error) throw error;
+      }
+      else {
+        const { error } = await supabase.from('fixtures').insert({
+          api_fixture_id:   fid,
+          is_open:          newStatus,
+          match_date:       match.fixture.date,
+          round:            match.league.round,
+          home_team:        match.teams.home.name,
+          away_team:        match.teams.away.name,
+          home_team_name:   match.teams.home.name,
+          away_team_name:   match.teams.away.name,
+          home_team_id:     match.teams.home.id,
+          away_team_id:     match.teams.away.id,
+          home_team_logo:   match.teams.home.logo,
+          away_team_logo:   match.teams.away.logo,
+        });
+        if(error) throw error;
+      }
       await loadMatches();
       showMsg(newStatus ? '✅ التوقعات مفتوحة' : '🔒 التوقعات مغلقة');
     } catch (err:any) { showMsg('❌ '+(err?.message||'خطأ'),'error'); }
@@ -235,8 +254,28 @@ export default function AdminPage() {
         penalty_in_match:  penalty,
         both_teams_scored: bothTeams,
       };
-      if (ex) { const { error } = await supabase.from('fixtures').update(payload).eq('api_fixture_id',fid); if(error) throw error; }
-      else    { const { error } = await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:false,home_team:selectedMatch.teams.home.name,away_team:selectedMatch.teams.away.name,match_date:selectedMatch.fixture.date,round:selectedMatch.league.round,...payload}); if(error) throw error; }
+      if (ex) {
+        const { error } = await supabase.from('fixtures').update(payload).eq('api_fixture_id',fid);
+        if(error) throw error;
+      }
+      else {
+        const { error } = await supabase.from('fixtures').insert({
+          api_fixture_id:   fid,
+          is_open:          false,
+          match_date:       selectedMatch.fixture.date,
+          round:            selectedMatch.league.round,
+          home_team:        selectedMatch.teams.home.name,
+          away_team:        selectedMatch.teams.away.name,
+          home_team_name:   selectedMatch.teams.home.name,
+          away_team_name:   selectedMatch.teams.away.name,
+          home_team_id:     selectedMatch.teams.home.id,
+          away_team_id:     selectedMatch.teams.away.id,
+          home_team_logo:   selectedMatch.teams.home.logo,
+          away_team_logo:   selectedMatch.teams.away.logo,
+          ...payload,
+        });
+        if(error) throw error;
+      }
       const res  = await fetch('/api/update-results');
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'خطأ في حساب النقاط');
@@ -248,7 +287,7 @@ export default function AdminPage() {
   };
 
   const openAllMatches = async () => {
-    if (!confirm(`فتح توقعات جميع ماتشات "${roundLabels[activeRound]||activeRound}"؟`)) return;
+    if (!confirm(`فتح توقعات جميع ماتشات \"${roundLabels[activeRound]||activeRound}\"؟`)) return;
     setUpdating(true);
     const filtered = matches.filter(m => m.league.round === activeRound);
     let ok=0, fail=0;
@@ -256,8 +295,25 @@ export default function AdminPage() {
       const fid = match.fixture.id;
       try {
         const { data: ex } = await supabase.from('fixtures').select('id').eq('api_fixture_id',fid).maybeSingle();
-        if (ex) { await supabase.from('fixtures').update({is_open:true}).eq('api_fixture_id',fid); }
-        else    { await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:true,home_team:match.teams.home.name,away_team:match.teams.away.name,match_date:match.fixture.date,round:match.league.round}); }
+        if (ex) {
+          await supabase.from('fixtures').update({is_open:true}).eq('api_fixture_id',fid);
+        }
+        else {
+          await supabase.from('fixtures').insert({
+            api_fixture_id:   fid,
+            is_open:          true,
+            match_date:       match.fixture.date,
+            round:            match.league.round,
+            home_team:        match.teams.home.name,
+            away_team:        match.teams.away.name,
+            home_team_name:   match.teams.home.name,
+            away_team_name:   match.teams.away.name,
+            home_team_id:     match.teams.home.id,
+            away_team_id:     match.teams.away.id,
+            home_team_logo:   match.teams.home.logo,
+            away_team_logo:   match.teams.away.logo,
+          });
+        }
         ok++;
       } catch { fail++; }
     }
@@ -310,22 +366,22 @@ export default function AdminPage() {
   };
 
   const adminDeleteLeague = async (lg: any) => {
-    if (!confirm(`حذف ليج "${lg.name}" نهائياً؟`)) return;
+    if (!confirm(`حذف ليج \"${lg.name}\" نهائياً؟`)) return;
     try {
       await supabase.from('mini_league_invitations').delete().eq('league_id',lg.id);
       await supabase.from('mini_league_members').delete().eq('league_id',lg.id);
       const { error } = await supabase.from('mini_leagues').delete().eq('id',lg.id);
       if (error) throw error;
-      showMsg(`🗑️ تم حذف ليج "${lg.name}"`); await loadLeagues();
+      showMsg(`🗑️ تم حذف ليج \"${lg.name}\"`); await loadLeagues();
     } catch (err:any) { showMsg('❌ '+(err?.message||'خطأ'),'error'); }
   };
 
   const adminRemoveMember = async (leagueId: string, userId: string, memberName: string) => {
-    if (!confirm(`إزالة "${memberName}" من الليج؟`)) return;
+    if (!confirm(`إزالة \"${memberName}\" من الليج؟`)) return;
     try {
       const { error } = await supabase.from('mini_league_members').delete().eq('league_id',leagueId).eq('user_id',userId);
       if (error) throw error;
-      showMsg(`✅ تم إزالة "${memberName}"`); await loadLeagues();
+      showMsg(`✅ تم إزالة \"${memberName}\"`); await loadLeagues();
     } catch (err:any) { showMsg('❌ '+(err?.message||'خطأ'),'error'); }
   };
 
@@ -772,7 +828,6 @@ export default function AdminPage() {
 
         {activeTab==='prizes' && (
           <div>
-
             {/* ── أكثر نقاط اليوم ── */}
             <div style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:18,padding:'18px 20px',marginBottom:20}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
@@ -872,7 +927,6 @@ export default function AdminPage() {
       </div>
 
       {/* ══ RESULT MODAL ══ */}
-
       {showModal && selectedMatch && (
         <div onClick={()=>setShowModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',backdropFilter:'blur(6px)',display:'grid',placeItems:'center',zIndex:1000,padding:16}}>
           <div onClick={e=>e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:24,padding:28,width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}}>
@@ -924,71 +978,71 @@ export default function AdminPage() {
         </div>
       )}
 
-        {/* ── Modal إعلان الفائز ── */}
-        {showPrizeModal && selectedPhase && (
-          <div onClick={() => setShowPrizeModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',backdropFilter:'blur(8px)',display:'grid',placeItems:'center',zIndex:1001,padding:16}}>
-            <div onClick={e => e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid rgba(217,178,95,.25)',borderRadius:24,padding:28,width:'100%',maxWidth:500,maxHeight:'90vh',overflowY:'auto'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-                <div>
-                  <div style={{fontWeight:900,fontSize:17,color:'var(--gold)'}}>🏅 إعلان فائز</div>
-                  <div style={{fontSize:13,color:'var(--muted)',marginTop:3}}>{selectedPhase.name}</div>
-                </div>
-                <button onClick={() => setShowPrizeModal(false)} style={{background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center'}}>✕</button>
+      {/* ── Modal إعلان الفائز ── */}
+      {showPrizeModal && selectedPhase && (
+        <div onClick={() => setShowPrizeModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',backdropFilter:'blur(8px)',display:'grid',placeItems:'center',zIndex:1001,padding:16}}>
+          <div onClick={e => e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid rgba(217,178,95,.25)',borderRadius:24,padding:28,width:'100%',maxWidth:500,maxHeight:'90vh',overflowY:'auto'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+              <div>
+                <div style={{fontWeight:900,fontSize:17,color:'var(--gold)'}}>🏅 إعلان فائز</div>
+                <div style={{fontSize:13,color:'var(--muted)',marginTop:3}}>{selectedPhase.name}</div>
               </div>
-              {prizeModalLoading
-                ? <div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>⏳ جاري تحميل الليدربورد...</div>
-                : phaseLeaderboard.length === 0
-                  ? <div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>لا توجد نقاط مسجلة في هذه المرحلة بعد</div>
-                  : <>
-                    <div style={{background:'rgba(217,178,95,.08)',border:'1px solid rgba(217,178,95,.15)',borderRadius:12,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#ffe3a6'}}>
-                      سيتم إعلان أعلى {selectedPhase.winner_count || 1} مشارك كفائز في هذه المرحلة
-                    </div>
-                    {phaseLeaderboard.map((row: any, i: number) => {
-                      const prizeLabels = [selectedPhase.prize_label, selectedPhase.prize_label_2, selectedPhase.prize_label_3];
-                      return (
-                        <div key={row.user_id} style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'rgba(217,178,95,.06)',border:'1px solid rgba(217,178,95,.15)',borderRadius:14,marginBottom:8}}>
-                          <span style={{fontSize:24}}>{['🥇','🥈','🥉'][i] || String(i + 1)}</span>
-                          <div style={{flex:1}}>
-                            <div style={{fontWeight:800,fontSize:15}}>{row.full_name || 'مجهول'}</div>
-                            <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{row.phase_points} نقطة في المرحلة</div>
-                          </div>
-                          {prizeLabels[i] && (
-                            <div style={{fontSize:13,color:'#ffe3a6',fontWeight:700,background:'rgba(217,178,95,.1)',borderRadius:8,padding:'4px 10px'}}>{prizeLabels[i]}</div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    <button
-                      disabled={savingWinner}
-                      onClick={async () => {
-                        setSavingWinner(true);
-                        try {
-                          for (let i = 0; i < phaseLeaderboard.length; i++) {
-                            await supabase.from('prize_winners').insert({
-                              phase_id: selectedPhase.id,
-                              user_id:  phaseLeaderboard[i].user_id,
-                              rank:     i + 1,
-                              points:   Number(phaseLeaderboard[i].phase_points),
-                            });
-                          }
-                          await supabase.from('prize_phases').update({ status: 'completed' }).eq('id', selectedPhase.id);
-                          await loadPrizes();
-                          setShowPrizeModal(false);
-                          showMsg('✅ تم إعلان الفائزين بنجاح!', 'success');
-                        } catch (err: any) {
-                          showMsg('❌ ' + (err?.message || 'خطأ في الحفظ'), 'error');
-                        }
-                        setSavingWinner(false);
-                      }}
-                      style={{width:'100%',padding:14,borderRadius:14,border:'none',background:savingWinner?'rgba(217,178,95,.3)':'linear-gradient(135deg,#e0bc73,#b9892d)',color:'#1a0a00',fontWeight:900,fontSize:15,fontFamily:'Cairo,sans-serif',cursor:savingWinner?'not-allowed':'pointer',marginTop:16}}
-                    >
-                      {savingWinner ? '⏳ جاري الحفظ...' : '✅ تأكيد وإعلان الفائزين'}
-                    </button>
-                  </>
-              }
+              <button onClick={() => setShowPrizeModal(false)} style={{background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center'}}>✕</button>
             </div>
+            {prizeModalLoading
+              ? <div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>⏳ جاري تحميل الليدربورد...</div>
+              : phaseLeaderboard.length === 0
+                ? <div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>لا توجد نقاط مسجلة في هذه المرحلة بعد</div>
+                : <>
+                  <div style={{background:'rgba(217,178,95,.08)',border:'1px solid rgba(217,178,95,.15)',borderRadius:12,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#ffe3a6'}}>
+                    سيتم إعلان أعلى {selectedPhase.winner_count || 1} مشارك كفائز في هذه المرحلة
+                  </div>
+                  {phaseLeaderboard.map((row: any, i: number) => {
+                    const prizeLabels = [selectedPhase.prize_label, selectedPhase.prize_label_2, selectedPhase.prize_label_3];
+                    return (
+                      <div key={row.user_id} style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'rgba(217,178,95,.06)',border:'1px solid rgba(217,178,95,.15)',borderRadius:14,marginBottom:8}}>
+                        <span style={{fontSize:24}}>{['🥇','🥈','🥉'][i] || String(i + 1)}</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:800,fontSize:15}}>{row.full_name || 'مجهول'}</div>
+                          <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{row.phase_points} نقطة في المرحلة</div>
+                        </div>
+                        {prizeLabels[i] && (
+                          <div style={{fontSize:13,color:'#ffe3a6',fontWeight:700,background:'rgba(217,178,95,.1)',borderRadius:8,padding:'4px 10px'}}>{prizeLabels[i]}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <button
+                    disabled={savingWinner}
+                    onClick={async () => {
+                      setSavingWinner(true);
+                      try {
+                        for (let i = 0; i < phaseLeaderboard.length; i++) {
+                          await supabase.from('prize_winners').insert({
+                            phase_id: selectedPhase.id,
+                            user_id:  phaseLeaderboard[i].user_id,
+                            rank:     i + 1,
+                            points:   Number(phaseLeaderboard[i].phase_points),
+                          });
+                        }
+                        await supabase.from('prize_phases').update({ status: 'completed' }).eq('id', selectedPhase.id);
+                        await loadPrizes();
+                        setShowPrizeModal(false);
+                        showMsg('✅ تم إعلان الفائزين بنجاح!', 'success');
+                      } catch (err: any) {
+                        showMsg('❌ ' + (err?.message || 'خطأ في الحفظ'), 'error');
+                      }
+                      setSavingWinner(false);
+                    }}
+                    style={{width:'100%',padding:14,borderRadius:14,border:'none',background:savingWinner?'rgba(217,178,95,.3)':'linear-gradient(135deg,#e0bc73,#b9892d)',color:'#1a0a00',fontWeight:900,fontSize:15,fontFamily:'Cairo,sans-serif',cursor:savingWinner?'not-allowed':'pointer',marginTop:16}}
+                  >
+                    {savingWinner ? '⏳ جاري الحفظ...' : '✅ تأكيد وإعلان الفائزين'}
+                  </button>
+                </>
+            }
           </div>
-        )}
+        </div>
+      )}
 
       {/* ══ BREAKDOWN MODAL ══ */}
       {showBreakdown && breakdownUser && (
