@@ -16,7 +16,6 @@ async function apiFetch(path: string) {
 }
 
 export async function GET(request: Request) {
-  // ✅ Vercel Cron Security — يمنع أي حد يستدعي الـ route يدوياً
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -26,14 +25,11 @@ export async function GET(request: Request) {
     const now = new Date();
     const log: string[] = [];
 
-    // ① جيب الماتشات اللي:
-    //    - مش عندها نتيجة في DB (actual_home_score IS NULL)
-    //    - وقت انتهائها المتوقع فات (match_date + 115 دقيقة)
     const cutoff = new Date(now.getTime() - 115 * 60 * 1000).toISOString();
 
     const { data: pendingFixtures } = await supabaseAdmin
       .from('fixtures')
-      .select('api_fixture_id, home_team, away_team')
+      .select('api_fixture_id, home_team_name, away_team_name') // ✅ FIX
       .is('actual_home_score', null)
       .lt('match_date', cutoff);
 
@@ -49,7 +45,6 @@ export async function GET(request: Request) {
     for (const fixture of pendingFixtures) {
       const apiId = fixture.api_fixture_id;
 
-      // ② تحقق من حالة الماتش في API
       await sleep(300);
       const fixtureData = await apiFetch(`/fixtures?id=${apiId}`);
       apiCalls++;
@@ -61,11 +56,10 @@ export async function GET(request: Request) {
       const isFinished = ['FT', 'AET', 'PEN'].includes(status);
 
       if (!isFinished) {
-        log.push(`⏳ ${fixture.home_team} × ${fixture.away_team} — لسه ما خلصش (${status})`);
+        log.push(`⏳ ${fixture.home_team_name} × ${fixture.away_team_name} — لسه ما خلصش (${status})`); // ✅ FIX
         continue;
       }
 
-      // ③ الماتش خلص — جيب events + lineups
       const goalsHome = match.goals?.home ?? null;
       const goalsAway = match.goals?.away ?? null;
       const wentExtraTime   = status === 'AET' || status === 'PEN';
@@ -87,7 +81,6 @@ export async function GET(request: Request) {
         }
       }
 
-      // ④ احفظ في Supabase
       await supabaseAdmin.from('fixtures').update({
         actual_home_score: goalsHome,
         actual_away_score: goalsAway,
@@ -98,11 +91,10 @@ export async function GET(request: Request) {
         penalty_in_match:  penalty,
       }).eq('api_fixture_id', apiId);
 
-      log.push(`✅ ${fixture.home_team} ${goalsHome} - ${goalsAway} ${fixture.away_team}`);
+      log.push(`✅ ${fixture.home_team_name} ${goalsHome} - ${goalsAway} ${fixture.away_team_name}`); // ✅ FIX
       syncedCount++;
     }
 
-    // ⑤ لو في ماتشات اتحفظت → شغّل update-results أوتو
     if (syncedCount > 0) {
       const updateRes = await fetch(
         `${process.env.NEXT_PUBLIC_SITE_URL}/api/update-results`,
