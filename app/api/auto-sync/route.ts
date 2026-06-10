@@ -15,6 +15,10 @@ async function apiFetch(path: string) {
   return res.json();
 }
 
+function normalizeScorerName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ');
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -29,12 +33,16 @@ export async function GET(request: Request) {
 
     const { data: pendingFixtures } = await supabaseAdmin
       .from('fixtures')
-      .select('api_fixture_id, home_team_name, away_team_name') // ✅ FIX
+      .select('api_fixture_id, home_team_name, away_team_name')
       .is('actual_home_score', null)
       .lt('match_date', cutoff);
 
     if (!pendingFixtures || pendingFixtures.length === 0) {
-      return NextResponse.json({ success: true, message: 'لا توجد ماتشات تحتاج مزامنة', apiCalls: 0 });
+      return NextResponse.json({
+        success: true,
+        message: 'لا توجد ماتشات تحتاج مزامنة',
+        apiCalls: 0,
+      });
     }
 
     log.push(`🔍 وجدنا ${pendingFixtures.length} ماتش محتاج مزامنة`);
@@ -56,49 +64,71 @@ export async function GET(request: Request) {
       const isFinished = ['FT', 'AET', 'PEN'].includes(status);
 
       if (!isFinished) {
-        log.push(`⏳ ${fixture.home_team_name} × ${fixture.away_team_name} — لسه ما خلصش (${status})`); // ✅ FIX
+        log.push(`⏳ ${fixture.home_team_name} × ${fixture.away_team_name} — لسه ما خلصش (${status})`);
         continue;
       }
 
       const goalsHome = match.goals?.home ?? null;
       const goalsAway = match.goals?.away ?? null;
-      const wentExtraTime   = status === 'AET' || status === 'PEN';
+      const wentExtraTime = status === 'AET' || status === 'PEN';
       const bothTeamsScored = goalsHome !== null && goalsAway !== null
-        ? goalsHome > 0 && goalsAway > 0 : false;
+        ? goalsHome > 0 && goalsAway > 0
+        : false;
 
-      let redCard = false, penalty = false;
+      let redCard = false;
+      let penalty = false;
       let firstScorer: string | null = null;
+      const allScorers: string[] = [];
 
       await sleep(300);
       const evData = await apiFetch(`/fixtures/events?fixture=${apiId}`);
       apiCalls++;
 
       for (const ev of evData.response || []) {
-        if (ev.type === 'Card' && ev.detail === 'Red Card')   redCard   = true;
-        if (ev.type === 'Goal' && ev.detail === 'Penalty')    penalty   = true;
-        if (!firstScorer && ev.type === 'Goal' && ev.detail !== 'Own Goal') {
-          firstScorer = ev.player?.name ?? null;
+        if (ev.type === 'Card' && ev.detail === 'Red Card') {
+          redCard = true;
+        }
+
+        if (ev.type === 'Goal' && ev.detail === 'Penalty') {
+          penalty = true;
+        }
+
+        if (ev.type === 'Goal' && ev.detail !== 'Own Goal') {
+          const scorerName = ev.player?.name ? normalizeScorerName(ev.player.name) : null;
+
+          if (scorerName) {
+            if (!firstScorer) firstScorer = scorerName;
+            if (!allScorers.some(name => name === scorerName)) {
+              allScorers.push(scorerName);
+            }
+          }
         }
       }
 
-      await supabaseAdmin.from('fixtures').update({
-        actual_home_score: goalsHome,
-        actual_away_score: goalsAway,
-        first_scorer:      firstScorer,
-        went_extra_time:   wentExtraTime,
-        both_teams_scored: bothTeamsScored,
-        red_card_in_match: redCard,
-        penalty_in_match:  penalty,
-      }).eq('api_fixture_id', apiId);
+      await supabaseAdmin
+        .from('fixtures')
+        .update({
+          actual_home_score: goalsHome,
+          actual_away_score: goalsAway,
+          first_scorer: firstScorer,
+          scorers_json: allScorers,
+          went_extra_time: wentExtraTime,
+          both_teams_scored: bothTeamsScored,
+          red_card_in_match: redCard,
+          penalty_in_match: penalty,
+        })
+        .eq('api_fixture_id', apiId);
 
-      log.push(`✅ ${fixture.home_team_name} ${goalsHome} - ${goalsAway} ${fixture.away_team_name}`); // ✅ FIX
+      log.push(`✅ ${fixture.home_team_name} ${goalsHome} - ${goalsAway} ${fixture.away_team_name}`);
       syncedCount++;
     }
 
     if (syncedCount > 0) {
       const updateRes = await fetch(
         `${process.env.NEXT_PUBLIC_SITE_URL}/api/update-results`,
-        { headers: { 'x-internal-key': process.env.CRON_SECRET || '' } }
+        {
+          headers: { 'x-internal-key': process.env.CRON_SECRET || '' },
+        }
       );
       const updateData = await updateRes.json();
       log.push(`⚡ تحديث النقاط: ${updateData.message || updateData.updated + ' توقع'}`);
