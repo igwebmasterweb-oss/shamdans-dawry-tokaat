@@ -15,11 +15,11 @@ export default function AdminPage() {
   const [leagueMembers, setLeagueMembers] = useState<Record<string,any[]>>({});
   const [expandedLeague, setExpandedLeague] = useState<string|null>(null);
   const [loading, setLoading]         = useState(true);
-  // ① loadError ✅
+
   const [loadError, setLoadError]     = useState(false);
   const [activeTab, setActiveTab]     = useState<'matches'|'predictions'|'leaderboard'|'leagues'|'prizes'>('matches');
   const [activeRound, setActiveRound] = useState('Group Stage - 1');
-  // ⑦ فلتر التوقعات بالجولة
+
   const [predRoundFilter, setPredRoundFilter] = useState<string>('all');
   const [predStatusFilter, setPredStatusFilter] = useState<'all'|'ungraded'>('all');
   const [updating, setUpdating]       = useState(false);
@@ -38,9 +38,9 @@ export default function AdminPage() {
   const [redCard,    setRedCard]    = useState(false);
   const [penalty,    setPenalty]    = useState(false);
   const [bothTeams,  setBothTeams]  = useState(false);
-  // ① savingResult moved to top ✅
+
   const [savingResult, setSavingResult] = useState(false);
-  // ── Prize Phases & Daily ──
+
   const [prizePhases, setPrizePhases]           = useState<any[]>([]);
   const [prizeWinners, setPrizeWinners]         = useState<any[]>([]);
   const [dailyScorers, setDailyScorers]         = useState<any[]>([]);
@@ -50,12 +50,11 @@ export default function AdminPage() {
   const [prizeModalLoading, setPrizeModalLoading] = useState(false);
   const [savingWinner, setSavingWinner]         = useState(false);
 
-  // ── Breakdown Modal ──
   const [breakdownUser, setBreakdownUser]   = useState<any>(null);
   const [breakdownPreds, setBreakdownPreds] = useState<any[]>([]);
   const [showBreakdown, setShowBreakdown]   = useState(false);
 
-  const autoIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
+  const autoIntervalRef = useRef<any>(null);
   const router = useRouter();
 
   const roundLabels: Record<string,string> = {
@@ -97,7 +96,7 @@ export default function AdminPage() {
       if (avail.length > 0) setActiveRound(prev => avail.includes(prev) ? prev : avail[0]);
     } catch (err) {
       console.error('loadMatches:', err);
-      setLoadError(true); // ① catch → setLoadError ✅
+      setLoadError(true);
     }
     setLoading(false);
   }, []);
@@ -121,10 +120,10 @@ export default function AdminPage() {
         total:                row.total_points || 0,
         count:                row.predictions_count || 0,
         referral_count:       row.referral_count || 0,
-        bonus_points_awarded: row.bonus_points_awarded ?? false,   // boolean
-        facebook_bonus_awarded: row.facebook_bonus_awarded ?? false, // boolean
+        bonus_points_awarded: row.bonus_points_awarded ?? false,
+        facebook_bonus_awarded: row.facebook_bonus_awarded ?? false,
         profile_completed:    row.profile_completed ?? false,
-        bonus_points:         row.bonus_points ?? 0,                 // نقاط مضافة يدوياً
+        bonus_points:         row.bonus_points ?? 0,
       })));
     } catch (err) { console.error('loadLeaderboard:', err); }
   }, []);
@@ -201,7 +200,7 @@ export default function AdminPage() {
       const { data: ex, error: se } = await supabase.from('fixtures').select('id').eq('api_fixture_id',fid).maybeSingle();
       if (se) throw se;
       if (ex) { const { error } = await supabase.from('fixtures').update({is_open:newStatus}).eq('api_fixture_id',fid); if(error) throw error; }
-      else    { const { error } = await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:newStatus,home_team:match.teams.home.name,away_team:match.teams.away.name,match_date:match.fixture.date,round:match.league.round}); if(error) throw error; }
+      else    { const { error } = await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:newStatus,home_team_name:match.teams.home.name,away_team_name:match.teams.away.name,home_team_id:match.teams.home.id,away_team_id:match.teams.away.id,home_team_logo:match.teams.home.logo,away_team_logo:match.teams.away.logo,match_date:match.fixture.date,round:match.league.round}); if(error) throw error; }
       await loadMatches();
       showMsg(newStatus ? '✅ التوقعات مفتوحة' : '🔒 التوقعات مغلقة');
     } catch (err:any) { showMsg('❌ '+(err?.message||'خطأ'),'error'); }
@@ -236,14 +235,14 @@ export default function AdminPage() {
         both_teams_scored: bothTeams,
       };
       if (ex) { const { error } = await supabase.from('fixtures').update(payload).eq('api_fixture_id',fid); if(error) throw error; }
-      else    { const { error } = await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:false,home_team:selectedMatch.teams.home.name,away_team:selectedMatch.teams.away.name,match_date:selectedMatch.fixture.date,round:selectedMatch.league.round,...payload}); if(error) throw error; }
+      else    { const { error } = await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:false,home_team_name:selectedMatch.teams.home.name,away_team_name:selectedMatch.teams.away.name,home_team_id:selectedMatch.teams.home.id,away_team_id:selectedMatch.teams.away.id,home_team_logo:selectedMatch.teams.home.logo,away_team_logo:selectedMatch.teams.away.logo,match_date:selectedMatch.fixture.date,round:selectedMatch.league.round,...payload}); if(error) throw error; }
       const res  = await fetch('/api/update-results');
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'خطأ في حساب النقاط');
       setShowModal(false);
       await loadMatches(); await loadPredictions(); await loadLeaderboard();
       showMsg(`✅ تم حفظ النتيجة وتحديث النقاط — ${data.message || ''}`);
-    } catch (err:any) { showMsg('❌ '+(err?.message||'خطأ في الحفظ'),'error'); }
+    } catch (err:any) { showMsg('❌ '+(err?.message||'خطأ'),'error'); }
     setSavingResult(false);
   };
 
@@ -257,7 +256,7 @@ export default function AdminPage() {
       try {
         const { data: ex } = await supabase.from('fixtures').select('id').eq('api_fixture_id',fid).maybeSingle();
         if (ex) { await supabase.from('fixtures').update({is_open:true}).eq('api_fixture_id',fid); }
-        else    { await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:true,home_team:match.teams.home.name,away_team:match.teams.away.name,match_date:match.fixture.date,round:match.league.round}); }
+        else    { await supabase.from('fixtures').insert({api_fixture_id:fid,is_open:true,home_team_name:match.teams.home.name,away_team_name:match.teams.away.name,home_team_id:match.teams.home.id,away_team_id:match.teams.away.id,home_team_logo:match.teams.home.logo,away_team_logo:match.teams.away.logo,match_date:match.fixture.date,round:match.league.round}); }
         ok++;
       } catch { fail++; }
     }
@@ -331,366 +330,159 @@ export default function AdminPage() {
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
-  // ⑧ Export CSV helpers
   const exportPredictionsCSV = () => {
     const headers = ['اللاعب','المباراة','توقع','نتيجة فعلية','نقاط','وقت التسجيل'];
     const rows = predictions.map(p => [
       p.user_name||p.user_email?.split('@')[0]||'—',
       `${p.home_team} × ${p.away_team}`,
       `${p.predicted_home_score}-${p.predicted_away_score}`,
-      p.actual_home_score!==null ? `${p.actual_home_score}-${p.actual_away_score}` : '—',
-      p.actual_home_score!==null ? (p.points||0) : '—',
+      (p.actual_home_score==null?'—':`${p.actual_home_score}-${p.actual_away_score}`),
+      p.points ?? '—',
       p.submitted_at ? new Date(p.submitted_at).toLocaleString('ar-EG') : '—',
     ]);
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `predictions-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    const csv = [headers, ...rows].map(r => r.map((v:any)=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\ufeff"+csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = `predictions-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
   };
 
   const exportLeaderboardCSV = () => {
-    const headers = ['#','الاسم','الإيميل','النقاط','عدد التوقعات'];
-    const rows = leaderboard.map((p,i) => [i+1, p.full_name||'—', p.user_email, p.total, p.count]);
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `leaderboard-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    const headers = ['الترتيب','الاسم','الإيميل','النقاط','عدد التوقعات','إحالات'];
+    const rows = leaderboard.map((u:any,idx:number)=>[
+      idx+1, u.full_name||'—', u.user_email||'—', u.total||0, u.count||0, u.referral_count||0
+    ]);
+    const csv = [headers,...rows].map(r => r.map((v:any)=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob(["\ufeff"+csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = `leaderboard-${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
   };
 
-  const openBreakdown = (p: any) => {
-    const userPreds = predictions
-      .filter(pr => pr.user_id === p.user_id && pr.actual_home_score !== null)
-      .map(pr => {
-        const items: { icon: string; label: string; pts: number }[] = [];
-        const isExact = pr.predicted_home_score === pr.actual_home_score
-                     && pr.predicted_away_score === pr.actual_away_score;
-        if (isExact) {
-          items.push({ icon:'🎯', label:'نتيجة كاملة', pts:10 });
-        } else {
-          const homeWin  = pr.actual_home_score > pr.actual_away_score;
-          const awayWin  = pr.actual_away_score > pr.actual_home_score;
-          const isDraw   = pr.actual_home_score === pr.actual_away_score;
-          const pHomeWin = pr.predicted_home_score > pr.predicted_away_score;
-          const pAwayWin = pr.predicted_away_score > pr.predicted_home_score;
-          const pDraw    = pr.predicted_home_score === pr.predicted_away_score;
-          const correctOutcome = (homeWin&&pHomeWin)||(awayWin&&pAwayWin)||(isDraw&&pDraw);
-          if (correctOutcome) items.push({ icon:'✅', label:'فائز/تعادل صح', pts:5 });
-        }
-        if (pr.predicted_first_scorer && pr.first_scorer_actual &&
-            pr.predicted_first_scorer.trim().toLowerCase() === pr.first_scorer_actual.trim().toLowerCase())
-          items.push({ icon:'⚽', label:'أول هدف صح', pts:3 });
-        if (pr.predicted_red_card   && pr.red_card_in_match)  items.push({ icon:'🟥', label:'كرت أحمر صح',   pts: 2 });
-        if (pr.predicted_penalty    && pr.penalty_in_match)   items.push({ icon:'🥅', label:'ركلة جزاء صح',  pts: 2 });
-        if (pr.predicted_extra_time && pr.went_extra_time)    items.push({ icon:'⏱️', label:'وقت إضافي صح',  pts: 2 });
-        if (pr.predicted_both_teams && pr.both_teams_scored)  items.push({ icon:'🔄', label:'الفريقين سجلا', pts: 2 });
-        if (!pr.red_card_in_match   && pr.predicted_red_card)   items.push({ icon:'🟥', label:'كرت أحمر غلط',  pts:-1 });
-        if (!pr.penalty_in_match    && pr.predicted_penalty)    items.push({ icon:'🥅', label:'ركلة جزاء غلط', pts:-1 });
-        if (!pr.went_extra_time     && pr.predicted_extra_time) items.push({ icon:'⏱️', label:'وقت إضافي غلط', pts:-1 });
-        return { ...pr, items, calcTotal: Math.max(0, items.reduce((s,i)=>s+i.pts,0)) };
-      });
-    setBreakdownUser(p);
-    setBreakdownPreds(userPreds);
-    setShowBreakdown(true);
+  const openUserBreakdown = async (u: any) => {
+    try {
+      setBreakdownUser(u); setShowBreakdown(true); setBreakdownPreds([]);
+      const { data } = await supabase.from('predictions').select('*').eq('user_id',u.user_id).order('submitted_at',{ascending:false});
+      setBreakdownPreds(data || []);
+    } catch (err) { console.error(err); }
   };
 
-  // ─── Render states ─────────────────────────────────────
-  if (loading) return (
-    <div style={{display:'grid',placeItems:'center',height:'100vh',background:'#070809',color:'#d9b25f',fontFamily:"'Cairo',sans-serif",gap:16,fontSize:18}}>
-      <div style={{fontSize:40}}>⚙️</div>
-      <div>جاري التحميل...</div>
-    </div>
-  );
-
-  // ① شاشة الخطأ + retry ✅
-  if (loadError) return (
-    <div style={{display:'grid',placeItems:'center',height:'100vh',background:'#070809',fontFamily:"'Cairo',sans-serif",gap:16,textAlign:'center',padding:24}}>
-      <div style={{fontSize:48}}>⚠️</div>
-      <div style={{fontSize:18,color:'#f4f1e8'}}>حدث خطأ أثناء تحميل البيانات</div>
-      <div style={{fontSize:13,color:'#a8a39a'}}>تحقق من اتصالك بالإنترنت وحاول مجدداً</div>
-      <button
-        onClick={() => { setLoadError(false); setLoading(true); loadMatches(); loadPredictions(); loadLeaderboard(); loadLeagues(); }}
-        style={{padding:'12px 32px',borderRadius:14,border:'none',background:'#d9b25f',color:'#1a1200',fontFamily:"'Cairo',sans-serif",fontSize:16,fontWeight:700,cursor:'pointer'}}
-      >
-        🔄 إعادة المحاولة
-      </button>
-    </div>
-  );
-
-  // ④ computed stats ✅
-  const filteredMatches    = matches.filter(m => m.league.round === activeRound);
-  const openCount          = matches.filter(m => m.is_open).length;
-  const gradedCount        = predictions.filter(p => p.actual_home_score !== null).length;
-  const medals             = ['🥇','🥈','🥉'];
-  const totalLeagueMembers = leagues.reduce((s,lg)=>s+lg.member_count,0);
-  const totalPending       = leagues.reduce((s,lg)=>s+lg.pending_invites,0);
-  const biggestLeague      = leagues.reduce((best,lg)=>lg.member_count>(best?.member_count||0)?lg:best,null as any);
-  const rounds             = [...new Set(matches.map((m:any)=>m.league?.round).filter(Boolean))] as string[];
-
-  // ④ 4 new computed stats ✅
-  const avgPoints       = leaderboard.length > 0
-    ? (leaderboard.reduce((s:number,p:any)=>s+p.total,0) / leaderboard.length).toFixed(1) : '—';
-  const coveragePct     = leaderboard.length > 0 && filteredMatches.length > 0
-    ? Math.round((predictions.filter(p => filteredMatches.find(m => m.fixture.id === p.fixture_id)).length
-        / (leaderboard.length * filteredMatches.length)) * 100) : 0;
-  const ungradedCount   = predictions.filter(p => p.actual_home_score === null).length;
-  const noResultCount   = matches.filter(m => m.actual_home_score === null && !m.is_open).length;
-  const topScore        = leaderboard.length > 0 ? Math.max(...leaderboard.map((p:any) => p.total)) : 0;
-  const zeroPointsCount = leaderboard.filter((p:any) => p.total === 0).length;
-
-  // ⑦ filtered predictions ✅
-  const visiblePredictions = predictions.filter(p => {
-    if (predRoundFilter !== 'all') {
-      const m = matches.find(m => m.fixture.id === p.fixture_id);
-      if (!m || m.league?.round !== predRoundFilter) return false;
-    }
-    if (predStatusFilter === 'ungraded' && p.actual_home_score !== null) return false;
-    return true;
-  });
-
-  // ⑥ round badges ✅
-  const roundOpenMap: Record<string,{open:number,total:number}> = {};
-  rounds.forEach(r => {
-    const rm = matches.filter(m => m.league?.round === r);
-    roundOpenMap[r] = { open: rm.filter(m => m.is_open).length, total: rm.length };
-  });
+  if (loading) return <div style={{padding:30,color:'#fff'}}>...جاري التحميل</div>;
 
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-        :root{--bg:#070809;--surface:#111315;--surface-2:#171a1d;--surface-3:#1d2125;--line:rgba(255,255,255,.08);--text:#f4f1e8;--muted:#a8a39a;--gold:#d9b25f;--red:#c93a2f;--green:#27b06e}
-        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        body{background:var(--bg);color:var(--text);font-family:'Cairo',sans-serif;direction:rtl;min-height:100vh}
-        .tab-btn{padding:10px 22px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-family:'Cairo',sans-serif;font-size:14px;font-weight:700;transition:all .2s;white-space:nowrap;flex-shrink:0}
-        .tab-btn.active{background:linear-gradient(135deg,rgba(217,178,95,.15),rgba(217,178,95,.05));border-color:rgba(217,178,95,.28);color:var(--gold)}
-        .round-btn{padding:8px 16px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;transition:all .2s;white-space:nowrap;flex-shrink:0}
-        .round-btn.active{background:rgba(217,178,95,.14);border-color:rgba(217,178,95,.3);color:var(--gold)}
-        .action-btn{padding:10px 20px;border-radius:12px;border:none;color:#fff;cursor:pointer;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;transition:opacity .18s}
-        .action-btn:disabled{opacity:.6;cursor:not-allowed}
-        .action-btn:hover:not(:disabled){opacity:.85}
-        .field-input{width:100%;padding:12px 16px;border-radius:12px;background:var(--surface-3);border:1px solid var(--line);color:var(--text);font-family:'Cairo',sans-serif;font-size:14px;outline:none;transition:border-color .2s}
-        .field-input:focus{border-color:rgba(217,178,95,.4)}
+      <style jsx>{`
+        :global(body){margin:0;background:#0b0d12;color:#f4f7fb;font-family:Cairo,system-ui,sans-serif}
+        .wrap{max-width:1320px;margin:0 auto;padding:20px}
+        .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+        .title{font-size:28px;font-weight:900}
+        .muted{color:#9aa4b2}
+        .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+        .tab{background:#121722;border:1px solid #1f2937;color:#cbd5e1;padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:700}
+        .tab.active{background:#1d4ed8;color:#fff;border-color:#2563eb}
+        .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+        .btn{background:#1f2937;border:1px solid #334155;color:#fff;padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:800}
+        .btn.primary{background:#16a34a;border-color:#22c55e}
+        .btn.warn{background:#ea580c;border-color:#fb923c}
+        .btn.red{background:#b91c1c;border-color:#ef4444}
+        .btn.blue{background:#1d4ed8;border-color:#2563eb}
+        .btn:disabled{opacity:.6;cursor:not-allowed}
+        .card{background:#0f1420;border:1px solid #1f2937;border-radius:18px;padding:16px;margin-bottom:16px}
+        .tableWrap{overflow:auto}
         table{width:100%;border-collapse:collapse}
-        th,td{padding:10px 14px;text-align:right;border-bottom:1px solid var(--line);font-size:13px}
-        th{color:var(--muted);font-weight:700;background:var(--surface-2)}
-        tr:hover td{background:rgba(255,255,255,.015)}
-        .league-card{background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01));border:1px solid var(--line);border-radius:18px;padding:16px 20px;margin-bottom:10px}
-        .league-card:hover{border-color:rgba(217,178,95,.2)}
-        .del-btn{padding:6px 12px;border-radius:10px;border:1px solid rgba(201,58,47,.25);background:rgba(201,58,47,.08);color:#ff9c91;font-size:12px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer;transition:opacity .18s}
-        .del-btn:hover{opacity:.75}
-        .export-btn{padding:8px 16px;border-radius:10px;border:1px solid rgba(217,178,95,.25);background:rgba(217,178,95,.08);color:var(--gold);font-size:12px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer;transition:opacity .18s}
-        .export-btn:hover{opacity:.75}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-        .auto-pulse{animation:pulse 2s ease-in-out infinite}
+        th,td{padding:10px 12px;border-bottom:1px solid #1f2937;text-align:right;white-space:nowrap}
+        th{color:#93c5fd;font-size:13px}
+        tr:hover td{background:#0d1320}
+        .rounds{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+        .chip{padding:8px 12px;border-radius:999px;border:1px solid #334155;background:#111827;color:#cbd5e1;cursor:pointer;font-weight:700}
+        .chip.active{background:#1e3a8a;border-color:#2563eb;color:#fff}
+        .score{font-weight:900;font-size:18px}
+        .ok{color:#22c55e}.warnTxt{color:#f59e0b}.bad{color:#ef4444}
+        .msg{padding:12px 14px;border-radius:12px;margin-bottom:14px;font-weight:800}
+        .msg.success{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#bbf7d0}
+        .msg.error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fecaca}
+        .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        @media (max-width:900px){.grid2{grid-template-columns:1fr}}
+        .modalBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+        .modal{width:min(720px,100%);background:#0f1420;border:1px solid #243042;border-radius:20px;padding:18px}
+        .field{display:flex;flex-direction:column;gap:6px}
+        .field input,.field select{background:#0b111b;border:1px solid #243042;color:#fff;padding:10px 12px;border-radius:12px}
+        .row{display:flex;gap:10px;flex-wrap:wrap}
+        .spacer{height:8px}
+        .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#111827;border:1px solid #334155;font-size:12px}
+        .leagueBox{border:1px solid #22304a;border-radius:14px;padding:12px}
+        .right{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
       `}</style>
 
-      {/* HEADER */}
-      <div style={{background:'var(--surface)',borderBottom:'1px solid var(--line)',padding:'14px 24px',display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
-        <div style={{fontSize:28}}>⚙️</div>
-        <div>
-          <div style={{fontWeight:800,fontSize:18,color:'var(--gold)'}}>لوحة التحكم</div>
-          <div style={{fontSize:12,color:'var(--muted)'}}>كأس العالم 2026 — الشمعدان</div>
-        </div>
-        {/* ⑤ lastAutoUpdate معروض ✅ */}
-        <div style={{marginRight:'auto',display:'flex',alignItems:'center',gap:8,fontSize:12,color:'var(--muted)'}}>
-          <span className={autoUpdating ? 'auto-pulse' : ''} style={{color:autoUpdating?'var(--gold)':'var(--muted)'}}>🔄</span>
-          <span>{autoUpdating ? 'تحديث أوتوماتيك...' : lastAutoUpdate ? `آخر تحديث: ${lastAutoUpdate}` : 'تحديث كل 5 دقايق'}</span>
-        </div>
-        <a href="/leaderboard" style={{color:'var(--gold)',textDecoration:'none',fontSize:13,fontWeight:700}}>🏁 الصدارة</a>
-        <button onClick={syncFixtures} disabled={syncing} className="action-btn" style={{background:'linear-gradient(135deg,#3b82f6,#1d4ed8)',fontSize:12}}>
-          {syncing?'⏳ مزامنة...':'🔄 مزامنة'}
-        </button>
-        <button onClick={syncSquads} disabled={syncingSquads} className="action-btn" style={{background:'linear-gradient(135deg,#6366f1,#4338ca)',fontSize:12}}>
-          {syncingSquads ? '⏳ جاري التحديث...' : '👥 تحديث السكواد'}
-        </button>
-        <button onClick={updateAllPoints} disabled={updating} className="action-btn" style={{background:'linear-gradient(135deg,var(--gold),#a8761a)',fontSize:12}}>
-          {updating?'⏳ جاري...':'⚡ تحديث النقاط'}
-        </button>
-        <button onClick={handleLogout} className="action-btn" style={{background:'rgba(201,58,47,.2)',border:'1px solid rgba(201,58,47,.3)',color:'#ff9c91',fontSize:12}}>خروج</button>
-      </div>
-
-      {message && (
-        <div style={{padding:'12px 24px',background:msgType==='success'?'rgba(39,176,110,.15)':'rgba(201,58,47,.15)',borderBottom:`1px solid ${msgType==='success'?'rgba(39,176,110,.25)':'rgba(201,58,47,.25)'}`,color:msgType==='success'?'var(--green)':'#ff9c91',fontWeight:700,fontSize:14,textAlign:'center'}}>
-          {message}
-        </div>
-      )}
-
-      {/* ④ STATS — 7 أصلية + 4 جديدة ✅ */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:10,padding:'20px 24px'}}>
-        {[
-          {label:'إجمالي التوقعات', value:predictions.length,     color:'var(--gold)'},
-          {label:'محسوبة',           value:gradedCount,            color:'var(--green)'},
-          {label:'غير محسوبة',       value:ungradedCount,          color:'#fb923c'},
-          {label:'ماتشات مفتوحة',    value:openCount,              color:'#facc15'},
-          {label:'بدون نتيجة',       value:noResultCount,          color:'#f87171'},
-          {label:'المتسابقين',        value:leaderboard.length,     color:'#ff9c91'},
-          {label:'متوسط النقاط',     value:avgPoints,              color:'#a78bfa'},
-          {label:'تغطية الجولة',     value:`${coveragePct}%`,      color:'#38bdf8'},
-          {label:'ميني ليجات',        value:leagues.length,         color:'#a78bfa'},
-          {label:'أعضاء ميني ليج',   value:totalLeagueMembers,     color:'#38bdf8'},
-          {label:'دعوات معلقة',       value:totalPending,           color:'#fb923c'},
-          {label:'أعلى نقاط',           value:topScore,               color:'#4ade80'},
-          {label:'صفر نقاط',            value:zeroPointsCount,        color:'#f87171'},
-        ].map(s=>(
-          <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:16,padding:'12px 14px',textAlign:'center'}}>
-            <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,fontWeight:700}}>{s.label}</div>
-            <div style={{fontSize:22,fontWeight:900,color:s.color,fontVariantNumeric:'tabular-nums'}}>{s.value}</div>
+      <div className="wrap">
+        <div className="topbar">
+          <div>
+            <div className="title">لوحة تحكم الأدمن</div>
+            <div className="muted">
+              {user?.email} • {autoUpdating ? 'تحديث أوتوماتيك...' : `آخر تحديث تلقائي: ${lastAutoUpdate || '—'}`}
+            </div>
           </div>
-        ))}
-      </div>
+          <div className="right">
+            <button className="btn" onClick={()=>router.push('/dashboard')}>العودة للداش بورد</button>
+            <button className="btn red" onClick={handleLogout}>تسجيل الخروج</button>
+          </div>
+        </div>
 
-      {/* ③ TABS — overflowX: auto ✅ */}
-      <div style={{display:'flex',gap:8,padding:'0 24px 16px',overflowX:'auto',scrollbarWidth:'none',WebkitOverflowScrolling:'touch'} as React.CSSProperties}>
-        {([
-          {id:'matches',     label:`🏟️ الماتشات (${matches.length})`},
-          {id:'predictions', label:`📋 التوقعات (${predictions.length})`},
-          {id:'leaderboard', label:`🏆 الصدارة (${leaderboard.length})`},
-          {id:'leagues',     label:`🏅 الليجات (${leagues.length})`},
-          {id:'prizes',      label:`🥇 الجوائز (${prizePhases.length})`},
-        ] as const).map(({id,label})=>(
-          <button key={id} className={`tab-btn${activeTab===id?' active':''}`} onClick={()=>setActiveTab(id)}>{label}</button>
-        ))}
-      </div>
+        {message && <div className={`msg ${msgType}`}>{message}</div>}
+        {loadError && <div className="msg error">حدث خطأ أثناء تحميل البيانات.</div>}
 
-      <div style={{padding:'0 24px 40px'}}>
+        <div className="tabs">
+          <button className={`tab ${activeTab==='matches'?'active':''}`} onClick={()=>setActiveTab('matches')}>الماتشات</button>
+          <button className={`tab ${activeTab==='predictions'?'active':''}`} onClick={()=>setActiveTab('predictions')}>التوقعات</button>
+          <button className={`tab ${activeTab==='leaderboard'?'active':''}`} onClick={()=>setActiveTab('leaderboard')}>الترتيب</button>
+          <button className={`tab ${activeTab==='leagues'?'active':''}`} onClick={()=>setActiveTab('leagues')}>الليجات</button>
+          <button className={`tab ${activeTab==='prizes'?'active':''}`} onClick={()=>setActiveTab('prizes')}>الجوائز</button>
+        </div>
 
-        {/* ══ MATCHES ══ */}
-        {activeTab==='matches' && (
+        {activeTab === 'matches' && (
           <>
-            {/* ⑥ Round buttons — badge مفتوح/إجمالي ✅ */}
-            <div style={{display:'flex',gap:8,overflowX:'auto',scrollbarWidth:'none',marginBottom:16,paddingBottom:4} as React.CSSProperties}>
-              {rounds.map(r=>{
-                const {open,total} = roundOpenMap[r]||{open:0,total:0};
-                return (
-                  <button key={r} className={`round-btn${activeRound===r?' active':''}`} onClick={()=>setActiveRound(r)}>
-                    {roundLabels[r]||r}
-                    <span style={{marginRight:6,fontSize:11,opacity:.75,fontVariantNumeric:'tabular-nums'}}>
-                      ({open > 0 ? <span style={{color:'var(--green)'}}>{open}</span> : 0}/{total})
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="toolbar">
+              <button className="btn blue" onClick={syncFixtures} disabled={syncing}>{syncing ? 'جارٍ...' : 'مزامنة الماتشات'}</button>
+              <button className="btn" onClick={syncSquads} disabled={syncingSquads}>{syncingSquads ? 'جارٍ...' : 'تحديث السكواد'}</button>
+              <button className="btn primary" onClick={openAllMatches} disabled={updating}>فتح كل ماتشات الجولة</button>
+              <button className="btn red" onClick={closeAllMatches} disabled={updating}>غلق كل الماتشات</button>
+              <button className="btn warn" onClick={updateAllPoints} disabled={updating}>تحديث النقاط</button>
             </div>
-            <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
-              <button onClick={openAllMatches} disabled={updating} className="action-btn" style={{background:'linear-gradient(135deg,#22c55e,#16a34a)'}}>🟢 فتح الكل</button>
-              <button onClick={closeAllMatches} disabled={updating} className="action-btn" style={{background:'linear-gradient(135deg,#ef4444,#b91c1c)'}}>🔒 غلق الكل</button>
-            </div>
-            {filteredMatches.map(match=>{
-              const hasResult  = match.actual_home_score !== null && match.actual_home_score !== undefined;
-              const matchPreds = predictions.filter(p=>p.fixture_id===match.fixture.id);
-              // ⑨ % مشاركة ✅
-              const participationPct = leaderboard.length > 0
-                ? Math.round((matchPreds.length / leaderboard.length) * 100) : 0;
-              return (
-                <div key={match.fixture.id} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:18,padding:'16px 20px',marginBottom:10,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-                  <div style={{flex:1,minWidth:200}}>
-                    <div style={{fontWeight:800,fontSize:15,marginBottom:4}}>{match.teams.home.name} × {match.teams.away.name}</div>
-                    <div style={{fontSize:12,color:'var(--muted)',display:'flex',gap:10,flexWrap:'wrap',alignItems:'center'}}>
-                      <span>{new Date(match.fixture.date).toLocaleDateString('ar-EG',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
-                      <span style={{color:match.is_open?'var(--green)':'var(--red)',fontWeight:700}}>{match.is_open?'مفتوح':'مغلق'}</span>
-                      {matchPreds.length > 0 && (
-                        <span style={{color:'#38bdf8'}}>
-                          👥 {matchPreds.length}
-                          {leaderboard.length > 0 && (
-                            <span style={{
-                              marginRight:4, fontSize:10,
-                              color: participationPct >= 70 ? 'var(--green)' : participationPct >= 40 ? '#facc15' : '#f87171',
-                            }}>
-                              ({participationPct}%)
-                            </span>
-                          )}
-                        </span>
-                      )}
-                      {hasResult && <span style={{color:'var(--gold)',fontWeight:700}}>النتيجة: {match.actual_home_score} - {match.actual_away_score}</span>}
-                    </div>
-                  </div>
-                  <button onClick={()=>toggleMatchOpen(match)} className="action-btn" style={{background:match.is_open?'linear-gradient(135deg,#ef4444,#b91c1c)':'linear-gradient(135deg,#22c55e,#16a34a)',fontSize:12,padding:'8px 14px'}}>
-                    {match.is_open?'🔒 غلق':'🟢 فتح'}
-                  </button>
-                  <button onClick={()=>openResultModal(match)} className="action-btn" style={{background:'linear-gradient(135deg,var(--gold),#a8761a)',fontSize:12,padding:'8px 14px'}}>
-                    📝 {hasResult?'تعديل':'إدخال نتيجة'}
-                  </button>
-                </div>
-              );
-            })}
-            {filteredMatches.length===0 && <div style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد ماتشات في هذه الجولة</div>}
-          </>
-        )}
 
-        {/* ══ PREDICTIONS ══ */}
-        {activeTab==='predictions' && (
-          <>
-            {/* ⑦ فلاتر التوقعات ✅ */}
-            <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
-              <select
-                value={predRoundFilter}
-                onChange={e=>setPredRoundFilter(e.target.value)}
-                style={{padding:'8px 14px',borderRadius:10,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--text)',fontFamily:"'Cairo',sans-serif",fontSize:13,cursor:'pointer'}}
-              >
-                <option value="all">كل الجولات</option>
-                {rounds.map(r=><option key={r} value={r}>{roundLabels[r]||r}</option>)}
-              </select>
-              <button
-                onClick={()=>setPredStatusFilter(s=>s==='all'?'ungraded':'all')}
-                style={{padding:'8px 14px',borderRadius:10,border:`1px solid ${predStatusFilter==='ungraded'?'rgba(251,146,60,.4)':'var(--line)'}`,background:predStatusFilter==='ungraded'?'rgba(251,146,60,.1)':'var(--surface-2)',color:predStatusFilter==='ungraded'?'#fb923c':'var(--muted)',fontFamily:"'Cairo',sans-serif",fontSize:13,fontWeight:700,cursor:'pointer'}}
-              >
-                {predStatusFilter==='ungraded'?'✅ غير محسوبة فقط':'⬜ غير محسوبة فقط'}
-              </button>
-              <span style={{fontSize:12,color:'var(--muted)',marginRight:4}}>
-                يعرض {visiblePredictions.length} من {predictions.length}
-              </span>
-              {/* ⑧ Export CSV ✅ */}
-              <button onClick={exportPredictionsCSV} className="export-btn" style={{marginRight:'auto'}}>
-                ⬇️ تصدير CSV
-              </button>
+            <div className="rounds">
+              {[...new Set(matches.map((m:any)=>m.league?.round).filter(Boolean))].map((r:string)=>(
+                <button key={r} className={`chip ${activeRound===r?'active':''}`} onClick={()=>setActiveRound(r)}>
+                  {roundLabels[r] || r}
+                </button>
+              ))}
             </div>
-            <div style={{overflowX:'auto'}}>
+
+            <div className="card tableWrap">
               <table>
-                <thead><tr><th>اللاعب</th><th>المباراة</th><th>توقع</th><th>نتيجة فعلية</th><th>نقاط</th><th>وقت التسجيل</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>المباراة</th>
+                    <th>التاريخ</th>
+                    <th>الحالة</th>
+                    <th>النتيجة</th>
+                    <th>فتح/غلق</th>
+                    <th>إدارة</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {visiblePredictions.length===0 ? (
-                    <tr><td colSpan={6} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد توقعات</td></tr>
-                  ) : visiblePredictions.map((p,i)=>(
-                    <tr key={i}>
-                      <td style={{fontWeight:700}}>{p.user_name||p.user_email?.split('@')[0]||'—'}</td>
-                      <td>{p.home_team} × {p.away_team}</td>
-                      <td style={{fontVariantNumeric:'tabular-nums'}}>{p.predicted_home_score} - {p.predicted_away_score}{p.predicted_extra_time?' (و)':''}</td>
-                      <td style={{fontVariantNumeric:'tabular-nums'}}>{p.actual_home_score!==null?`${p.actual_home_score} - ${p.actual_away_score}`:'—'}</td>
-                      <td style={{color:p.points>0?'var(--green)':'var(--muted)',fontWeight:800,fontVariantNumeric:'tabular-nums'}}>{p.actual_home_score!==null?(p.points||0):'—'}</td>
-                      <td style={{color:'var(--muted)'}}>{p.submitted_at?new Date(p.submitted_at).toLocaleDateString('ar-EG',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        {/* ══ LEADERBOARD ══ */}
-        {activeTab==='leaderboard' && (
-          <>
-            {/* ⑧ Export CSV leaderboard ✅ */}
-            <div style={{display:'flex',justifyContent:'flex-start',marginBottom:12}}>
-              <button onClick={exportLeaderboardCSV} className="export-btn">⬇️ تصدير CSV</button>
-            </div>
-            <div style={{overflowX:'auto'}}>
-              <table>
-                <thead><tr><th>#</th><th>اللاعب</th><th>الإيميل</th><th>النقاط</th><th>التوقعات</th><th></th></tr></thead>
-                <tbody>
-                  {leaderboard.length===0 ? (
-                    <tr><td colSpan={5} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
-                  ) : leaderboard.map((p,i)=>(
-                    <tr key={i}>
-                      <td style={{fontWeight:800,color:i<3?'var(--gold)':'var(--muted)'}}>{i<3?medals[i]:`#${i+1}`}</td>
-                      <td style={{fontWeight:700}}>{p.full_name || p.user_email?.split('@')[0] || '—'}</td>
-                      <td style={{color:'var(--muted)',fontSize:12}}>{p.user_email}</td>
-                      <td style={{color:'var(--gold)',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{p.total}</td>
-                      <td style={{color:'var(--muted)'}}>{p.count}</td>
+                  {matches.filter((m:any)=>m.league?.round===activeRound).map((match:any)=>(
+                    <tr key={match.fixture.id}>
+                      <td>{match.teams.home.name} × {match.teams.away.name}</td>
+                      <td>{new Date(match.fixture.date).toLocaleString('ar-EG')}</td>
+                      <td>{match.fixture.status?.short || '—'}</td>
+                      <td className="score">
+                        {match.actual_home_score == null ? '—' : `${match.actual_home_score} - ${match.actual_away_score}`}
+                      </td>
                       <td>
-                        <button
-                          onClick={()=>openBreakdown(p)}
-                          style={{padding:'5px 12px',borderRadius:8,border:'1px solid rgba(217,178,95,.3)',background:'rgba(217,178,95,.08)',color:'var(--gold)',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'Cairo,sans-serif',whiteSpace:'nowrap'}}
-                        >🔍 تفاصيل</button>
+                        <button className={`btn ${match.is_open?'warn':'primary'}`} onClick={()=>toggleMatchOpen(match)}>
+                          {match.is_open ? 'غلق' : 'فتح'}
+                        </button>
+                      </td>
+                      <td>
+                        <button className="btn blue" onClick={()=>openResultModal(match)}>إدخال/تعديل نتيجة</button>
                       </td>
                     </tr>
                   ))}
@@ -700,397 +492,401 @@ export default function AdminPage() {
           </>
         )}
 
-        {/* ══ LEAGUES ══ */}
-        {activeTab==='leagues' && (
+        {activeTab === 'predictions' && (
           <>
-            {biggestLeague && (
-              <div style={{background:'rgba(217,178,95,.08)',border:'1px solid rgba(217,178,95,.2)',borderRadius:14,padding:'12px 18px',marginBottom:16,fontSize:13,color:'var(--gold)',fontWeight:700,display:'flex',flexWrap:'wrap',gap:16}}>
-                <span>🏆 أكبر ميني ليج: <strong>{biggestLeague.name}</strong> ({biggestLeague.member_count} أعضاء)</span>
-                <span>📩 دعوات معلقة: <strong>{totalPending}</strong></span>
-                <span>📊 متوسط أعضاء: <strong>{leagues.length?(totalLeagueMembers/leagues.length).toFixed(1):0}</strong></span>
-              </div>
-            )}
-            {leagues.length===0 ? (
-              <div style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد ليجات بعد</div>
-            ) : leagues.map(lg=>{
-              const members    = leagueMembers[lg.id]||[];
-              const isExpanded = expandedLeague===lg.id;
-              return (
-                <div key={lg.id} className="league-card">
-                  <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:800,fontSize:15,color:'var(--gold)',marginBottom:4}}>{lg.name}</div>
-                      <div style={{fontSize:12,color:'var(--muted)',display:'flex',gap:12,flexWrap:'wrap',alignItems:'center'}}>
-                        {/* زر نسخ الكود مباشرة ✅ */}
-                        <span
-                          onClick={()=>navigator.clipboard.writeText(lg.code).then(()=>showMsg(`✅ تم نسخ كود ${lg.name}`))}
-                          style={{cursor:'pointer',display:'flex',alignItems:'center',gap:4}}
-                          title="اضغط لنسخ الكود"
-                        >
-                          كود: <strong style={{color:'var(--text)',letterSpacing:1}}>{lg.code}</strong>
-                          <span style={{fontSize:10,color:'var(--gold)'}}>📋</span>
-                        </span>
-                        <span>👑 {lg.owner_name}</span>
-                        <span>👥 {lg.member_count} عضو</span>
-                        {lg.pending_invites>0 && <span style={{color:'#fb923c'}}>📩 {lg.pending_invites} معلق</span>}
-                        <span>{new Date(lg.created_at).toLocaleDateString('ar-EG',{month:'short',day:'numeric'})}</span>
-                      </div>
-                    </div>
-                    <button onClick={()=>setExpandedLeague(isExpanded?null:lg.id)} className="action-btn" style={{background:'rgba(217,178,95,.12)',border:'1px solid rgba(217,178,95,.2)',color:'#ffe3a6',fontSize:12,padding:'8px 14px'}}>
-                      {isExpanded?'▲ إخفاء':'▼ الأعضاء'}
-                    </button>
-                    <button onClick={()=>adminDeleteLeague(lg)} className="del-btn">🗑️ حذف</button>
-                  </div>
-                  {isExpanded && (
-                    <div style={{marginTop:14,borderTop:'1px solid var(--line)',paddingTop:14}}>
-                      <div style={{fontSize:13,color:'var(--gold)',fontWeight:700,marginBottom:10}}>أعضاء الليج ({members.length})</div>
-                      {members.length===0 ? (
-                        <div style={{color:'var(--muted)',fontSize:13}}>لا يوجد أعضاء</div>
-                      ) : members
-                        .sort((a:any,b:any)=>(b._profile?.total_points||0)-(a._profile?.total_points||0))
-                        .map((m:any,idx:number)=>{
-                          const name    = m._profile?.full_name||m._profile?.user_email?.split('@')[0]||'لاعب';
-                          const pts     = m._profile?.total_points||0;
-                          const isOwner = m.role==='owner';
-                          return (
-                            <div key={m.user_id} style={{display:'flex',alignItems:'center',gap:12,padding:'8px 0',borderBottom:'1px solid var(--line)'}}>
-                              <span style={{color:'var(--muted)',fontSize:12,minWidth:24}}>#{idx+1}</span>
-                              <span style={{flex:1,fontWeight:700}}>{name} {isOwner && <span style={{fontSize:11,color:'var(--gold)'}}>👑 مالك</span>}</span>
-                              <span style={{color:'var(--gold)',fontWeight:800,fontSize:13}}>{pts} نقطة</span>
-                              {!isOwner && <button onClick={()=>adminRemoveMember(lg.id,m.user_id,name)} className="del-btn">إزالة</button>}
-                            </div>
-                          );
-                        })
-                      }
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            <div className="toolbar">
+              <select className="btn" value={predRoundFilter} onChange={e=>setPredRoundFilter(e.target.value)}>
+                <option value="all">كل الجولات</option>
+                {[...new Set(matches.map((m:any)=>m.league?.round).filter(Boolean))].map((r:string)=>(
+                  <option key={r} value={r}>{roundLabels[r] || r}</option>
+                ))}
+              </select>
+              <select className="btn" value={predStatusFilter} onChange={e=>setPredStatusFilter(e.target.value as any)}>
+                <option value="all">كل التوقعات</option>
+                <option value="ungraded">غير محسوبة</option>
+              </select>
+              <button className="btn" onClick={exportPredictionsCSV}>تصدير CSV</button>
+            </div>
+
+            <div className="card tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>اللاعب</th>
+                    <th>المباراة</th>
+                    <th>التوقع</th>
+                    <th>النتيجة الفعلية</th>
+                    <th>النقاط</th>
+                    <th>وقت التسجيل</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {predictions
+                    .filter((p:any)=>{
+                      const round = matches.find((m:any)=>m.fixture.id===p.fixture_id)?.league?.round || '';
+                      const byRound = predRoundFilter==='all' || round===predRoundFilter;
+                      const byStatus = predStatusFilter==='all' || p.points==null;
+                      return byRound && byStatus;
+                    })
+                    .map((p:any)=>(
+                    <tr key={p.id}>
+                      <td>{p.user_name || p.user_email?.split('@')[0] || '—'}</td>
+                      <td>{p.home_team} × {p.away_team}</td>
+                      <td>{p.predicted_home_score}-{p.predicted_away_score}</td>
+                      <td>{p.actual_home_score==null?'—':`${p.actual_home_score}-${p.actual_away_score}`}</td>
+                      <td>{p.points ?? '—'}</td>
+                      <td>{p.submitted_at ? new Date(p.submitted_at).toLocaleString('ar-EG') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
 
-        {activeTab==='prizes' && (
-          <div>
-
-            {/* ── أكثر نقاط اليوم ── */}
-            <div style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:18,padding:'18px 20px',marginBottom:20}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
-                <div style={{fontWeight:800,fontSize:15,color:'var(--gold)'}}>🌟 أكثر نقاط اليوم</div>
-                <button onClick={loadPrizes} style={{fontSize:12,padding:'4px 12px',borderRadius:8,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--muted)',cursor:'pointer',fontFamily:'Cairo,sans-serif'}}>🔄 تحديث</button>
-              </div>
-              {dailyScorers.length === 0
-                ? <div style={{color:'var(--muted)',fontSize:13,textAlign:'center',padding:'16px 0'}}>لا توجد نقاط مسجلة اليوم بعد</div>
-                : dailyScorers.map((s: any, i: number) => (
-                  <div key={s.user_id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',background:'var(--surface-2)',borderRadius:12,marginBottom:8}}>
-                    <div style={{fontWeight:900,fontSize:18,minWidth:28,textAlign:'center'}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`}</div>
-                    <div style={{flex:1,fontWeight:700,fontSize:14}}>{s.full_name || 'مجهول'}</div>
-                    <div style={{fontWeight:900,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{s.daily_points} نقطة</div>
-                    <div style={{fontSize:12,color:'var(--muted)',background:'var(--surface-3)',borderRadius:8,padding:'2px 8px'}}>{s.preds_count} توقع</div>
-                  </div>
-                ))
-              }
+        {activeTab === 'leaderboard' && (
+          <>
+            <div className="toolbar">
+              <button className="btn" onClick={exportLeaderboardCSV}>تصدير CSV</button>
             </div>
 
-            {/* ── مراحل الجوائز ── */}
-            <div style={{fontWeight:800,fontSize:15,marginBottom:14}}>🏆 مراحل الجوائز (5 مراحل)</div>
-            {prizePhases.map((phase: any) => {
-              const phaseWins  = prizeWinners.filter((w: any) => w.phase_id === phase.id);
-              const today      = new Date().toISOString().split('T')[0];
-              const isFinished = phaseWins.length > 0;
-              const isPast     = phase.end_date < today;
-              const isActive   = !isFinished && phase.start_date <= today && phase.end_date >= today;
-              const prizes     = [phase.prize_label, phase.prize_label_2, phase.prize_label_3].filter(Boolean);
-              const badge      = isFinished
-                ? { bg:'rgba(39,176,110,.12)', bd:'rgba(39,176,110,.25)', c:'#5effa8',  t:'✅ مكتملة' }
-                : isActive
-                  ? { bg:'rgba(217,178,95,.12)',bd:'rgba(217,178,95,.25)',c:'var(--gold)',t:'🔴 نشطة' }
-                  : isPast
-                    ? { bg:'rgba(201,58,47,.1)', bd:'rgba(201,58,47,.2)', c:'#ff9c91',  t:'⏳ انتهت' }
-                    : { bg:'rgba(255,255,255,.04)',bd:'var(--line)',        c:'var(--muted)',t:'⏰ قادمة' };
-              return (
-                <div key={phase.id} style={{background:'var(--surface)',border:`1px solid ${isFinished?'rgba(39,176,110,.3)':isActive?'rgba(217,178,95,.3)':'var(--line)'}`,borderRadius:18,padding:'18px 20px',marginBottom:12}}>
-                  <div style={{display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap'}}>
-                    <div style={{flex:1,minWidth:200}}>
-                      <div style={{fontWeight:800,fontSize:15,marginBottom:6}}>{phase.name}</div>
-                      <div style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>
-                        📅 {new Date(phase.start_date+'T12:00:00').toLocaleDateString('ar-EG',{month:'long',day:'numeric'})}
-                        {' — '}
-                        {new Date(phase.end_date+'T12:00:00').toLocaleDateString('ar-EG',{month:'long',day:'numeric',year:'numeric'})}
-                        {'  ·  '}
-                        <span style={{color:phase.is_cumulative?'var(--gold)':'var(--muted)'}}>
-                          {phase.is_cumulative ? '📊 تراكمي' : '📋 غير تراكمي'}
-                        </span>
-                      </div>
-                      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                        {prizes.map((p: string, i: number) => (
-                          <span key={i} style={{background:'rgba(217,178,95,.1)',border:'1px solid rgba(217,178,95,.2)',borderRadius:999,padding:'4px 14px',fontSize:12,fontWeight:700,color:'#ffe3a6'}}>
-                            {prizes.length > 1 ? ['🥇','🥈','🥉'][i]+' ' : ''}{p}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:8}}>
-                      <span style={{fontSize:11,padding:'4px 12px',borderRadius:999,fontWeight:700,whiteSpace:'nowrap',background:badge.bg,color:badge.c,border:`1px solid ${badge.bd}`}}>{badge.t}</span>
-                      {(isPast || isActive) && !isFinished && (
-                        <button
-                          onClick={async () => {
-                            setSelectedPhase(phase);
-                            setShowPrizeModal(true);
-                            setPrizeModalLoading(true);
-                            setPhaseLeaderboard([]);
-                            const { data } = await supabase.rpc('get_phase_leaderboard', { p_phase_key: phase.phase_key });
-                            setPhaseLeaderboard((data || []).slice(0, phase.winner_count || 1));
-                            setPrizeModalLoading(false);
-                          }}
-                          style={{padding:'8px 16px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#e0bc73,#b9892d)',color:'#1a0a00',fontWeight:800,fontSize:12,fontFamily:'Cairo,sans-serif',cursor:'pointer'}}
-                        >
-                          🏅 إعلان الفائز
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {isFinished && (
-                    <div style={{marginTop:14,borderTop:'1px solid var(--line)',paddingTop:14}}>
-                      <div style={{fontSize:12,color:'var(--gold)',fontWeight:700,marginBottom:10}}>الفائزون المُعلنون:</div>
-                      {phaseWins.map((w: any) => (
-                        <div key={w.id} style={{display:'flex',alignItems:'center',gap:12,padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.05)'}}>
-                          <span style={{fontSize:20}}>{['🥇','🥈','🥉'][w.rank - 1] || '🏅'}</span>
-                          <span style={{fontWeight:700,flex:1}}>{w.profiles?.full_name || '—'}</span>
-                          <span style={{color:'var(--gold)',fontWeight:800,fontVariantNumeric:'tabular-nums'}}>{w.points} نقطة</span>
-                          <span style={{fontSize:11,color:'#ffe3a6',background:'rgba(217,178,95,.1)',borderRadius:8,padding:'2px 8px'}}>{prizes[w.rank - 1] || ''}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+            <div className="card tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>الاسم</th>
+                    <th>الإيميل</th>
+                    <th>النقاط</th>
+                    <th>التوقعات</th>
+                    <th>الإحالات</th>
+                    <th>تفاصيل</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.map((u:any, idx:number)=>(
+                    <tr key={u.user_id}>
+                      <td>{idx+1}</td>
+                      <td>{u.full_name || '—'}</td>
+                      <td>{u.user_email || '—'}</td>
+                      <td>{u.total || 0}</td>
+                      <td>{u.count || 0}</td>
+                      <td>{u.referral_count || 0}</td>
+                      <td><button className="btn blue" onClick={()=>openUserBreakdown(u)}>عرض</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
-      </div>
-
-      {/* ══ RESULT MODAL ══ */}
-
-      {showModal && selectedMatch && (
-        <div onClick={()=>setShowModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',backdropFilter:'blur(6px)',display:'grid',placeItems:'center',zIndex:1000,padding:16}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:24,padding:28,width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-              <div>
-                <div style={{fontWeight:900,fontSize:16,color:'var(--gold)'}}>{selectedMatch.teams.home.name} × {selectedMatch.teams.away.name}</div>
-                <div style={{fontSize:12,color:'var(--muted)',marginTop:3}}>إدخال / تعديل النتيجة</div>
-              </div>
-              <button onClick={()=>setShowModal(false)} style={{background:'var(--surface-3)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center'}}>✕</button>
-            </div>
-            <div style={{fontSize:13,color:'var(--muted)',fontWeight:700,marginBottom:10}}>النتيجة الفعلية</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:18}}>
-              {[{label:selectedMatch.teams.home.name,val:homeScore,set:setHomeScore},{label:selectedMatch.teams.away.name,val:awayScore,set:setAwayScore}].map(({label,val,set})=>(
-                <div key={label} style={{background:'var(--surface-2)',borderRadius:16,padding:'12px 16px',textAlign:'center'}}>
-                  <div style={{fontSize:11,color:'var(--muted)',marginBottom:8,fontWeight:700}}>{label}</div>
-                  <input type="number" min={0} value={val}
-                    onChange={e=>set(Number(e.target.value))}
-                    style={{width:'100%',height:66,borderRadius:14,background:'#fff',color:'#000',fontSize:34,fontWeight:900,textAlign:'center',border:'none',outline:'none',fontFamily:"'Cairo',sans-serif"}} />
-                </div>
-              ))}
-            </div>
-            <div style={{marginBottom:14}}>
-              <div style={{fontSize:13,color:'var(--muted)',fontWeight:700,marginBottom:6}}>⚽ أول هدف</div>
-              <input type="text" value={firstScorer} onChange={e=>setFirstScorer(e.target.value)}
-                placeholder="مثال: محمد صلاح" className="field-input" />
-            </div>
-            <div style={{background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:16,padding:'14px 16px',marginBottom:18}}>
-              <div style={{fontSize:13,color:'var(--muted)',fontWeight:700,marginBottom:12}}>أحداث الماتش (+2 نقطة لكل توقع صح)</div>
-              {[
-                { label:'⏱️ ذهبت لوقت إضافي',   val:extraTime,  set:setExtraTime  },
-                { label:'🟥 كان في بطاقة حمراء', val:redCard,    set:setRedCard    },
-                { label:'⚽ كان في ركلة جزاء',   val:penalty,    set:setPenalty    },
-                { label:'🎯 كلا الفريقين سجّلا', val:bothTeams,  set:setBothTeams  },
-              ].map(({label,val,set})=>(
-                <label key={label} style={{display:'flex',alignItems:'center',gap:10,marginBottom:10,cursor:'pointer'}}>
-                  <input type="checkbox" checked={val} onChange={e=>set(e.target.checked)}
-                    style={{width:18,height:18,accentColor:'var(--gold)',flexShrink:0}} />
-                  <span style={{fontSize:14,fontWeight:600}}>{label}</span>
-                </label>
-              ))}
-            </div>
-            <div style={{display:'flex',gap:10}}>
-              <button onClick={()=>setShowModal(false)} style={{flex:1,padding:'13px 0',borderRadius:16,background:'var(--surface-2)',border:'1px solid var(--line)',color:'var(--muted)',cursor:'pointer',fontFamily:"'Cairo',sans-serif",fontWeight:700,fontSize:14}}>إلغاء</button>
-              <button onClick={saveResult} disabled={savingResult} className="action-btn" style={{flex:2,padding:'13px 0',borderRadius:16,background:'linear-gradient(135deg,var(--gold),#a8761a)',fontSize:15}}>
-                {savingResult?'⏳ جاري الحفظ...':'✅ حفظ النتيجة وتحديث النقاط'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-        {/* ── Modal إعلان الفائز ── */}
-        {showPrizeModal && selectedPhase && (
-          <div onClick={() => setShowPrizeModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',backdropFilter:'blur(8px)',display:'grid',placeItems:'center',zIndex:1001,padding:16}}>
-            <div onClick={e => e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid rgba(217,178,95,.25)',borderRadius:24,padding:28,width:'100%',maxWidth:500,maxHeight:'90vh',overflowY:'auto'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-                <div>
-                  <div style={{fontWeight:900,fontSize:17,color:'var(--gold)'}}>🏅 إعلان فائز</div>
-                  <div style={{fontSize:13,color:'var(--muted)',marginTop:3}}>{selectedPhase.name}</div>
-                </div>
-                <button onClick={() => setShowPrizeModal(false)} style={{background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center'}}>✕</button>
-              </div>
-              {prizeModalLoading
-                ? <div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>⏳ جاري تحميل الليدربورد...</div>
-                : phaseLeaderboard.length === 0
-                  ? <div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>لا توجد نقاط مسجلة في هذه المرحلة بعد</div>
-                  : <>
-                    <div style={{background:'rgba(217,178,95,.08)',border:'1px solid rgba(217,178,95,.15)',borderRadius:12,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#ffe3a6'}}>
-                      سيتم إعلان أعلى {selectedPhase.winner_count || 1} مشارك كفائز في هذه المرحلة
-                    </div>
-                    {phaseLeaderboard.map((row: any, i: number) => {
-                      const prizeLabels = [selectedPhase.prize_label, selectedPhase.prize_label_2, selectedPhase.prize_label_3];
-                      return (
-                        <div key={row.user_id} style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'rgba(217,178,95,.06)',border:'1px solid rgba(217,178,95,.15)',borderRadius:14,marginBottom:8}}>
-                          <span style={{fontSize:24}}>{['🥇','🥈','🥉'][i] || String(i + 1)}</span>
-                          <div style={{flex:1}}>
-                            <div style={{fontWeight:800,fontSize:15}}>{row.full_name || 'مجهول'}</div>
-                            <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{row.phase_points} نقطة في المرحلة</div>
-                          </div>
-                          {prizeLabels[i] && (
-                            <div style={{fontSize:13,color:'#ffe3a6',fontWeight:700,background:'rgba(217,178,95,.1)',borderRadius:8,padding:'4px 10px'}}>{prizeLabels[i]}</div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    <button
-                      disabled={savingWinner}
-                      onClick={async () => {
-                        setSavingWinner(true);
-                        try {
-                          for (let i = 0; i < phaseLeaderboard.length; i++) {
-                            await supabase.from('prize_winners').insert({
-                              phase_id: selectedPhase.id,
-                              user_id:  phaseLeaderboard[i].user_id,
-                              rank:     i + 1,
-                              points:   Number(phaseLeaderboard[i].phase_points),
-                            });
-                          }
-                          await supabase.from('prize_phases').update({ status: 'completed' }).eq('id', selectedPhase.id);
-                          await loadPrizes();
-                          setShowPrizeModal(false);
-                          showMsg('✅ تم إعلان الفائزين بنجاح!', 'success');
-                        } catch (err: any) {
-                          showMsg('❌ ' + (err?.message || 'خطأ في الحفظ'), 'error');
-                        }
-                        setSavingWinner(false);
-                      }}
-                      style={{width:'100%',padding:14,borderRadius:14,border:'none',background:savingWinner?'rgba(217,178,95,.3)':'linear-gradient(135deg,#e0bc73,#b9892d)',color:'#1a0a00',fontWeight:900,fontSize:15,fontFamily:'Cairo,sans-serif',cursor:savingWinner?'not-allowed':'pointer',marginTop:16}}
-                    >
-                      {savingWinner ? '⏳ جاري الحفظ...' : '✅ تأكيد وإعلان الفائزين'}
+        {activeTab === 'leagues' && (
+          <div className="grid2">
+            {leagues.map((lg:any)=>(
+              <div key={lg.id} className="card leagueBox">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+                  <div>
+                    <div style={{fontSize:20,fontWeight:900}}>{lg.name}</div>
+                    <div className="muted">الكود: {lg.code} • المالك: {lg.owner_name}</div>
+                  </div>
+                  <div className="right">
+                    <span className="pill">الأعضاء: {lg.member_count}</span>
+                    <span className="pill">دعوات معلقة: {lg.pending_invites}</span>
+                    <span className="pill">أعلى نقاط: {lg.top_points}</span>
+                    <button className="btn" onClick={()=>setExpandedLeague(expandedLeague===lg.id?null:lg.id)}>
+                      {expandedLeague===lg.id?'إخفاء':'الأعضاء'}
                     </button>
-                  </>
-              }
-            </div>
-          </div>
-        )}
-
-      {/* ══ BREAKDOWN MODAL ══ */}
-      {showBreakdown && breakdownUser && (
-        <div onClick={()=>setShowBreakdown(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',display:'grid',placeItems:'center',zIndex:2000,padding:16}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:24,padding:24,width:'100%',maxWidth:580,maxHeight:'88vh',overflowY:'auto',direction:'rtl'}}>
-
-            {/* Header */}
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-              <div>
-                <div style={{fontWeight:900,fontSize:16,color:'var(--gold)'}}>
-                  {breakdownUser.full_name || breakdownUser.user_email?.split('@')[0] || '—'}
-                </div>
-                <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{breakdownUser.user_email}</div>
-              </div>
-              <button onClick={()=>setShowBreakdown(false)} style={{background:'var(--surface-3)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center'}}>✕</button>
-            </div>
-
-            {/* ملخص الإجمالي */}
-            <div style={{background:'linear-gradient(135deg,rgba(217,178,95,.12),rgba(217,178,95,.04))',border:'1px solid rgba(217,178,95,.25)',borderRadius:16,padding:'14px 18px',marginBottom:20}}>
-              <div style={{fontSize:13,color:'var(--muted)',fontWeight:700,marginBottom:12}}>📊 مصادر النقاط</div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10}}>
-                {/* نقاط التوقعات */}
-                {(() => {
-                  const predPts = breakdownPreds.reduce((s,p)=>s+(p.points||0),0);
-                  return (
-                    <div style={{background:'var(--surface-2)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
-                      <div style={{fontSize:11,color:'var(--muted)',marginBottom:4}}>🎯 التوقعات</div>
-                      <div style={{fontWeight:900,fontSize:20,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{predPts}</div>
-                      <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{breakdownPreds.length} ماتش محسوب</div>
-                    </div>
-                  );
-                })()}
-                {/* نقاط الدعوات */}
-                <div style={{background:'var(--surface-2)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
-                  <div style={{fontSize:11,color:'var(--muted)',marginBottom:4}}>🤝 الدعوات</div>
-                  <div style={{fontWeight:900,fontSize:20,color:'#5effa8',fontVariantNumeric:'tabular-nums'}}>{(breakdownUser.referral_count||0)*5}</div>
-                  <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{breakdownUser.referral_count||0} دعوة × 5</div>
-                </div>
-                {/* نقاط البروفايل */}
-                {((breakdownUser.bonus_points ?? 0) > 0 || breakdownUser.profile_completed) && (
-                  <div style={{background:'var(--surface-2)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
-                    <div style={{fontSize:11,color:'var(--muted)',marginBottom:4}}>✅ البروفايل</div>
-                    <div style={{fontWeight:900,fontSize:20,color:'#60c3ff',fontVariantNumeric:'tabular-nums'}}>
-                      {(breakdownUser.bonus_points ?? 0) + (breakdownUser.profile_completed ? 5 : 0)}
-                    </div>
-                    <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>
-                      {breakdownUser.facebook_bonus_awarded ? '📘 FB +5 · ' : ''}
-                      {breakdownUser.profile_completed && !breakdownUser.facebook_bonus_awarded ? '🔵 Google/إكمال +5 · ' : ''}
-                      {(breakdownUser.bonus_points ?? 0) > 0 ? `🎁 إضافي: ${breakdownUser.bonus_points}` : ''}
-                    </div>
-                  </div>
-                )}
-                {/* الإجمالي */}
-                <div style={{background:'rgba(217,178,95,.1)',border:'1px solid rgba(217,178,95,.25)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
-                  <div style={{fontSize:11,color:'var(--gold)',fontWeight:700,marginBottom:4}}>🏆 الإجمالي</div>
-                  <div style={{fontWeight:900,fontSize:22,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{breakdownUser.total}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* تفاصيل كل توقع */}
-            <div style={{fontSize:13,color:'var(--muted)',fontWeight:700,marginBottom:12}}>📋 تفصيل التوقعات ({breakdownPreds.length})</div>
-            {breakdownPreds.length === 0 ? (
-              <div style={{textAlign:'center',color:'var(--muted)',padding:32,fontSize:13}}>لا توجد توقعات محسوبة بعد</div>
-            ) : breakdownPreds.map((pr, idx) => (
-              <div key={idx} style={{background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:14,padding:'12px 14px',marginBottom:10}}>
-                {/* اسم الماتش */}
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,flexWrap:'wrap',gap:6}}>
-                  <div style={{fontWeight:800,fontSize:13}}>{pr.home_team} × {pr.away_team}</div>
-                  <div style={{fontWeight:900,fontSize:15,color:(pr.points||0)>0?'var(--gold)':'var(--muted)',fontVariantNumeric:'tabular-nums'}}>
-                    {pr.points||0} نقطة
+                    <button className="btn red" onClick={()=>adminDeleteLeague(lg)}>حذف الليج</button>
                   </div>
                 </div>
-                {/* توقع vs فعلي */}
-                <div style={{display:'flex',gap:16,fontSize:12,color:'var(--muted)',marginBottom:8,flexWrap:'wrap'}}>
-                  <span>🔮 توقع: <strong style={{color:'var(--text)'}}>{pr.predicted_home_score} - {pr.predicted_away_score}</strong></span>
-                  <span>✅ فعلي: <strong style={{color:'var(--text)'}}>{pr.actual_home_score} - {pr.actual_away_score}</strong></span>
-                  {pr.first_scorer_actual && <span>⚽ أول هدف: <strong style={{color:'var(--text)'}}>{pr.first_scorer_actual}</strong></span>}
-                </div>
-                {/* البنود */}
-                {pr.items.length > 0 ? (
-                  <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-                    {pr.items.map((item: any, ii: number) => (
-                      <span key={ii} style={{
-                        fontSize:11,padding:'3px 10px',borderRadius:999,fontWeight:700,
-                        background: item.pts>0 ? 'rgba(39,176,110,.12)' : 'rgba(201,58,47,.12)',
-                        border: `1px solid ${item.pts>0 ? 'rgba(39,176,110,.25)' : 'rgba(201,58,47,.25)'}`,
-                        color: item.pts>0 ? '#5effa8' : '#ff9c91',
-                      }}>
-                        {item.icon} {item.label} ({item.pts>0?'+':''}{item.pts})
-                      </span>
-                    ))}
+
+                {expandedLeague===lg.id && (
+                  <div className="spacer">
+                    <div className="tableWrap" style={{marginTop:12}}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>الاسم</th>
+                            <th>الإيميل</th>
+                            <th>النقاط</th>
+                            <th>الدور</th>
+                            <th>إزالة</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(leagueMembers[lg.id] || []).map((m:any)=>(
+                            <tr key={`${lg.id}-${m.user_id}`}>
+                              <td>{m._profile?.full_name || '—'}</td>
+                              <td>{m._profile?.user_email || '—'}</td>
+                              <td>{m._profile?.total_points || 0}</td>
+                              <td>{m.role || 'member'}</td>
+                              <td>
+                                <button
+                                  className="btn red"
+                                  disabled={m.role==='owner'}
+                                  onClick={()=>adminRemoveMember(lg.id,m.user_id,m._profile?.full_name || m._profile?.user_email || 'العضو')}
+                                >
+                                  إزالة
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                ) : (
-                  <div style={{fontSize:11,color:'var(--muted)'}}>— لا نقاط من هذا الماتش</div>
                 )}
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
+        {activeTab === 'prizes' && (
+          <div className="grid2">
+            <div className="card">
+              <div style={{fontSize:22,fontWeight:900,marginBottom:12}}>المراحل</div>
+              <div className="tableWrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>المرحلة</th>
+                      <th>الحالة</th>
+                      <th>الفترة</th>
+                      <th>إدارة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prizePhases.map((phase:any)=>(
+                      <tr key={phase.id}>
+                        <td>{phase.name}</td>
+                        <td>{phase.status}</td>
+                        <td>{phase.start_date} → {phase.end_date}</td>
+                        <td>
+                          <button
+                            className="btn blue"
+                            onClick={async()=>{
+                              setShowPrizeModal(true);
+                              setPrizeModalLoading(true);
+                              setSelectedPhase(phase);
+                              try {
+                                const { data } = await supabase.rpc('get_phase_leaderboard', { p_phase_key: phase.phase_key });
+                                setPhaseLeaderboard(data || []);
+                              } finally {
+                                setPrizeModalLoading(false);
+                              }
+                            }}
+                          >
+                            إدارة
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="card">
+              <div style={{fontSize:22,fontWeight:900,marginBottom:12}}>أفضل مسجلين اليوم</div>
+              <div className="tableWrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>الاسم</th>
+                      <th>النقاط</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyScorers.map((u:any, idx:number)=>(
+                      <tr key={u.user_id || idx}>
+                        <td>{idx+1}</td>
+                        <td>{u.full_name || u.user_email || '—'}</td>
+                        <td>{u.total_points || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{fontSize:22,fontWeight:900,margin:'18px 0 12px'}}>الفائزون المحفوظون</div>
+              <div className="tableWrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>المرحلة</th>
+                      <th>الترتيب</th>
+                      <th>الاسم</th>
+                      <th>الجائزة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prizeWinners.map((w:any)=>(
+                      <tr key={w.id}>
+                        <td>{w.phase_id}</td>
+                        <td>{w.rank}</td>
+                        <td>{w.profiles?.full_name || '—'}</td>
+                        <td>{w.prize_label || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showModal && selectedMatch && (
+          <div className="modalBackdrop" onClick={()=>!savingResult && setShowModal(false)}>
+            <div className="modal" onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:24,fontWeight:900,marginBottom:12}}>
+                نتيجة: {selectedMatch.teams.home.name} × {selectedMatch.teams.away.name}
+              </div>
+
+              <div className="grid2">
+                <div className="field">
+                  <label>أهداف الفريق الأول</label>
+                  <input type="number" value={homeScore} onChange={e=>setHomeScore(Number(e.target.value))} />
+                </div>
+                <div className="field">
+                  <label>أهداف الفريق الثاني</label>
+                  <input type="number" value={awayScore} onChange={e=>setAwayScore(Number(e.target.value))} />
+                </div>
+              </div>
+
+              <div className="spacer" />
+
+              <div className="field">
+                <label>أول هداف</label>
+                <input value={firstScorer} onChange={e=>setFirstScorer(e.target.value)} placeholder="اسم اللاعب" />
+              </div>
+
+              <div className="spacer" />
+
+              <div className="row">
+                <label className="pill"><input type="checkbox" checked={extraTime} onChange={e=>setExtraTime(e.target.checked)} /> وقت إضافي</label>
+                <label className="pill"><input type="checkbox" checked={redCard} onChange={e=>setRedCard(e.target.checked)} /> بطاقة حمراء</label>
+                <label className="pill"><input type="checkbox" checked={penalty} onChange={e=>setPenalty(e.target.checked)} /> ركلة جزاء</label>
+                <label className="pill"><input type="checkbox" checked={bothTeams} onChange={e=>setBothTeams(e.target.checked)} /> الفريقان يسجلان</label>
+              </div>
+
+              <div className="spacer" />
+
+              <div className="right" style={{justifyContent:'flex-end'}}>
+                <button className="btn" onClick={()=>setShowModal(false)} disabled={savingResult}>إلغاء</button>
+                <button className="btn primary" onClick={saveResult} disabled={savingResult}>
+                  {savingResult ? 'جارٍ الحفظ...' : 'حفظ النتيجة'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showBreakdown && (
+          <div className="modalBackdrop" onClick={()=>setShowBreakdown(false)}>
+            <div className="modal" onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:24,fontWeight:900,marginBottom:12}}>
+                تفاصيل توقعات: {breakdownUser?.full_name || breakdownUser?.user_email || '—'}
+              </div>
+
+              <div className="tableWrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>المباراة</th>
+                      <th>التوقع</th>
+                      <th>النتيجة الفعلية</th>
+                      <th>النقاط</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {breakdownPreds.map((pr:any)=>(
+                      <tr key={pr.id}>
+                        <td>{pr.home_team} × {pr.away_team}</td>
+                        <td>{pr.predicted_home_score}-{pr.predicted_away_score}</td>
+                        <td>{pr.actual_home_score==null?'—':`${pr.actual_home_score}-${pr.actual_away_score}`}</td>
+                        <td>{pr.points ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="right" style={{justifyContent:'flex-end',marginTop:16}}>
+                <button className="btn" onClick={()=>setShowBreakdown(false)}>إغلاق</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showPrizeModal && selectedPhase && (
+          <div className="modalBackdrop" onClick={()=>!savingWinner && setShowPrizeModal(false)}>
+            <div className="modal" onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:24,fontWeight:900,marginBottom:12}}>
+                إدارة جوائز: {selectedPhase.name}
+              </div>
+
+              {prizeModalLoading ? (
+                <div>جارٍ التحميل...</div>
+              ) : (
+                <div className="tableWrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>الاسم</th>
+                        <th>النقاط</th>
+                        <th>حفظ كفائز</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {phaseLeaderboard.map((u:any, idx:number)=>(
+                        <tr key={u.user_id || idx}>
+                          <td>{idx+1}</td>
+                          <td>{u.full_name || u.user_email || '—'}</td>
+                          <td>{u.total_points || 0}</td>
+                          <td>
+                            <button
+                              className="btn primary"
+                              disabled={savingWinner}
+                              onClick={async()=>{
+                                try {
+                                  setSavingWinner(true);
+                                  await supabase.from('prize_winners').insert({
+                                    phase_id: selectedPhase.id,
+                                    user_id: u.user_id,
+                                    rank: idx + 1,
+                                    prize_label: idx === 0 ? 'المركز الأول' : idx === 1 ? 'المركز الثاني' : 'مركز متقدم',
+                                  });
+                                  await supabase.from('prize_phases').update({ status: 'completed' }).eq('id', selectedPhase.id);
+                                  showMsg('✅ تم حفظ الفائز');
+                                  setShowPrizeModal(false);
+                                  await loadPrizes();
+                                } catch (err:any) {
+                                  showMsg('❌ '+(err?.message || 'خطأ'), 'error');
+                                } finally {
+                                  setSavingWinner(false);
+                                }
+                              }}
+                            >
+                              حفظ
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="right" style={{justifyContent:'flex-end',marginTop:16}}>
+                <button className="btn" onClick={()=>setShowPrizeModal(false)} disabled={savingWinner}>إغلاق</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </>
   );
 }
