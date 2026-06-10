@@ -1079,7 +1079,7 @@ export default function Dashboard() {
               <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px', textAlign: 'center', border: '1px solid rgba(217,178,95,.2)' }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>الترتيب الإجمالي</div>
                 <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>#{myRank}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>من {leaderboard.length} متسابق</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>من {totalParticipants || leaderboard.length} متسابق</div>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{animatedPoints} نقطة</div>
               </div>
               <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px', textAlign: 'center', border: '1px solid rgba(59,130,246,.2)' }}>
