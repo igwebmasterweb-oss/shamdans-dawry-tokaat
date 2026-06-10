@@ -15,16 +15,6 @@ function normalizeName(s: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const internalKey = request.headers.get('x-internal-key');
-  const authHeader  = request.headers.get('authorization');
-  const cronSecret  = process.env.CRON_SECRET || '';
-  const isAuthorized =
-    internalKey === cronSecret || authHeader === `Bearer ${cronSecret}`;
-
-  if (!isAuthorized) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
     const { data: fixturesRaw, error: fixError } = await supabaseAdmin
       .from('fixtures')
@@ -47,7 +37,11 @@ export async function GET(request: NextRequest) {
     }>;
 
     if (!fixtures || fixtures.length === 0) {
-      return NextResponse.json({ success: true, message: 'لا توجد ماتشات بها نتائج بعد', updated: 0 });
+      return NextResponse.json({
+        success: true,
+        message: 'لا توجد ماتشات بها نتائج بعد',
+        updated: 0,
+      });
     }
 
     const fixtureMap = new Map(fixtures.map(f => [f.api_fixture_id, f]));
@@ -77,11 +71,26 @@ export async function GET(request: NextRequest) {
     }>;
 
     if (!preds || preds.length === 0) {
-      return NextResponse.json({ success: true, message: 'لا توجد توقعات تحتاج تحديث', updated: 0 });
+      return NextResponse.json({
+        success: true,
+        message: 'لا توجد توقعات تحتاج تحديث',
+        updated: 0,
+      });
     }
 
-    const predictionUpdates: { id: number; points: number; actual_home_score: number; actual_away_score: number }[] = [];
-    const socialFeedInserts: { user_id: string; type: string; data: object }[] = [];
+    const predictionUpdates: {
+      id: number;
+      points: number;
+      actual_home_score: number;
+      actual_away_score: number;
+    }[] = [];
+
+    const socialFeedInserts: {
+      user_id: string;
+      type: string;
+      data: object;
+    }[] = [];
+
     const affectedUsers = new Set<string>();
 
     for (const pred of preds) {
@@ -98,24 +107,40 @@ export async function GET(request: NextRequest) {
       if (predHome === actualHome && predAway === actualAway) {
         points += 10;
       } else {
-        const actualWinner = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw';
-        const predWinner   = predHome  > predAway   ? 'home' : predAway  > predHome   ? 'away' : 'draw';
+        const actualWinner =
+          actualHome > actualAway ? 'home' :
+          actualAway > actualHome ? 'away' : 'draw';
+
+        const predWinner =
+          predHome > predAway ? 'home' :
+          predAway > predHome ? 'away' : 'draw';
+
         if (actualWinner === predWinner) points += 5;
       }
 
       // ② الهداف
-      const actualFirstScorer = fixture.first_scorer ? normalizeName(fixture.first_scorer) : null;
-      const predictedScorer   = pred.predicted_first_scorer ? normalizeName(pred.predicted_first_scorer) : null;
-      const allScorers        = Array.isArray(fixture.scorers_json)
+      const actualFirstScorer = fixture.first_scorer
+        ? normalizeName(fixture.first_scorer)
+        : null;
+
+      const predictedScorer = pred.predicted_first_scorer
+        ? normalizeName(pred.predicted_first_scorer)
+        : null;
+
+      const allScorers = Array.isArray(fixture.scorers_json)
         ? fixture.scorers_json.map(name => normalizeName(String(name)))
         : [];
 
       if (predictedScorer) {
-        if (actualFirstScorer && (
-          actualFirstScorer === predictedScorer ||
-          actualFirstScorer.includes(predictedScorer) ||
-          predictedScorer.includes(actualFirstScorer)
-        )) {
+        const isFirstScorer =
+          actualFirstScorer &&
+          (
+            actualFirstScorer === predictedScorer ||
+            actualFirstScorer.includes(predictedScorer) ||
+            predictedScorer.includes(actualFirstScorer)
+          );
+
+        if (isFirstScorer) {
           points += 3;
         } else {
           const scoredInMatch = allScorers.some(name =>
@@ -123,6 +148,7 @@ export async function GET(request: NextRequest) {
             name.includes(predictedScorer) ||
             predictedScorer.includes(name)
           );
+
           if (scoredInMatch) points += 1;
         }
       }
@@ -134,20 +160,34 @@ export async function GET(request: NextRequest) {
 
       // وقت إضافي — كما هو
       if (!isGroupStage) {
-        if (fixture.went_extra_time === true  && pred.predicted_extra_time === true) points += 2;
-        if (fixture.went_extra_time === false && pred.predicted_extra_time === true) points -= 1;
+        if (fixture.went_extra_time === true && pred.predicted_extra_time === true) {
+          points += 2;
+        }
+        if (fixture.went_extra_time === false && pred.predicted_extra_time === true) {
+          points -= 1;
+        }
       }
 
       // بطاقة حمراء — +3 / -1
-      if (fixture.red_card_in_match === true  && pred.predicted_red_card === true) points += 3;
-      if (fixture.red_card_in_match === false && pred.predicted_red_card === true) points -= 1;
+      if (fixture.red_card_in_match === true && pred.predicted_red_card === true) {
+        points += 3;
+      }
+      if (fixture.red_card_in_match === false && pred.predicted_red_card === true) {
+        points -= 1;
+      }
 
       // ركلة جزاء — +3 / -1
-      if (fixture.penalty_in_match === true  && pred.predicted_penalty === true) points += 3;
-      if (fixture.penalty_in_match === false && pred.predicted_penalty === true) points -= 1;
+      if (fixture.penalty_in_match === true && pred.predicted_penalty === true) {
+        points += 3;
+      }
+      if (fixture.penalty_in_match === false && pred.predicted_penalty === true) {
+        points -= 1;
+      }
 
       // الفريقان يسجلان — كما هو للسجلات القديمة
-      if (fixture.both_teams_scored === true && pred.predicted_both_teams === true) points += 2;
+      if (fixture.both_teams_scored === true && pred.predicted_both_teams === true) {
+        points += 2;
+      }
 
       if (points < 0) points = 0;
 
@@ -162,13 +202,19 @@ export async function GET(request: NextRequest) {
         socialFeedInserts.push({
           user_id: pred.user_id,
           type: 'points_earned',
-          data: { points, fixture_id: pred.fixture_id, home_team: pred.home_team, away_team: pred.away_team },
+          data: {
+            points,
+            fixture_id: pred.fixture_id,
+            home_team: pred.home_team,
+            away_team: pred.away_team,
+          },
         });
       }
 
       affectedUsers.add(pred.user_id);
     }
 
+    // STEP 4: UPDATE predictions
     for (const update of predictionUpdates) {
       const { error: updateError } = await supabaseAdmin
         .from('predictions')
@@ -182,6 +228,7 @@ export async function GET(request: NextRequest) {
       if (updateError) throw updateError;
     }
 
+    // STEP 5: Bulk insert social_feed
     if (socialFeedInserts.length > 0) {
       const { error: feedError } = await supabaseAdmin
         .from('social_feed')
@@ -190,13 +237,19 @@ export async function GET(request: NextRequest) {
       if (feedError) throw feedError;
     }
 
+    // STEP 6: Batch refresh user_points
     const affectedUsersArray = Array.from(affectedUsers);
+
     if (affectedUsersArray.length > 0) {
       const { error: batchRefreshError } = await supabaseAdmin
         .rpc('refreshuserspointsbatch', { p_userids: affectedUsersArray });
 
       if (batchRefreshError) {
-        console.warn('refreshuserspointsbatch failed — falling back to per-user refresh', batchRefreshError.message);
+        console.warn(
+          'refreshuserspointsbatch failed — falling back to per-user refresh',
+          batchRefreshError.message
+        );
+
         for (const userId of affectedUsers) {
           await supabaseAdmin.rpc('refreshuserpoints', { p_userid: userId });
         }
@@ -211,6 +264,9 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
+    );
   }
 }
