@@ -296,6 +296,7 @@ export default function Dashboard() {
   const [matches, setMatches]               = useState<any[]>([]);
   const [predictions, setPredictions]       = useState<any[]>([]);
   const [leaderboard, setLeaderboard]       = useState<any[]>([]);
+  const [totalParticipants, setTotalParticipants] = useState(0);
   const [loading, setLoading]               = useState(true);
   const [loadError, setLoadError]           = useState(false);
   const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'feed' | 'history'>('predict');
@@ -416,7 +417,7 @@ export default function Dashboard() {
 
       const [
         profileRes, sessionRes, fixturesApiRes, sbFixturesRes,
-        userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes,
+        userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes, participantsCountRes,
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
         supabase.auth.getSession(),
@@ -429,6 +430,7 @@ export default function Dashboard() {
         supabase.from('social_feed').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('historical_rankings').select('*').order('week_start', { ascending: false }).order('total_points', { ascending: false }),
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
+        supabase.from('user_points').select('*', { count: 'exact', head: true }),
       ]);
 
       const profileData    = profileRes.data;
@@ -440,7 +442,9 @@ export default function Dashboard() {
       const finalReferralCode = profileData?.referral_code || '';
       const feedData       = feedDataRes.data;
       const histData       = histDataRes.data;
-      const userPointsData = userPointsDataRes.data;
+      const userPointsData    = userPointsDataRes.data;
+      const participantsCount  = participantsCountRes.count ?? 0;
+      setTotalParticipants(participantsCount);
 
       const userNameMap: Record<string, string> = {};
       (userPointsData || []).forEach((row: any) => {
@@ -1056,7 +1060,7 @@ export default function Dashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 16 }}>
           {[
             { label: 'توقعاتي',    value: predictions.length,                                        color: '#8ae0b3', icon: '⚽' },
-            { label: 'المتسابقون', value: leaderboard.length,                                        color: '#7db1ff', icon: '👥' },
+            { label: 'المتسابقون', value: totalParticipants, color: '#7db1ff', icon: '👥' },
             { label: 'دقة التوقع', value: resolvedPreds.length > 0 ? `${accuracyPct}%` : '—',        color: '#c084fc', icon: '🎯' },
             { label: 'الجولات',    value: streakCount > 0 ? `${streakCount} 🔥` : '—',               color: '#f97316', icon: '📅' },
           ].map((s: any) => (
