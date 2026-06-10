@@ -30,21 +30,31 @@ export const metadata: Metadata = {
     siteName: 'دوري الشمعدان',
     locale: 'ar_SA',
     type: 'website',
+    images: [
+      {
+        url: '/share-logo.jpeg',
+        width: 1200,
+        height: 630,
+        alt: 'الشمعدان × كأس العالم 2026',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'الشمعدان × كأس العالم 2026',
+    description: 'توقع نتايج كأس العالم مع الشمعدان',
+    images: ['/share-logo.jpeg'],
   },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="ar" dir="rtl">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="bg-black text-white antialiased">
+      <body>
         <ServiceWorkerRegister />
         <InstallPrompt />
         {children}
