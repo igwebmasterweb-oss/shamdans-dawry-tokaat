@@ -550,32 +550,72 @@ export default function Dashboard() {
     setLoading(false);
   };
 
-  const quickJoinLeague = async () => {
-    if (!user || !leagueCode.trim()) return;
-    setLeagueJoining(true);
-    setLeagueQuickMsg('');
-    try {
-      const { data: lgData } = await supabase
-        .from('mini_leagues').select('id, name')
-        .eq('code', leagueCode.trim().toUpperCase()).maybeSingle();
-      if (!lgData) { setLeagueQuickMsg('❌ كود غير صحيح'); setLeagueJoining(false); return; }
-      const { data: already } = await supabase
-        .from('mini_league_members').select('id')
-        .eq('league_id', lgData.id).eq('user_id', user.id).maybeSingle();
-      if (already) { setLeagueQuickMsg(`✅ أنت بالفعل عضو في "${lgData.name}"`); setLeagueJoining(false); return; }
-      await supabase.from('mini_league_members').insert({ league_id: lgData.id, user_id: user.id, role: 'member' });
-      await supabase.from('social_feed').insert({
+const quickJoinLeague = async () => {
+  if (!user || !leagueCode.trim()) return;
+  setLeagueJoining(true);
+  setLeagueQuickMsg('');
+
+  try {
+    const code = leagueCode.trim().toUpperCase();
+
+    const { data: lgData, error: leagueErr } = await supabase
+      .from('mini_leagues')
+      .select('id, name')
+      .eq('code', code)
+      .maybeSingle();
+
+    if (leagueErr) throw leagueErr;
+
+    if (!lgData) {
+      setLeagueQuickMsg('❌ كود غير صحيح');
+      return;
+    }
+
+    const { data: already, error: alreadyErr } = await supabase
+      .from('mini_league_members')
+      .select('id')
+      .eq('league_id', lgData.id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (alreadyErr) throw alreadyErr;
+
+    if (already) {
+      setLeagueQuickMsg(`✅ أنت بالفعل عضو في "${lgData.name}"`);
+      return;
+    }
+
+    const { error: joinErr } = await supabase
+      .from('mini_league_members')
+      .insert({
+        league_id: lgData.id,
+        user_id: user.id,
+        role: 'member',
+      });
+
+    if (joinErr) throw joinErr;
+
+    const { error: feedErr } = await supabase
+      .from('social_feed')
+      .insert({
         user_id: user.id,
         type: 'joined_league',
         data: { league_name: lgData.name, league_id: lgData.id },
       });
-      setLeagueQuickMsg(`🎉 انضممت لـ "${lgData.name}" بنجاح!`);
-      setLeagueCode('');
-      await loadData(user.id);
-    } catch { setLeagueQuickMsg('❌ حدث خطأ، حاول مجدداً'); }
-    setLeagueJoining(false);
-  };
 
+    if (feedErr) console.error('social_feed insert error:', feedErr);
+
+    setLeagueQuickMsg(`🎉 انضممت لـ "${lgData.name}" بنجاح!`);
+    setLeagueCode('');
+    await loadData(user.id);
+  } catch (err: any) {
+    console.error('quickJoinLeague error:', err);
+    setLeagueQuickMsg(`❌ ${err.message || 'حدث خطأ، حاول مجدداً'}`);
+  } finally {
+    setLeagueJoining(false);
+  }
+};
+  
   const saveProfile = async () => {
     if (!user) return;
     setProfileSaving(true);
