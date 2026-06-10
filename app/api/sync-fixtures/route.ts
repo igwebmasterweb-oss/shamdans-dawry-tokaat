@@ -15,7 +15,6 @@ async function apiFetch(path: string) {
   return res.json();
 }
 
-// ✅ حفظ lineups في fixture_players
 async function saveLineups(apiId: number, dbId: string, homeTeamId: number) {
   await sleep(250);
   const luData = await apiFetch(`/fixtures/lineups?fixture=${apiId}`);
@@ -33,12 +32,12 @@ async function saveLineups(apiId: number, dbId: string, homeTeamId: number) {
     ];
     for (const pl of all) {
       if (pl?.name) playersToInsert.push({
-        fixture_id:    dbId,
+        fixture_id:     dbId,
         api_fixture_id: apiId,
-        player_name:   pl.name,
-        team_name:     lu.team.name,
-        team_side:     side,
-        position:      pl.pos ?? null,
+        player_name:    pl.name,
+        team_name:      lu.team.name,
+        team_side:      side,
+        position:       pl.pos ?? null,
       });
     }
   }
@@ -74,53 +73,48 @@ export async function GET(request: NextRequest) {
       const bothTeamsScored = goalsHome !== null && goalsAway !== null
         ? goalsHome > 0 && goalsAway > 0 : false;
 
-      // ✅ اقرأ الـ record الحالي من DB
       const { data: existing } = await supabaseAdmin
         .from('fixtures')
         .select('id, actual_home_score, first_scorer, red_card_in_match, penalty_in_match')
         .eq('api_fixture_id', apiId)
         .maybeSingle();
 
-      // ✅ FIX 1: Guard يعتمد على actual_home_score بس (مش first_scorer)
-      // → الماتشات 0-0 مفيهاش first_scorer لكن نتيجتها محفوظة
       const alreadySynced = !forceSync &&
         existing?.actual_home_score !== null &&
         existing?.actual_home_score !== undefined;
 
-      let redCard     = existing?.red_card_in_match ?? false;  // ✅ FIX 2: احتفظ بالقيمة القديمة
+      let redCard     = existing?.red_card_in_match ?? false;
       let penalty     = existing?.penalty_in_match  ?? false;
       let firstScorer: string | null = existing?.first_scorer ?? null;
 
       if (isFinished && !alreadySynced) {
-        // ── Events ──
         await sleep(250);
         const evData = await apiFetch(`/fixtures/events?fixture=${apiId}`);
         apiCalls++;
         const events: any[] = evData.response || [];
 
-        // reset عند جلب جديد
         redCard     = false;
         penalty     = false;
         firstScorer = null;
 
         for (const ev of events) {
-          if (ev.type === 'Card' && ev.detail === 'Red Card')             redCard     = true;
-          if (ev.type === 'Goal' && ev.detail === 'Penalty')              penalty     = true;
+          if (ev.type === 'Card' && ev.detail === 'Red Card')                  redCard     = true;
+          if (ev.type === 'Goal' && ev.detail === 'Penalty')                   penalty     = true;
           if (!firstScorer && ev.type === 'Goal' && ev.detail !== 'Own Goal') {
             firstScorer = ev.player?.name ?? null;
           }
         }
       }
 
-      // ══════════════════════════════════════
-      // INSERT أو UPDATE
-      // ══════════════════════════════════════
       if (!existing) {
-        // ✅ FIX 3: INSERT الـ fixture الأول
         const basePayload = {
           api_fixture_id:   apiId,
-          home_team:        match.teams.home.name,
-          away_team:        match.teams.away.name,
+          home_team_name:   match.teams.home.name,   // ✅ FIX
+          away_team_name:   match.teams.away.name,   // ✅ FIX
+          home_team_id:     match.teams.home.id,     // ✅ bonus
+          away_team_id:     match.teams.away.id,     // ✅ bonus
+          home_team_logo:   match.teams.home.logo,   // ✅ bonus
+          away_team_logo:   match.teams.away.logo,   // ✅ bonus
           match_date:       match.fixture.date,
           round:            match.league.round,
           is_open:          false,
@@ -139,7 +133,6 @@ export async function GET(request: NextRequest) {
           .select('id')
           .single();
 
-        // ✅ FIX 3: بعد الـ INSERT لو الماتش خلص احفظ الـ lineups
         if (newFixture && isFinished) {
           apiCalls++;
           await saveLineups(apiId, newFixture.id, match.teams.home.id);
@@ -148,7 +141,6 @@ export async function GET(request: NextRequest) {
         inserted++;
 
       } else if (isFinished && !alreadySynced) {
-        // UPDATE للماتشات اللي خلصت ولسه ما اتسينكتش
         await supabaseAdmin.from('fixtures').update({
           went_extra_time:   wentExtraTime,
           both_teams_scored: bothTeamsScored,
@@ -159,15 +151,12 @@ export async function GET(request: NextRequest) {
           ...(firstScorer          ? { first_scorer: firstScorer }    : {}),
         }).eq('api_fixture_id', apiId);
 
-        // ✅ احفظ lineups للـ fixture الموجود
         apiCalls++;
         await saveLineups(apiId, existing.id, match.teams.home.id);
 
         updated++;
 
       } else if (isFinished && alreadySynced) {
-        // ✅ حتى لو alreadySynced — حدّث went_extra_time + both_teams_scored بس
-        // (ممكن الحالة تتغير من AET → PEN)
         await supabaseAdmin.from('fixtures').update({
           went_extra_time:   wentExtraTime,
           both_teams_scored: bothTeamsScored,
@@ -175,7 +164,6 @@ export async function GET(request: NextRequest) {
 
         skipped++;
       } else {
-        // ماتش لسه مكملش — skip
         skipped++;
       }
     }
