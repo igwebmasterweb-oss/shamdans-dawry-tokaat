@@ -1370,7 +1370,8 @@ const quickJoinLeague = async () => {
                           <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '14px 16px', marginBottom: 12 }}>
                             <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                               توقعات إضافية
-                              <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: '#ffe3a6', border: '1px solid rgba(217,178,95,.2)' }}>+2 لكل صح</span>
+                              <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: '#ffe3a6', border: '1px solid rgba(217,178,95,.2)' }}>
+اكسب 3 نقاط اضافية لكل توقع صحيح هنا 👇</span>
                             </div>
                             <div style={{ fontSize: 12, color: '#fdba74', background: 'rgba(251,146,60,.08)', border: '1px solid rgba(251,146,60,.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 12 }}>
                               ⚠️ خد بالك، اختياراتك الغلط هنا هتخسرك نقاط لأن كل توقع غلط بـ -1 😉
