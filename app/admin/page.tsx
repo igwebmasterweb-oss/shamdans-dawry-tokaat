@@ -121,9 +121,10 @@ export default function AdminPage() {
         total:                row.total_points || 0,
         count:                row.predictions_count || 0,
         referral_count:       row.referral_count || 0,
-        bonus_points_awarded: row.bonus_points_awarded || 0,
-        facebook_bonus:       row.facebook_bonus || 0,
-        google_bonus:         row.google_bonus || 0,
+        bonus_points_awarded: row.bonus_points_awarded ?? false,   // boolean
+        facebook_bonus_awarded: row.facebook_bonus_awarded ?? false, // boolean
+        profile_completed:    row.profile_completed ?? false,
+        bonus_points:         row.bonus_points ?? 0,                 // نقاط مضافة يدوياً
       })));
     } catch (err) { console.error('loadLeaderboard:', err); }
   }, []);
@@ -1027,16 +1028,16 @@ export default function AdminPage() {
                   <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{breakdownUser.referral_count||0} دعوة × 5</div>
                 </div>
                 {/* نقاط البروفايل */}
-                {(breakdownUser.bonus_points_awarded||0)+(breakdownUser.facebook_bonus||0)+(breakdownUser.google_bonus||0) > 0 && (
+                {((breakdownUser.bonus_points ?? 0) > 0 || breakdownUser.profile_completed) && (
                   <div style={{background:'var(--surface-2)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
                     <div style={{fontSize:11,color:'var(--muted)',marginBottom:4}}>✅ البروفايل</div>
                     <div style={{fontWeight:900,fontSize:20,color:'#60c3ff',fontVariantNumeric:'tabular-nums'}}>
-                      {(breakdownUser.bonus_points_awarded||0)+(breakdownUser.facebook_bonus||0)+(breakdownUser.google_bonus||0)}
+                      {(breakdownUser.bonus_points ?? 0) + (breakdownUser.profile_completed ? 5 : 0)}
                     </div>
                     <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>
-                      {breakdownUser.facebook_bonus>0?'FB ':''}
-                      {breakdownUser.google_bonus>0?'Google ':''}
-                      {breakdownUser.bonus_points_awarded>0?'إكمال':''}
+                      {breakdownUser.facebook_bonus_awarded ? '📘 FB +5 · ' : ''}
+                      {breakdownUser.profile_completed && !breakdownUser.facebook_bonus_awarded ? '🔵 Google/إكمال +5 · ' : ''}
+                      {(breakdownUser.bonus_points ?? 0) > 0 ? `🎁 إضافي: ${breakdownUser.bonus_points}` : ''}
                     </div>
                   </div>
                 )}
