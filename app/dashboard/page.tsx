@@ -520,6 +520,7 @@ export default function Dashboard() {
           away_team: p.away_team || matchNames?.away_team || '',
           predicted_red_card: p.predicted_red_card === true || p.predicted_red_card === 'true' || p.predicted_red_card === 1,
           predicted_penalty: p.predicted_penalty === true || p.predicted_penalty === 'true' || p.predicted_penalty === 1,
+          predicted_both_teams: p.predicted_both_teams === true || p.predicted_both_teams === 'true' || p.predicted_both_teams === 1,
         };
       });
 
@@ -543,10 +544,18 @@ export default function Dashboard() {
         setMyTotalPoints(myRow?.total_points || 0);
       }
 
-      setSocialFeed((feedData || []).map((item: any) => ({
-        ...item,
-        user_name: userNameMap[item.user_id] || 'لاعب',
-      })));
+      setSocialFeed((feedData || []).map((item: any) => {
+        const fallbackName =
+          item?.data?.display_name ||
+          item?.data?.full_name ||
+          item?.data?.user_name ||
+          item?.data?.name ||
+          '';
+        return {
+          ...item,
+          user_name: userNameMap[item.user_id] || fallbackName || 'لاعب',
+        };
+      }));
 
       if (histData && histData.length > 0) {
         const normalizedHist = histData
@@ -1619,7 +1628,24 @@ const quickJoinLeague = async () => {
                         توقعك: <strong>{p.predicted_home_score} — {p.predicted_away_score}</strong>
                         {p.predicted_first_scorer && <span style={{ marginRight: 8 }}>⚽ {p.predicted_first_scorer}</span>}
                       </div>
-                      {hasResult && <div style={{ fontSize: 13, color: 'var(--muted)' }}>الفعلية: <strong>{p.actual_home_score} — {p.actual_away_score}</strong></div>}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                        {p.predicted_extra_time && (
+                          <span style={{ fontSize: 11, fontWeight: 800, padding: '6px 10px', borderRadius: 999, background: 'rgba(217,178,95,.12)', border: '1px solid rgba(217,178,95,.22)', color: '#ffe3a6' }}>🕒 وقت إضافي</span>
+                        )}
+                        {p.predicted_red_card && (
+                          <span style={{ fontSize: 11, fontWeight: 800, padding: '6px 10px', borderRadius: 999, background: 'rgba(201,58,47,.12)', border: '1px solid rgba(201,58,47,.22)', color: '#ffb4b4' }}>🟥 كارت أحمر</span>
+                        )}
+                        {p.predicted_penalty && (
+                          <span style={{ fontSize: 11, fontWeight: 800, padding: '6px 10px', borderRadius: 999, background: 'rgba(39,176,110,.12)', border: '1px solid rgba(39,176,110,.22)', color: '#94f0c0' }}>⚽ ضربة جزاء</span>
+                        )}
+                        {p.predicted_both_teams && (
+                          <span style={{ fontSize: 11, fontWeight: 800, padding: '6px 10px', borderRadius: 999, background: 'rgba(102,163,255,.12)', border: '1px solid rgba(102,163,255,.22)', color: '#b9d6ff' }}>🥅 الفريقان يسجلان</span>
+                        )}
+                        {!p.predicted_extra_time && !p.predicted_red_card && !p.predicted_penalty && !p.predicted_both_teams && (
+                          <span style={{ fontSize: 11, color: 'var(--muted)' }}>لا توجد اختيارات إضافية</span>
+                        )}
+                      </div>
+                      {hasResult && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 10 }}>الفعلية: <strong>{p.actual_home_score} — {p.actual_away_score}</strong></div>}
                     </div>
                     <div style={{ padding: '10px 18px', borderRadius: 14, background: !hasResult ? 'var(--surface-3)' : (p.points || 0) >= 10 ? 'rgba(217,178,95,.12)' : (p.points || 0) >= 5 ? 'rgba(39,176,110,.12)' : 'var(--surface-3)', border: '1px solid var(--line)', color: !hasResult ? 'var(--muted)' : (p.points || 0) >= 10 ? '#ffe3a6' : (p.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)', textAlign: 'center', minWidth: 60 }}>
                       <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{hasResult ? (p.points || 0) : '⏳'}</div>
