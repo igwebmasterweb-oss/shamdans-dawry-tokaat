@@ -54,7 +54,7 @@ export default function AdminPage() {
   const [breakdownUser, setBreakdownUser]   = useState<any>(null);
   const [breakdownPreds, setBreakdownPreds] = useState<any[]>([]);
   const [showBreakdown, setShowBreakdown]   = useState(false);
-
+const [participantsCount, setParticipantsCount] = useState(0);
   const autoIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const router = useRouter();
 
@@ -111,23 +111,31 @@ export default function AdminPage() {
     } catch (err) { console.error('loadPredictions:', err); }
   }, []);
 
-  const loadLeaderboard = useCallback(async () => {
-    try {
-      const { data } = await supabase.from('user_points').select('*').order('total_points',{ascending:false});
-      setLeaderboard((data || []).map((row: any) => ({
-        user_id:              row.user_id,
-        user_email:           row.user_email,
-        full_name:            row.full_name,
-        total:                row.total_points || 0,
-        count:                row.predictions_count || 0,
-        referral_count:       row.referral_count || 0,
-        bonus_points_awarded: row.bonus_points_awarded ?? false,   // boolean
-        facebook_bonus_awarded: row.facebook_bonus_awarded ?? false, // boolean
-        profile_completed:    row.profile_completed ?? false,
-        bonus_points:         row.bonus_points ?? 0,                 // نقاط مضافة يدوياً
-      })));
-    } catch (err) { console.error('loadLeaderboard:', err); }
-  }, []);
+const loadLeaderboard = useCallback(async () => {
+  try {
+    const [{ data }, { count }] = await Promise.all([
+      supabase.from('user_points').select('*').order('total_points', { ascending: false }),
+      supabase.from('user_points').select('*', { count: 'exact', head: true }),
+    ]);
+
+    setParticipantsCount(count ?? 0);
+
+    setLeaderboard((data || []).map((row: any) => ({
+      user_id: row.user_id,
+      user_email: row.user_email,
+      full_name: row.full_name,
+      total: row.total_points || 0,
+      count: row.predictions_count || 0,
+      referral_count: row.referral_count || 0,
+      bonus_points_awarded: row.bonus_points_awarded ?? false,
+      facebook_bonus_awarded: row.facebook_bonus_awarded ?? false,
+      profile_completed: row.profile_completed ?? false,
+      bonus_points: row.bonus_points ?? 0,
+    })));
+  } catch (err) {
+    console.error('loadLeaderboard:', err);
+  }
+}, []);
 
   const loadLeagues = useCallback(async () => {
     try {
@@ -415,7 +423,7 @@ export default function AdminPage() {
 
   const openBreakdown = (p: any) => {
   const userPreds = predictions
-    .filter(pr => pr.user_id === p.user_id && pr.actual_home_score !== null)
+    .filter(pr => pr.user_id === p.user_id && pr.points !== null)
     .map(pr => {
       const items: { icon: string; label: string; pts: number }[] = [];
 
@@ -515,7 +523,7 @@ export default function AdminPage() {
   // ④ computed stats ✅
   const filteredMatches    = matches.filter(m => m.league.round === activeRound);
   const openCount          = matches.filter(m => m.is_open).length;
-  const gradedCount        = predictions.filter(p => p.actual_home_score !== null).length;
+  const gradedCount = predictions.filter(p => p.points !== null).length;
   const medals             = ['🥇','🥈','🥉'];
   const totalLeagueMembers = leagues.reduce((s,lg)=>s+lg.member_count,0);
   const totalPending       = leagues.reduce((s,lg)=>s+lg.pending_invites,0);
@@ -523,12 +531,14 @@ export default function AdminPage() {
   const rounds             = [...new Set(matches.map((m:any)=>m.league?.round).filter(Boolean))] as string[];
 
   // ④ 4 new computed stats ✅
-  const avgPoints       = leaderboard.length > 0
-    ? (leaderboard.reduce((s:number,p:any)=>s+p.total,0) / leaderboard.length).toFixed(1) : '—';
-  const coveragePct     = leaderboard.length > 0 && filteredMatches.length > 0
-    ? Math.round((predictions.filter(p => filteredMatches.find(m => m.fixture.id === p.fixture_id)).length
-        / (leaderboard.length * filteredMatches.length)) * 100) : 0;
-  const ungradedCount   = predictions.filter(p => p.actual_home_score === null).length;
+const avgPoints = participantsCount > 0
+  ? (leaderboard.reduce((s:number,p:any)=>s+p.total,0) / participantsCount).toFixed(1)
+  : '—';
+  const coveragePct = participantsCount > 0 && filteredMatches.length > 0
+  ? Math.round((predictions.filter(p => filteredMatches.find(m => m.fixture.id === p.fixture_id)).length
+      / (participantsCount * filteredMatches.length)) * 100)
+  : 0;
+  const ungradedCount = predictions.filter(p => p.points === null).length;
   const noResultCount   = matches.filter(m => m.actual_home_score === null && !m.is_open).length;
   const topScore        = leaderboard.length > 0 ? Math.max(...leaderboard.map((p:any) => p.total)) : 0;
   const zeroPointsCount = leaderboard.filter((p:any) => p.total === 0).length;
@@ -619,7 +629,7 @@ export default function AdminPage() {
           {label:'غير محسوبة',       value:ungradedCount,          color:'#fb923c'},
           {label:'ماتشات مفتوحة',    value:openCount,              color:'#facc15'},
           {label:'بدون نتيجة',       value:noResultCount,          color:'#f87171'},
-          {label:'المتسابقين',        value:leaderboard.length,     color:'#ff9c91'},
+          {label:'المتسابقين',        value:participantsCount,     color:'#ff9c91'},
           {label:'متوسط النقاط',     value:avgPoints,              color:'#a78bfa'},
           {label:'تغطية الجولة',     value:`${coveragePct}%`,      color:'#38bdf8'},
           {label:'ميني ليجات',        value:leagues.length,         color:'#a78bfa'},
@@ -640,7 +650,7 @@ export default function AdminPage() {
         {([
           {id:'matches',     label:`🏟️ الماتشات (${matches.length})`},
           {id:'predictions', label:`📋 التوقعات (${predictions.length})`},
-          {id:'leaderboard', label:`🏆 الصدارة (${leaderboard.length})`},
+          {id:'leaderboard', label:`🏆 الصدارة (${participantsCount})`},
           {id:'leagues',     label:`🏅 الليجات (${leagues.length})`},
           {id:'prizes',      label:`🥇 الجوائز (${prizePhases.length})`},
         ] as const).map(({id,label})=>(
@@ -675,8 +685,9 @@ export default function AdminPage() {
               const hasResult  = match.actual_home_score !== null && match.actual_home_score !== undefined;
               const matchPreds = predictions.filter(p=>p.fixture_id===match.fixture.id);
               // ⑨ % مشاركة ✅
-              const participationPct = leaderboard.length > 0
-                ? Math.round((matchPreds.length / leaderboard.length) * 100) : 0;
+              const participationPct = participantsCount > 0
+  ? Math.round((matchPreds.length / participantsCount) * 100)
+  : 0;
               return (
                 <div key={match.fixture.id} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:18,padding:'16px 20px',marginBottom:10,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
                   <div style={{flex:1,minWidth:200}}>
