@@ -421,10 +421,11 @@ export default function Dashboard() {
       }
 
       const [
-        profileRes, sessionRes, fixturesApiRes, sbFixturesRes,
+        profileRes, profilesRes, sessionRes, fixturesApiRes, sbFixturesRes,
         userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes, participantsCountRes,
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('profiles').select('id, full_name'),
         supabase.auth.getSession(),
         fetch('/api/fixtures').then(res => res.json()),
         supabase.from('fixtures').select(
@@ -439,6 +440,7 @@ export default function Dashboard() {
       ]);
 
       const profileData    = profileRes.data;
+      const profilesData   = profilesRes.data;
       const sessionData    = sessionRes.data;
       const apiMatches     = (fixturesApiRes as any)?.response || [];
       const sbFixtures     = sbFixturesRes.data;
@@ -452,8 +454,13 @@ export default function Dashboard() {
       setTotalParticipants(participantsCount);
 
       const userNameMap: Record<string, string> = {};
+      (profilesData || []).forEach((row: any) => {
+        if (row?.id && row?.full_name) userNameMap[row.id] = row.full_name;
+      });
       (userPointsData || []).forEach((row: any) => {
-        userNameMap[row.user_id] = row.full_name || row.user_email?.split('@')[0] || 'لاعب';
+        if (!userNameMap[row.user_id]) {
+          userNameMap[row.user_id] = row.full_name || row.user_email?.split('@')[0] || 'لاعب';
+        }
       });
 
       if (profileData) {
@@ -499,12 +506,31 @@ export default function Dashboard() {
 
       const openUnpredicted = merged.find((m: any) => {
         const hasResult = m.actual_home_score !== null;
-        const predicted = (userPreds || []).find((p: any) => p.fixture_id === m.fixture.id);
+        const predicted = normalizedUserPreds.find((p: any) => p.fixture_id === m.fixture.id);
         return m.is_open && !hasResult && !predicted;
       });
       setUpcomingAlert(openUnpredicted || null);
 
-      setPredictions(userPreds || []);
+      const fixtureNameMap = new Map(merged.map((m: any) => [
+        m.fixture.id,
+        {
+          home_team: m.db_home_team || m.teams?.home?.name || '',
+          away_team: m.db_away_team || m.teams?.away?.name || '',
+        }
+      ]));
+
+      const normalizedUserPreds = (userPreds || []).map((p: any) => {
+        const matchNames = fixtureNameMap.get(p.fixture_id);
+        return {
+          ...p,
+          home_team: p.home_team || matchNames?.home_team || '',
+          away_team: p.away_team || matchNames?.away_team || '',
+          predicted_red_card: p.predicted_red_card === true || p.predicted_red_card === 'true' || p.predicted_red_card === 1,
+          predicted_penalty: p.predicted_penalty === true || p.predicted_penalty === 'true' || p.predicted_penalty === 1,
+        };
+      });
+
+      setPredictions(normalizedUserPreds);
 
       if (myPointsRow) {
         setReferralCode(finalReferralCode);
@@ -528,10 +554,17 @@ export default function Dashboard() {
             ...row,
             week_start: row.week_start ? String(row.week_start).slice(0, 10) : '',
           }))
-          .filter((row: any) => row.week_start);
-        const dates = [...new Set(normalizedHist.map((r: any) => r.week_start))] as string[];
+          .filter((row: any) => row.week_start)
+          .sort((a: any, b: any) => {
+            if (a.week_start === b.week_start) return (b.total_points || 0) - (a.total_points || 0);
+            return String(b.week_start).localeCompare(String(a.week_start));
+          });
+        const dates = [...new Set(normalizedHist.map((r: any) => r.week_start))].sort((a: string, b: string) => b.localeCompare(a)) as string[];
         setHistoryDates(dates);
-        setActiveHistoryDate(prev => (prev && dates.includes(prev) ? prev : dates[0]));
+        setActiveHistoryDate(prev => {
+          const normalizedPrev = prev ? String(prev).slice(0, 10) : '';
+          return normalizedPrev && dates.includes(normalizedPrev) ? normalizedPrev : dates[0];
+        });
         setHistoryRankings(normalizedHist.map((row: any) => ({
           ...row,
           display_name: userNameMap[row.user_id] || 'لاعب',
@@ -551,7 +584,7 @@ export default function Dashboard() {
         count:             row.predictions_count || 0,
       })));
 
-      const breakdown = (userPreds || [])
+      const breakdown = normalizedUserPreds
         .filter((p: any) => p.points !== null && p.points > 0)
         .sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
         .slice(0, 10);
@@ -829,8 +862,26 @@ const quickJoinLeague = async () => {
         .eq('user_id', player.user_id)
         .order('submitted_at', { ascending: false });
 
+      const fixtureNameMap = new Map(matches.map((m: any) => [
+        m.fixture.id,
+        {
+          home_team: m.db_home_team || m.teams?.home?.name || '',
+          away_team: m.db_away_team || m.teams?.away?.name || '',
+        }
+      ]));
+
+      const normalizedPreds = (predsData || []).map((pred: any) => {
+        const fixtureId = pred.fixture_id || pred.api_fixture_id;
+        const matchNames = fixtureNameMap.get(fixtureId);
+        return {
+          ...pred,
+          home_team: pred.home_team || matchNames?.home_team || '',
+          away_team: pred.away_team || matchNames?.away_team || '',
+        };
+      });
+
       setSelectedLeaderSummary(summaryData || null);
-      setSelectedLeaderPredictions(predsData || []);
+      setSelectedLeaderPredictions(normalizedPreds);
     } catch (err) {
       console.error('openLeaderDetails error:', err);
       setSelectedLeaderSummary(null);
@@ -1085,8 +1136,12 @@ const quickJoinLeague = async () => {
                     <div style={{ fontSize: 24, fontWeight: 800, color: '#5effa8', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.bonus_points ?? 0}</div>
                   </div>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>اسم العرض</div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', wordBreak: 'break-word' }}>{selectedLeaderSummary?.display_name || selectedLeader?.display_name || 'غير متوفر'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط الدعوات</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.referral_points ?? 0}</div>
+                  </div>
+                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط إكمال البروفايل</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: '#7db1ff', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.bonus_points ?? 0}</div>
                   </div>
                 </div>
 
@@ -1101,7 +1156,9 @@ const quickJoinLeague = async () => {
                     {selectedLeaderPredictions.slice(0, 20).map((pred: any, idx: number) => (
                       <div key={pred.id || idx} className="pred-box" style={{ background: 'var(--surface-3)', borderColor: 'var(--line)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>مباراة #{pred.fixture_id || pred.api_fixture_id || '—'}</div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>
+                            {pred.home_team && pred.away_team ? `${pred.home_team} × ${pred.away_team}` : `مباراة #${pred.fixture_id || pred.api_fixture_id || '—'}`}
+                          </div>
                           <div style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{pred.submitted_at ? new Date(pred.submitted_at).toLocaleString('ar-EG') : 'بدون تاريخ'}</div>
                         </div>
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 13, color: 'var(--muted)' }}>
