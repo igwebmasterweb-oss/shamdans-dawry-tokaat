@@ -305,6 +305,11 @@ export default function Dashboard() {
   const [submitting, setSubmitting]         = useState<number | null>(null);
   const [messages, setMessages]             = useState<Record<number, string>>({});
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showLeaderDetails, setShowLeaderDetails] = useState(false);
+  const [selectedLeader, setSelectedLeader] = useState<any>(null);
+  const [selectedLeaderSummary, setSelectedLeaderSummary] = useState<any>(null);
+  const [selectedLeaderPredictions, setSelectedLeaderPredictions] = useState<any[]>([]);
+  const [leaderDetailsLoading, setLeaderDetailsLoading] = useState(false);
   const [profileForm, setProfileForm]       = useState({ display_name: '', phone: '', facebook_url: '' });
   const [profileSaving, setProfileSaving]   = useState(false);
   const [profileMsg, setProfileMsg]         = useState('');
@@ -796,6 +801,37 @@ const quickJoinLeague = async () => {
     if (!link || typeof window === 'undefined') return;
     const url = encodeURIComponent(link);
     window.open(`https://www.facebook.com/dialog/send?link=${url}&app_id=1302682795390354&redirect_uri=${url}`, '_blank');
+  };
+
+  const openLeaderDetails = async (player: any) => {
+    try {
+      setSelectedLeader(player);
+      setShowLeaderDetails(true);
+      setLeaderDetailsLoading(true);
+      setSelectedLeaderSummary(null);
+      setSelectedLeaderPredictions([]);
+
+      const { data: summaryData } = await supabase
+        .from('user_points')
+        .select('*')
+        .eq('user_id', player.user_id)
+        .maybeSingle();
+
+      const { data: predsData } = await supabase
+        .from('predictions')
+        .select('*')
+        .eq('user_id', player.user_id)
+        .order('submitted_at', { ascending: false });
+
+      setSelectedLeaderSummary(summaryData || null);
+      setSelectedLeaderPredictions(predsData || []);
+    } catch (err) {
+      console.error('openLeaderDetails error:', err);
+      setSelectedLeaderSummary(null);
+      setSelectedLeaderPredictions([]);
+    } finally {
+      setLeaderDetailsLoading(false);
+    }
   };
 
   if (loadError) {
@@ -1480,21 +1516,37 @@ const quickJoinLeague = async () => {
               const isMe = player.user_id === user?.id;
               const name = player.display_name || player.user_email?.split('@')[0];
               return (
-                <div key={i} className={`rank-item${isMe ? ' me' : ''}`}>
+                <button
+                  key={i}
+                  type="button"
+                  className={`rank-item${isMe ? ' me' : ''}`}
+                  onClick={() => openLeaderDetails(player)}
+                  style={{
+                    width: '100%',
+                    textAlign: 'inherit',
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer'
+                  }}
+                >
                   <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}</div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       {name}
                       {isMe && <span style={{ fontSize: 11, background: 'rgba(217,178,95,.15)', color: '#ffe3a6', borderRadius: 999, padding: '2px 8px' }}>أنت</span>}
                       {player.profile_completed && <span style={{ fontSize: 11 }}>✅</span>}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{player.count} توقع</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span>{player.count} توقع</span>
+                      <span style={{ color: 'var(--gold)', fontWeight: 700 }}>عرض التفاصيل ←</span>
+                    </div>
                   </div>
-                  <div style={{ textAlign: 'center' }}>
+                  <div style={{ textAlign: 'center', flexShrink: 0 }}>
                     <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
                   </div>
-                </div>
+                </button>
               );
             })}
             {leaderboard.length > 20 && (
