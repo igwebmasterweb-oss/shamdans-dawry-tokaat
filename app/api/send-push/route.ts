@@ -27,9 +27,9 @@ export async function GET(req: Request) {
   // جيب الماتشات اللي بعد 5 ساعات بالظبط (± 5 دقايق)
   const { data: fixtures } = await supabase
     .from('fixtures')
-    .select('api_fixture_id, home_team_name, away_team_name, date')
-    .gte('date', in5Hours.toISOString())
-    .lte('date', in5Hours10.toISOString())
+    .select('api_fixture_id, home_team_name, away_team_name, match_date')
+    .gte('match_date', in5Hours.toISOString())
+    .lte('match_date', in5Hours10.toISOString())
     .eq('is_open', true);
 
   if (!fixtures || fixtures.length === 0) {
