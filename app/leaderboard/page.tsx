@@ -120,16 +120,24 @@ export default function LeaderboardPage() {
 
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const loadAllForSearch = async () => {
-    if (allPlayers.length > 0) return;
-    const { data } = await supabase.from('user_points').select('*').order('total_points', { ascending: false });
-    if (data) setAllPlayers(data.map((row: any) => ({
-      user_id: row.user_id, user_email: row.user_email,
-      display_name: row.full_name || null,
-      total_points: row.total_points || 0,
-      predictions_count: row.predictions_count || 0,
-      profile_completed: row.profile_completed || false,
-    })));
-  };
+  const { data } = await supabase
+    .from('user_points')
+    .select('*')
+    .order('total_points', { ascending: false });
+
+  if (data) {
+    setAllPlayers(
+      data.map((row: any) => ({
+        user_id: row.user_id,
+        user_email: row.user_email,
+        display_name: row.full_name || null,
+        total_points: row.total_points || 0,
+        predictions_count: row.predictions_count || 0,
+        profile_completed: row.profile_completed || false,
+      }))
+    );
+  }
+};
 
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
