@@ -453,15 +453,26 @@ export default function Dashboard() {
       const participantsCount  = participantsCountRes.count ?? 0;
       setTotalParticipants(participantsCount);
 
-      const userNameMap: Record<string, string> = {};
-      (profilesData || []).forEach((row: any) => {
-        if (row?.id && row?.full_name) userNameMap[row.id] = row.full_name;
-      });
-      (userPointsData || []).forEach((row: any) => {
-        if (!userNameMap[row.user_id]) {
-          userNameMap[row.user_id] = row.full_name || row.user_email?.split('@')[0] || 'لاعب';
-        }
-      });
+     const userNameMap: Record<string, string> = {};
+
+(profilesData || []).forEach((row: any) => {
+  if (row?.id && row?.full_name) {
+    userNameMap[row.id] = row.full_name;
+  }
+});
+
+(userPointsData || []).forEach((row: any) => {
+  if (!userNameMap[row.user_id]) {
+    const emailPrefix =
+      row?.user_email &&
+      typeof row.user_email === 'string' &&
+      row.user_email.includes('@')
+        ? row.user_email.split('@')[0]
+        : '';
+
+    userNameMap[row.user_id] = row.full_name || emailPrefix || 'لاعب';
+  }
+});
 
       if (profileData) {
         setProfile(profileData);
