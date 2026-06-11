@@ -207,22 +207,41 @@ const loadLeaderboard = useCallback(async () => {
   }, []);
 
   const loadPrizes = useCallback(async () => {
-    try {
-      const [{ data: phases }, { data: winners }, { data: daily }] = await Promise.all([
-        supabase.from('prize_phases').select('*').order('id'),
-        supabase.from('prize_winners')
-          .select('*, profiles(full_name)').order('phase_id').order('rank'),
-        supabase.rpc('get_daily_top_scorers', {
-          p_date: new Date().toISOString().split('T')[0],
-          p_limit: 10,
-        }),
-      ]);
-      setPrizePhases(phases || []);
-      setPrizeWinners(winners || []);
-      setDailyScorers(daily || []);
-    } catch (err) { console.error('loadPrizes:', err); }
-  }, []);
+  try {
+    const [
+      { data: phases },
+      { data: winners },
+      { data: daily },
+      { data: userPts },
+    ] = await Promise.all([
+      supabase.from('prize_phases').select('*').order('id'),
+      supabase.from('prize_winners').select('*').order('phase_id').order('rank'),
+      supabase.rpc('get_daily_top_scorers', {
+        p_date: new Date().toISOString().split('T')[0],
+        p_limit: 10,
+      }),
+      supabase.from('user_points').select('user_id,full_name,user_email'),
+    ]);
 
+    const userMap = new Map(
+      (userPts || []).map((u: any) => [
+        u.user_id,
+        u.full_name || u.user_email?.split('@')[0] || '—',
+      ])
+    );
+
+    const enrichedWinners = (winners || []).map((w: any) => ({
+      ...w,
+      winner_name: userMap.get(w.user_id) || '—',
+    }));
+
+    setPrizePhases(phases || []);
+    setPrizeWinners(enrichedWinners);
+    setDailyScorers(daily || []);
+  } catch (err) {
+    console.error('loadPrizes:', err);
+  }
+}, []);
   const silentUpdateResults = useCallback(async () => {
     if (updating) return;
     setAutoUpdating(true);
@@ -1012,7 +1031,7 @@ const avgPoints = participantsCount > 0
                       {phaseWins.map((w: any) => (
                         <div key={w.id} style={{display:'flex',alignItems:'center',gap:12,padding:'9px 0',borderBottom:'1px solid rgba(255,255,255,.05)'}}>
                           <span style={{fontSize:20}}>{['🥇','🥈','🥉'][w.rank - 1] || '🏅'}</span>
-                          <span style={{fontWeight:700,flex:1}}>{w.profiles?.full_name || '—'}</span>
+                          <span style={{fontWeight:700,flex:1}}>{w.winner_name || '—'}</span>
                           <span style={{color:'var(--gold)',fontWeight:800,fontVariantNumeric:'tabular-nums'}}>{w.points} نقطة</span>
                           <span style={{fontSize:11,color:'#ffe3a6',background:'rgba(217,178,95,.1)',borderRadius:8,padding:'2px 8px'}}>{prizes[w.rank - 1] || ''}</span>
                         </div>
