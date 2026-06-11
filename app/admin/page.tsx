@@ -56,6 +56,9 @@ export default function AdminPage() {
   const [showBreakdown, setShowBreakdown]   = useState(false);
 const [participantsCount, setParticipantsCount] = useState(0);
   const autoIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
+  const [totalPredictionsCount, setTotalPredictionsCount] = useState(0);
+const [gradedPredictionsCount, setGradedPredictionsCount] = useState(0);
+const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
   const router = useRouter();
 
   const roundLabels: Record<string,string> = {
@@ -102,14 +105,61 @@ const [participantsCount, setParticipantsCount] = useState(0);
     setLoading(false);
   }, []);
 
-  const loadPredictions = useCallback(async () => {
-    try {
-      const { data: preds } = await supabase.from('predictions').select('*').not('fixture_id','is',null).order('submitted_at',{ascending:false});
-      const { data: pts }   = await supabase.from('user_points').select('user_id,full_name,user_email');
-      const nameMap = new Map(pts?.map((p: any) => [p.user_id, p.full_name || p.user_email?.split('@')[0]]) || []);
-      setPredictions((preds || []).map((p: any) => ({ ...p, user_name: nameMap.get(p.user_id) || p.user_email?.split('@')[0] })));
-    } catch (err) { console.error('loadPredictions:', err); }
-  }, []);
+ const loadPredictions = useCallback(async () => {
+  try {
+    const [
+      { data: preds },
+      { data: pts },
+      { count: totalCount },
+      { count: gradedCount },
+      { count: ungradedCount },
+    ] = await Promise.all([
+      supabase
+        .from('predictions')
+        .select('*')
+        .not('fixture_id', 'is', null)
+        .order('submitted_at', { ascending: false }),
+
+      supabase
+        .from('user_points')
+        .select('user_id,full_name,user_email'),
+
+      supabase
+        .from('predictions')
+        .select('*', { count: 'exact', head: true })
+        .not('fixture_id', 'is', null),
+
+      supabase
+        .from('predictions')
+        .select('*', { count: 'exact', head: true })
+        .not('fixture_id', 'is', null)
+        .not('points', 'is', null),
+
+      supabase
+        .from('predictions')
+        .select('*', { count: 'exact', head: true })
+        .not('fixture_id', 'is', null)
+        .is('points', null),
+    ]);
+
+    setTotalPredictionsCount(totalCount ?? 0);
+    setGradedPredictionsCount(gradedCount ?? 0);
+    setUngradedPredictionsCount(ungradedCount ?? 0);
+
+    const nameMap = new Map(
+      pts?.map((p: any) => [p.user_id, p.full_name || p.user_email?.split('@')[0]]) || []
+    );
+
+    setPredictions(
+      (preds || []).map((p: any) => ({
+        ...p,
+        user_name: nameMap.get(p.user_id) || p.user_email?.split('@')[0],
+      }))
+    );
+  } catch (err) {
+    console.error('loadPredictions:', err);
+  }
+}, []);
 
 const loadLeaderboard = useCallback(async () => {
   try {
@@ -523,7 +573,7 @@ const loadLeaderboard = useCallback(async () => {
   // ④ computed stats ✅
   const filteredMatches    = matches.filter(m => m.league.round === activeRound);
   const openCount          = matches.filter(m => m.is_open).length;
-  const gradedCount = predictions.filter(p => p.points !== null).length;
+ const gradedCount = gradedPredictionsCount;
   const medals             = ['🥇','🥈','🥉'];
   const totalLeagueMembers = leagues.reduce((s,lg)=>s+lg.member_count,0);
   const totalPending       = leagues.reduce((s,lg)=>s+lg.pending_invites,0);
@@ -538,7 +588,7 @@ const avgPoints = participantsCount > 0
   ? Math.round((predictions.filter(p => filteredMatches.find(m => m.fixture.id === p.fixture_id)).length
       / (participantsCount * filteredMatches.length)) * 100)
   : 0;
-  const ungradedCount = predictions.filter(p => p.points === null).length;
+  const ungradedCount = ungradedPredictionsCount;
   const noResultCount   = matches.filter(m => m.actual_home_score === null && !m.is_open).length;
   const topScore        = leaderboard.length > 0 ? Math.max(...leaderboard.map((p:any) => p.total)) : 0;
   const zeroPointsCount = leaderboard.filter((p:any) => p.total === 0).length;
@@ -549,7 +599,7 @@ const avgPoints = participantsCount > 0
       const m = matches.find(m => m.fixture.id === p.fixture_id);
       if (!m || m.league?.round !== predRoundFilter) return false;
     }
-    if (predStatusFilter === 'ungraded' && p.actual_home_score !== null) return false;
+   if (predStatusFilter === 'ungraded' && p.points !== null) return false;
     return true;
   });
 
@@ -624,7 +674,7 @@ const avgPoints = participantsCount > 0
       {/* ④ STATS — 7 أصلية + 4 جديدة ✅ */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:10,padding:'20px 24px'}}>
         {[
-          {label:'إجمالي التوقعات', value:predictions.length,     color:'var(--gold)'},
+          {label:'إجمالي التوقعات', value:totalPredictionsCount, color:'var(--gold)'},
           {label:'محسوبة',           value:gradedCount,            color:'var(--green)'},
           {label:'غير محسوبة',       value:ungradedCount,          color:'#fb923c'},
           {label:'ماتشات مفتوحة',    value:openCount,              color:'#facc15'},
@@ -649,7 +699,7 @@ const avgPoints = participantsCount > 0
       <div style={{display:'flex',gap:8,padding:'0 24px 16px',overflowX:'auto',scrollbarWidth:'none',WebkitOverflowScrolling:'touch'} as React.CSSProperties}>
         {([
           {id:'matches',     label:`🏟️ الماتشات (${matches.length})`},
-          {id:'predictions', label:`📋 التوقعات (${predictions.length})`},
+          {id:'predictions', label:`📋 التوقعات (${totalPredictionsCount})`},
           {id:'leaderboard', label:`🏆 الصدارة (${participantsCount})`},
           {id:'leagues',     label:`🏅 الليجات (${leagues.length})`},
           {id:'prizes',      label:`🥇 الجوائز (${prizePhases.length})`},
