@@ -425,7 +425,7 @@ export default function Dashboard() {
         userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes, participantsCountRes,
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
-        supabase.from('profiles').select('id, full_name, display_name, email'),
+        supabase.from('profiles').select('id, full_name'),
         supabase.auth.getSession(),
         fetch('/api/fixtures').then(res => res.json()),
         supabase.from('fixtures').select(
@@ -451,19 +451,6 @@ export default function Dashboard() {
       const histData       = histDataRes.data;
       const userPointsData    = userPointsDataRes.data;
       const participantsCount  = participantsCountRes.count ?? 0;
-
-      const normalizeName = (value: any) => String(value || '').trim();
-      const emailPrefix = (value: any) => {
-        const email = String(value || '').trim();
-        return email && email.includes('@') ? email.split('@')[0] : '';
-      };
-
-      const predictionIdentityMap = new Map<string, { user_email?: string | null }>();
-      for (const p of (userPreds || [])) {
-        if (p?.user_id && !predictionIdentityMap.has(p.user_id)) {
-          predictionIdentityMap.set(p.user_id, { user_email: p.user_email || null });
-        }
-      }
       setTotalParticipants(participantsCount);
 
       const userNameMap: Record<string, string> = {};
@@ -827,8 +814,7 @@ const quickJoinLeague = async () => {
   };
 
   const timeAgo = (dateStr: string) => {
-    const safeDate = dateStr?.includes('T') ? dateStr : String(dateStr).replace(' ', 'T');
-    const diff = Date.now() - new Date(safeDate).getTime();
+    const diff = Date.now() - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
     if (mins < 1)  return 'الآن';
     if (mins < 60) return `منذ ${mins} دقيقة`;
@@ -1832,38 +1818,4 @@ const quickJoinLeague = async () => {
       </div>
     </>
   );
-}const userNameMap = new Map<string, string>();
-      const normalizeName = (value: any) => String(value || '').trim();
-      const emailPrefix = (value: any) => {
-        const email = String(value || '').trim();
-        return email && email.includes('@') ? email.split('@')[0] : '';
-      };
-
-      for (const p of (profilesData || [])) {
-        const name =
-          normalizeName((p as any).display_name) ||
-          normalizeName((p as any).full_name) ||
-          emailPrefix((p as any).email);
-        if ((p as any).id && name) userNameMap.set((p as any).id, name);
-      }
-
-      for (const up of (userPointsData || [])) {
-        const existing = userNameMap.get(up.user_id);
-        const name = normalizeName(up.full_name) || emailPrefix(up.user_email);
-        if (!existing && up.user_id && name) userNameMap.set(up.user_id, name);
-      }
-
-      for (const item of (feedData || [])) {
-        const existing = userNameMap.get(item.user_id);
-        const fallbackName =
-          normalizeName(item?.data?.display_name) ||
-          normalizeName(item?.data?.full_name) ||
-          normalizeName(item?.data?.user_name) ||
-          normalizeName(item?.data?.name) ||
-          normalizeName(item?.data?.player_name) ||
-          emailPrefix(predictionIdentityMap.get(item.user_id)?.user_email);
-        if (!existing && item?.user_id && fallbackName) userNameMap.set(item.user_id, fallbackName);
-      }
-
-      const fixtureNameMap = new Map<number, { home_team: string; away_team: string }>(
-
+}
