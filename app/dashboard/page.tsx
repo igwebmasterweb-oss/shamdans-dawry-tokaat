@@ -1143,9 +1143,19 @@ const quickJoinLeague = async () => {
                     <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderPredictions.length}</div>
                   </div>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط البونص</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: '#5effa8', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.bonus_points ?? 0}</div>
-                  </div>
+  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط بونص مسابقة حلمك فيها</div>
+  <div style={{ fontSize: 24, fontWeight: 800, color: '#5effa8', fontVariantNumeric: 'tabular-nums' }}>
+    {selectedLeaderSummary?.bonus_points ?? 0}
+  </div>
+  <a
+    href="https://forms.gle/1pftaR7rV9SAJ2VL6"
+    target="_blank"
+    rel="noopener noreferrer"
+    style={{ marginTop: 8, display: 'inline-block', fontSize: 12, color: '#7db1ff', textDecoration: 'underline' }}
+  >
+    شارك في مسابقة حلمك فيها
+  </a>
+</div>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط الدعوات</div>
                     <div style={{ fontSize: 24, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.referral_points ?? 0}</div>
