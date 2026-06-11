@@ -452,6 +452,12 @@ export default function Dashboard() {
       const userPointsData    = userPointsDataRes.data;
       const participantsCount  = participantsCountRes.count ?? 0;
 
+      const normalizeName = (value: any) => String(value || '').trim();
+      const emailPrefix = (value: any) => {
+        const email = String(value || '').trim();
+        return email && email.includes('@') ? email.split('@')[0] : '';
+      };
+
       const predictionIdentityMap = new Map<string, { user_email?: string | null }>();
       for (const p of (userPreds || [])) {
         if (p?.user_id && !predictionIdentityMap.has(p.user_id)) {
