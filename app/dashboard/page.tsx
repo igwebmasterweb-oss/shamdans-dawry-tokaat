@@ -511,7 +511,7 @@ export default function Dashboard() {
       });
       setUpcomingAlert(openUnpredicted || null);
 
-      const fixtureNameMap = new Map(merged.map((m: any) => [
+      const fixtureNameMap = new Map<number, { home_team: string; away_team: string }>(merged.map((m: any) => [
         m.fixture.id,
         {
           home_team: m.db_home_team || m.teams?.home?.name || '',
@@ -862,7 +862,7 @@ const quickJoinLeague = async () => {
         .eq('user_id', player.user_id)
         .order('submitted_at', { ascending: false });
 
-      const fixtureNameMap = new Map(matches.map((m: any) => [
+      const fixtureNameMap = new Map<number, { home_team: string; away_team: string }>(matches.map((m: any) => [
         m.fixture.id,
         {
           home_team: m.db_home_team || m.teams?.home?.name || '',
