@@ -504,13 +504,6 @@ export default function Dashboard() {
         );
       }
 
-      const openUnpredicted = merged.find((m: any) => {
-        const hasResult = m.actual_home_score !== null;
-        const predicted = normalizedUserPreds.find((p: any) => p.fixture_id === m.fixture.id);
-        return m.is_open && !hasResult && !predicted;
-      });
-      setUpcomingAlert(openUnpredicted || null);
-
       const fixtureNameMap = new Map<number, { home_team: string; away_team: string }>(merged.map((m: any) => [
         m.fixture.id,
         {
@@ -529,6 +522,13 @@ export default function Dashboard() {
           predicted_penalty: p.predicted_penalty === true || p.predicted_penalty === 'true' || p.predicted_penalty === 1,
         };
       });
+
+      const openUnpredicted = merged.find((m: any) => {
+        const hasResult = m.actual_home_score !== null;
+        const predicted = normalizedUserPreds.find((p: any) => p.fixture_id === m.fixture.id);
+        return m.is_open && !hasResult && !predicted;
+      });
+      setUpcomingAlert(openUnpredicted || null);
 
       setPredictions(normalizedUserPreds);
 
