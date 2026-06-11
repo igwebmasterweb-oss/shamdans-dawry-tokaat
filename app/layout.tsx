@@ -20,8 +20,8 @@ export const metadata: Metadata = {
     title: 'دوري توقعات الشمعدان',
   },
   icons: {
-    icon: '/logo-FF.png',
-    apple: '/logo-FF.png',
+    icon: '/Shedan_logo.png',
+    apple: '/Shedan_logo.png',
   },
   openGraph: {
     title: 'الشمعدان × كأس العالم 2026',
