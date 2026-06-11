@@ -1045,6 +1045,74 @@ const quickJoinLeague = async () => {
         </div>
       ) : null}
 
+      {showLeaderDetails && (
+        <div className="modal-overlay" onClick={() => setShowLeaderDetails(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 760, maxHeight: '88vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12 }}>
+              <div>
+                <h3 style={{ fontWeight: 800, fontSize: 18 }}>
+                  👤 {selectedLeader?.display_name || selectedLeader?.user_email?.split('@')[0] || 'المتسابق'}
+                </h3>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>تفاصيل الأداء وآخر التوقعات</div>
+              </div>
+              <button onClick={() => setShowLeaderDetails(false)} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center', flexShrink: 0 }}>✕</button>
+            </div>
+
+            {leaderDetailsLoading ? (
+              <div style={{ textAlign: 'center', padding: '42px 16px', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>⏳</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>جاري تحميل التفاصيل...</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
+                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>إجمالي النقاط</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.total_points ?? selectedLeader?.totalPoints ?? 0}</div>
+                  </div>
+                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>عدد التوقعات</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderPredictions.length}</div>
+                  </div>
+                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط البونص</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: '#5effa8', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.bonus_points ?? 0}</div>
+                  </div>
+                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>اسم العرض</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', wordBreak: 'break-word' }}>{selectedLeaderSummary?.display_name || selectedLeader?.display_name || 'غير متوفر'}</div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>📋 آخر التوقعات</div>
+
+                {selectedLeaderPredictions.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: 28, color: 'var(--muted)' }} className="stat-card">
+                    لا توجد توقعات متاحة لهذا المتسابق
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {selectedLeaderPredictions.slice(0, 20).map((pred: any, idx: number) => (
+                      <div key={pred.id || idx} className="pred-box" style={{ background: 'var(--surface-3)', borderColor: 'var(--line)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>مباراة #{pred.fixture_id || pred.api_fixture_id || '—'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{pred.submitted_at ? new Date(pred.submitted_at).toLocaleString('ar-EG') : 'بدون تاريخ'}</div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 13, color: 'var(--muted)' }}>
+                          <span>النتيجة: <span style={{ color: 'var(--text)', fontWeight: 700 }}>{pred.home_score ?? '—'} - {pred.away_score ?? '—'}</span></span>
+                          <span>الهداف: <span style={{ color: 'var(--text)', fontWeight: 700 }}>{pred.goal_scorer || '—'}</span></span>
+                          <span>النقاط: <span style={{ color: 'var(--gold)', fontWeight: 800 }}>{pred.points ?? 0}</span></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {showProfileModal && (
         <div className="modal-overlay" onClick={() => { setShowProfileModal(false); setProfileMsg(''); }}>
           <div className="modal-box" onClick={e => e.stopPropagation()}>
@@ -1516,37 +1584,34 @@ const quickJoinLeague = async () => {
               const isMe = player.user_id === user?.id;
               const name = player.display_name || player.user_email?.split('@')[0];
               return (
-                <button
+                <div
                   key={i}
-                  type="button"
                   className={`rank-item${isMe ? ' me' : ''}`}
                   onClick={() => openLeaderDetails(player)}
-                  style={{
-                    width: '100%',
-                    textAlign: 'inherit',
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 0,
-                    cursor: 'pointer'
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openLeaderDetails(player);
+                    }
                   }}
+                  style={{ cursor: 'pointer' }}
                 >
                   <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
                       {name}
                       {isMe && <span style={{ fontSize: 11, background: 'rgba(217,178,95,.15)', color: '#ffe3a6', borderRadius: 999, padding: '2px 8px' }}>أنت</span>}
                       {player.profile_completed && <span style={{ fontSize: 11 }}>✅</span>}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span>{player.count} توقع</span>
-                      <span style={{ color: 'var(--gold)', fontWeight: 700 }}>عرض التفاصيل ←</span>
-                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{player.count} توقع</div>
                   </div>
-                  <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                  <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
                   </div>
-                </button>
+                </div>
               );
             })}
             {leaderboard.length > 20 && (
