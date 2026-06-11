@@ -523,10 +523,16 @@ export default function Dashboard() {
       })));
 
       if (histData && histData.length > 0) {
-        const dates = [...new Set(histData.map((r: any) => r.week_start))] as string[];
+        const normalizedHist = histData
+          .map((row: any) => ({
+            ...row,
+            week_start: row.week_start ? String(row.week_start).slice(0, 10) : '',
+          }))
+          .filter((row: any) => row.week_start);
+        const dates = [...new Set(normalizedHist.map((r: any) => r.week_start))] as string[];
         setHistoryDates(dates);
-        setActiveHistoryDate(prev => prev || dates[0]);
-        setHistoryRankings(histData.map((row: any) => ({
+        setActiveHistoryDate(prev => (prev && dates.includes(prev) ? prev : dates[0]));
+        setHistoryRankings(normalizedHist.map((row: any) => ({
           ...row,
           display_name: userNameMap[row.user_id] || 'لاعب',
         })));
@@ -1600,12 +1606,34 @@ const quickJoinLeague = async () => {
                 >
                   <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}</div>
                   <div>
-                    <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       {name}
                       {isMe && <span style={{ fontSize: 11, background: 'rgba(217,178,95,.15)', color: '#ffe3a6', borderRadius: 999, padding: '2px 8px' }}>أنت</span>}
                       {player.profile_completed && <span style={{ fontSize: 11 }}>✅</span>}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{player.count} توقع</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <span>{player.count} توقع</span>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openLeaderDetails(player);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          border: '1px solid rgba(217,178,95,.22)',
+                          background: 'rgba(217,178,95,.08)',
+                          color: '#ffe3a6',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        التفاصيل
+                      </span>
+                    </div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
