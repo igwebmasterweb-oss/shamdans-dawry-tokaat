@@ -414,41 +414,81 @@ export default function AdminPage() {
   };
 
   const openBreakdown = (p: any) => {
-    const userPreds = predictions
-      .filter(pr => pr.user_id === p.user_id && pr.actual_home_score !== null)
-      .map(pr => {
-        const items: { icon: string; label: string; pts: number }[] = [];
-        const isExact = pr.predicted_home_score === pr.actual_home_score
-                     && pr.predicted_away_score === pr.actual_away_score;
-        if (isExact) {
-          items.push({ icon:'🎯', label:'نتيجة كاملة', pts:10 });
-        } else {
-          const homeWin  = pr.actual_home_score > pr.actual_away_score;
-          const awayWin  = pr.actual_away_score > pr.actual_home_score;
-          const isDraw   = pr.actual_home_score === pr.actual_away_score;
-          const pHomeWin = pr.predicted_home_score > pr.predicted_away_score;
-          const pAwayWin = pr.predicted_away_score > pr.predicted_home_score;
-          const pDraw    = pr.predicted_home_score === pr.predicted_away_score;
-          const correctOutcome = (homeWin&&pHomeWin)||(awayWin&&pAwayWin)||(isDraw&&pDraw);
-          if (correctOutcome) items.push({ icon:'✅', label:'فائز/تعادل صح', pts:5 });
-        }
-        if (pr.predicted_first_scorer && pr.first_scorer_actual &&
-            pr.predicted_first_scorer.trim().toLowerCase() === pr.first_scorer_actual.trim().toLowerCase())
-          items.push({ icon:'⚽', label:'أول هدف صح', pts:3 });
-        if (pr.predicted_red_card   && pr.red_card_in_match)  items.push({ icon:'🟥', label:'كرت أحمر صح',   pts: 2 });
-        if (pr.predicted_penalty    && pr.penalty_in_match)   items.push({ icon:'🥅', label:'ركلة جزاء صح',  pts: 2 });
-        if (pr.predicted_extra_time && pr.went_extra_time)    items.push({ icon:'⏱️', label:'وقت إضافي صح',  pts: 2 });
-        if (pr.predicted_both_teams && pr.both_teams_scored)  items.push({ icon:'🔄', label:'الفريقين سجلا', pts: 2 });
-        if (!pr.red_card_in_match   && pr.predicted_red_card)   items.push({ icon:'🟥', label:'كرت أحمر غلط',  pts:-1 });
-        if (!pr.penalty_in_match    && pr.predicted_penalty)    items.push({ icon:'🥅', label:'ركلة جزاء غلط', pts:-1 });
-        if (!pr.went_extra_time     && pr.predicted_extra_time) items.push({ icon:'⏱️', label:'وقت إضافي غلط', pts:-1 });
-        return { ...pr, items, calcTotal: Math.max(0, items.reduce((s,i)=>s+i.pts,0)) };
-      });
-    setBreakdownUser(p);
-    setBreakdownPreds(userPreds);
-    setShowBreakdown(true);
-  };
+  const userPreds = predictions
+    .filter(pr => pr.user_id === p.user_id && pr.actual_home_score !== null)
+    .map(pr => {
+      const items: { icon: string; label: string; pts: number }[] = [];
 
+      const isExact =
+        pr.predicted_home_score === pr.actual_home_score &&
+        pr.predicted_away_score === pr.actual_away_score;
+
+      if (isExact) {
+        items.push({ icon: '🎯', label: 'نتيجة كاملة', pts: 10 });
+      } else {
+        const homeWin = pr.actual_home_score > pr.actual_away_score;
+        const awayWin = pr.actual_away_score > pr.actual_home_score;
+        const isDraw = pr.actual_home_score === pr.actual_away_score;
+
+        const pHomeWin = pr.predicted_home_score > pr.predicted_away_score;
+        const pAwayWin = pr.predicted_away_score > pr.predicted_home_score;
+        const pDraw = pr.predicted_home_score === pr.predicted_away_score;
+
+        const correctOutcome =
+          (homeWin && pHomeWin) ||
+          (awayWin && pAwayWin) ||
+          (isDraw && pDraw);
+
+        if (correctOutcome) {
+          items.push({ icon: '✅', label: 'فائز/تعادل صح', pts: 5 });
+        }
+      }
+
+      if (
+        pr.predicted_first_scorer &&
+        pr.first_scorer_actual &&
+        pr.predicted_first_scorer.trim().toLowerCase() ===
+          pr.first_scorer_actual.trim().toLowerCase()
+      ) {
+        items.push({ icon: '⚽', label: 'أول هدف صح', pts: 3 });
+      }
+
+      if (pr.predicted_red_card && pr.red_card_in_match) {
+        items.push({ icon: '🟥', label: 'كرت أحمر صح', pts: 3 });
+      }
+      if (!pr.red_card_in_match && pr.predicted_red_card) {
+        items.push({ icon: '🟥', label: 'كرت أحمر غلط', pts: -1 });
+      }
+
+      if (pr.predicted_penalty && pr.penalty_in_match) {
+        items.push({ icon: '🥅', label: 'ركلة جزاء صح', pts: 3 });
+      }
+      if (!pr.penalty_in_match && pr.predicted_penalty) {
+        items.push({ icon: '🥅', label: 'ركلة جزاء غلط', pts: -1 });
+      }
+
+      if (pr.predicted_extra_time && pr.went_extra_time) {
+        items.push({ icon: '⏱️', label: 'وقت إضافي صح', pts: 2 });
+      }
+      if (!pr.went_extra_time && pr.predicted_extra_time) {
+        items.push({ icon: '⏱️', label: 'وقت إضافي غلط', pts: -1 });
+      }
+
+      if (pr.predicted_both_teams && pr.both_teams_scored) {
+        items.push({ icon: '🔄', label: 'الفريقين سجلا', pts: 2 });
+      }
+
+      return {
+        ...pr,
+        items,
+        calcTotal: Math.max(0, items.reduce((s, i) => s + i.pts, 0)),
+      };
+    });
+
+  setBreakdownUser(p);
+  setBreakdownPreds(userPreds);
+  setShowBreakdown(true);
+};
   // ─── Render states ─────────────────────────────────────
   if (loading) return (
     <div style={{display:'grid',placeItems:'center',height:'100vh',background:'#070809',color:'#d9b25f',fontFamily:"'Cairo',sans-serif",gap:16,fontSize:18}}>
@@ -1078,20 +1118,20 @@ export default function AdminPage() {
                 {/* نقاط الدعوات */}
                 <div style={{background:'var(--surface-2)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
                   <div style={{fontSize:11,color:'var(--muted)',marginBottom:4}}>🤝 الدعوات</div>
-                  <div style={{fontWeight:900,fontSize:20,color:'#5effa8',fontVariantNumeric:'tabular-nums'}}>{(breakdownUser.referral_count||0)*5}</div>
-                  <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{breakdownUser.referral_count||0} دعوة × 5</div>
+                  <div style={{fontWeight:900,fontSize:20,color:'#5effa8',fontVariantNumeric:'tabular-nums'}}>{Math.min((breakdownUser.referral_count || 0) * 5, 50)}</div>
+                  <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>{Math.min(breakdownUser.referral_count || 0, 10)} دعوة محتسبة × 5</div>
                 </div>
                 {/* نقاط البروفايل */}
                 {((breakdownUser.bonus_points ?? 0) > 0 || breakdownUser.profile_completed) && (
                   <div style={{background:'var(--surface-2)',borderRadius:12,padding:'10px 14px',textAlign:'center'}}>
                     <div style={{fontSize:11,color:'var(--muted)',marginBottom:4}}>✅ البروفايل</div>
                     <div style={{fontWeight:900,fontSize:20,color:'#60c3ff',fontVariantNumeric:'tabular-nums'}}>
-                      {(breakdownUser.bonus_points ?? 0) + (breakdownUser.profile_completed ? 5 : 0)}
+                      {breakdownUser.bonus_points ?? 0}
                     </div>
                     <div style={{fontSize:11,color:'var(--muted)',marginTop:2}}>
-                      {breakdownUser.facebook_bonus_awarded ? '📘 FB +5 · ' : ''}
-                      {breakdownUser.profile_completed && !breakdownUser.facebook_bonus_awarded ? '🔵 Google/إكمال +5 · ' : ''}
-                      {(breakdownUser.bonus_points ?? 0) > 0 ? `🎁 إضافي: ${breakdownUser.bonus_points}` : ''}
+                     {breakdownUser.facebook_bonus_awarded ? '📘 Facebook مربوط · ' : ''}
+{breakdownUser.profile_completed ? '✅ البروفايل مكتمل · ' : ''}
+{(breakdownUser.bonus_points ?? 0) > 0 ? `🎁 Bonus محفوظ: ${breakdownUser.bonus_points}` : 'بدون بونص'}
                     </div>
                   </div>
                 )}
