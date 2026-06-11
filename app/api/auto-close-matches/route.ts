@@ -12,15 +12,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // ✅ FIX: buffer 120 دقيقة — مش بنغلق الماتش غير بعد ساعتين من وقت البداية
-  // عشان نضمن إن الماتش خلص (90 د + 30 د وقت إضافي محتمل)
-  const cutoff = new Date(Date.now() - 120 * 60 * 1000).toISOString();
+  const cutoff = new Date().toISOString();
 
   const { data: fixtures, error } = await supabase
     .from('fixtures')
-    .select('api_fixture_id, match_date, home_team, away_team')
+    .select('api_fixture_id, match_date, home_team_name, away_team_name')
     .eq('is_open', true)
-    .lt('match_date', cutoff);
+    .lte('match_date', cutoff);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -39,7 +37,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     closed: ids.length,
-    matches: fixtures.map((f: any) => `${f.home_team} × ${f.away_team}`),
-    message: `✅ تم غلق ${ids.length} ماتش تلقائياً (بعد 120 دقيقة من البداية)`,
+    matches: fixtures.map((f: any) => `${f.home_team_name} × ${f.away_team_name}`),
+    message: `✅ تم غلق ${ids.length} ماتش تلقائياً مع بداية وقت المباراة`,
   });
 }
