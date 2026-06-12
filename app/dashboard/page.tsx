@@ -895,14 +895,28 @@ const quickJoinLeague = async () => {
         }
       ]));
 
+      const fixtureDetailsMap = new Map<number, any>(matches.map((m: any) => [m.fixture.id, m]));
+
       const normalizedPreds = (predsData || []).map((pred: any) => {
         const fixtureId = pred.fixture_id || pred.api_fixture_id;
         const matchNames = fixtureNameMap.get(fixtureId);
+        const matchInfo = fixtureDetailsMap.get(fixtureId);
         return {
           ...pred,
           home_team: pred.home_team || matchNames?.home_team || '',
           away_team: pred.away_team || matchNames?.away_team || '',
+          fixture_date: matchInfo?.fixture?.date || null,
+          round: matchInfo?.round || matchInfo?.league?.round || null,
+          first_scorer_actual: matchInfo?.first_scorer || null,
+          red_card_in_match: matchInfo?.red_card_in_match ?? null,
+          penalty_in_match: matchInfo?.penalty_in_match ?? null,
+          both_teams_scored: matchInfo?.both_teams_scored ?? null,
+          went_extra_time: matchInfo?.went_extra_time ?? null,
         };
+      }).sort((a: any, b: any) => {
+        const dateA = a.fixture_date ? new Date(a.fixture_date).getTime() : 0;
+        const dateB = b.fixture_date ? new Date(b.fixture_date).getTime() : 0;
+        return dateA - dateB;
       });
 
       setSelectedLeaderSummary(summaryData || null);
@@ -1167,56 +1181,325 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                     <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.total_points ?? selectedLeader?.totalPoints ?? 0}</div>
                   </div>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط التوقعات</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: '#ffe3a6', fontVariantNumeric: 'tabular-nums' }}>
+                      {selectedLeaderPredictions.reduce((sum: number, pred: any) => sum + (pred.points || 0), 0)}
+                    </div>
+                  </div>
+                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>عدد التوقعات</div>
                     <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderPredictions.length}</div>
                   </div>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط بونص مسابقة حلمك فيها</div>
-  <div style={{ fontSize: 24, fontWeight: 800, color: '#5effa8', fontVariantNumeric: 'tabular-nums' }}>
-    {selectedLeaderSummary?.bonus_points ?? 0}
-  </div>
-  <a
-    href="https://forms.gle/1pftaR7rV9SAJ2VL6"
-    target="_blank"
-    rel="noopener noreferrer"
-    style={{ marginTop: 8, display: 'inline-block', fontSize: 12, color: '#7db1ff', textDecoration: 'underline' }}
-  >
-    شارك في مسابقة حلمك فيها
-  </a>
-</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط بونص مسابقة حلمك فيها</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: '#5effa8', fontVariantNumeric: 'tabular-nums' }}>
+                      {selectedLeaderSummary?.bonus_points ?? 0}
+                    </div>
+                    <a
+                      href="https://forms.gle/1pftaR7rV9SAJ2VL6"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ marginTop: 8, display: 'inline-block', fontSize: 12, color: '#7db1ff', textDecoration: 'underline' }}
+                    >
+                      شارك في مسابقة حلمك فيها
+                    </a>
+                  </div>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط الدعوات</div>
                     <div style={{ fontSize: 24, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.referral_points ?? 0}</div>
                   </div>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط إكمال البروفايل</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: '#7db1ff', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.bonus_points ?? 0}</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: '#7db1ff', fontVariantNumeric: 'tabular-nums' }}>
+                      {selectedLeaderSummary?.profile_completed ? 5 : 0}
+                    </div>
                   </div>
                 </div>
 
-                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>📋 آخر التوقعات</div>
+                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>📋 توقعات العضو</div>
 
                 {selectedLeaderPredictions.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 28, color: 'var(--muted)' }} className="stat-card">
                     لا توجد توقعات متاحة لهذا المتسابق
                   </div>
                 ) : (
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    {selectedLeaderPredictions.slice(0, 20).map((pred: any, idx: number) => (
-                      <div key={pred.id || idx} className="pred-box" style={{ background: 'var(--surface-3)', borderColor: 'var(--line)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)' }}>
-                            {pred.home_team && pred.away_team ? `${pred.home_team} × ${pred.away_team}` : `مباراة #${pred.fixture_id || pred.api_fixture_id || '—'}`}
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    {selectedLeaderPredictions.map((pred: any, idx: number) => {
+                      const hasResult = pred.actual_home_score !== null && pred.actual_home_score !== undefined;
+                      const matchDate = pred.fixture_date
+                        ? new Date(pred.fixture_date).toLocaleDateString('ar-EG', {
+                            weekday: 'long',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : null;
+                      const predictedResult =
+                        pred.predicted_home_score === pred.predicted_away_score
+                          ? 'تعادل'
+                          : pred.predicted_home_score > pred.predicted_away_score
+                          ? 'فوز ' + (pred.home_team || 'صاحب الأرض')
+                          : 'فوز ' + (pred.away_team || 'الضيف');
+                      const actualResult = hasResult
+                        ? pred.actual_home_score === pred.actual_away_score
+                          ? 'تعادل'
+                          : pred.actual_home_score > pred.actual_away_score
+                          ? 'فوز ' + (pred.home_team || 'صاحب الأرض')
+                          : 'فوز ' + (pred.away_team || 'الضيف')
+                        : null;
+                      const scoreExact = hasResult && pred.predicted_home_score === pred.actual_home_score && pred.predicted_away_score === pred.actual_away_score;
+                      const directionCorrect = hasResult && predictedResult === actualResult;
+                      const firstScorerExact = hasResult && pred.predicted_first_scorer && pred.first_scorer_actual && pred.predicted_first_scorer === pred.first_scorer_actual;
+                      const firstScorerPicked = !!pred.predicted_first_scorer;
+                      const extraChecks = [
+                        pred.predicted_extra_time ? { label: '⏱ وقت إضافي', predicted: !!pred.predicted_extra_time, actual: !!pred.went_extra_time } : null,
+                        pred.predicted_red_card ? { label: '🟥 كرت أحمر', predicted: !!pred.predicted_red_card, actual: !!pred.red_card_in_match } : null,
+                        pred.predicted_penalty ? { label: '⚽ ضربة جزاء', predicted: !!pred.predicted_penalty, actual: !!pred.penalty_in_match } : null,
+                        pred.predicted_both_teams ? { label: '🥅 الفريقان يسجلان', predicted: !!pred.predicted_both_teams, actual: !!pred.both_teams_scored } : null,
+                      ].filter(Boolean) as any[];
+
+                      return (
+                        <div
+                          key={pred.id || idx}
+                          className="rank-item"
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr auto',
+                            gap: 14,
+                            alignItems: 'stretch',
+                            ...(hasResult && (pred.points || 0) >= 10
+                              ? {
+                                  borderColor: 'rgba(217,178,95,.28)',
+                                  background: 'linear-gradient(90deg,rgba(217,178,95,.07),rgba(255,255,255,.015))',
+                                }
+                              : {}),
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                              <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>
+                                {pred.home_team && pred.away_team ? `${pred.home_team} × ${pred.away_team}` : `مباراة #${pred.fixture_id || pred.api_fixture_id || '—'}`}
+                              </div>
+
+                              <div
+                                style={{
+                                  padding: '4px 10px',
+                                  borderRadius: 999,
+                                  background: hasResult ? 'rgba(39,176,110,.10)' : 'rgba(255,255,255,.04)',
+                                  border: '1px solid var(--line)',
+                                  color: hasResult ? '#94f0c0' : 'var(--muted)',
+                                  fontSize: 11,
+                                  fontWeight: 800,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {hasResult ? 'تم الحسم' : 'بانتظار النتيجة'}
+                              </div>
+                            </div>
+
+                            {matchDate && (
+                              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+                                {matchDate}
+                              </div>
+                            )}
+
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                                gap: 10,
+                                marginBottom: 12,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  padding: '10px 12px',
+                                  borderRadius: 12,
+                                  background: 'var(--surface-3)',
+                                  border: '1px solid var(--line)',
+                                }}
+                              >
+                                <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>توقعه</div>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>
+                                  {pred.predicted_home_score} — {pred.predicted_away_score}
+                                </div>
+                              </div>
+
+                              <div
+                                style={{
+                                  padding: '10px 12px',
+                                  borderRadius: 12,
+                                  background: 'var(--surface-3)',
+                                  border: '1px solid var(--line)',
+                                }}
+                              >
+                                <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>الهداف المتوقع</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+                                  {pred.predicted_first_scorer || '—'}
+                                </div>
+                              </div>
+
+                              {hasResult && (
+                                <div
+                                  style={{
+                                    padding: '10px 12px',
+                                    borderRadius: 12,
+                                    background: 'var(--surface-3)',
+                                    border: '1px solid var(--line)',
+                                  }}
+                                >
+                                  <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>النتيجة الفعلية</div>
+                                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>
+                                    {pred.actual_home_score} — {pred.actual_away_score}
+                                  </div>
+                                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--muted)' }}>
+                                    ⚽ أول هدف: {pred.first_scorer_actual || '—'}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {hasResult && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    padding: '6px 10px',
+                                    borderRadius: 999,
+                                    border: scoreExact ? '1px solid rgba(217,178,95,.24)' : '1px solid rgba(201,58,47,.24)',
+                                    background: scoreExact ? 'rgba(217,178,95,.12)' : 'rgba(201,58,47,.12)',
+                                    color: scoreExact ? '#ffe3a6' : '#ffb4b4',
+                                  }}
+                                >
+                                  🎯 النتيجة الكاملة {scoreExact ? '✓' : '✕'}
+                                </span>
+
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    padding: '6px 10px',
+                                    borderRadius: 999,
+                                    border: directionCorrect ? '1px solid rgba(39,176,110,.24)' : '1px solid rgba(201,58,47,.24)',
+                                    background: directionCorrect ? 'rgba(39,176,110,.12)' : 'rgba(201,58,47,.12)',
+                                    color: directionCorrect ? '#94f0c0' : '#ffb4b4',
+                                  }}
+                                >
+                                  ✅ الاتجاه {directionCorrect ? '✓' : '✕'}
+                                </span>
+
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    padding: '6px 10px',
+                                    borderRadius: 999,
+                                    border: !firstScorerPicked
+                                      ? '1px dashed var(--line)'
+                                      : firstScorerExact
+                                      ? '1px solid rgba(39,176,110,.24)'
+                                      : '1px solid rgba(201,58,47,.24)',
+                                    background: !firstScorerPicked
+                                      ? 'rgba(255,255,255,.03)'
+                                      : firstScorerExact
+                                      ? 'rgba(39,176,110,.12)'
+                                      : 'rgba(201,58,47,.12)',
+                                    color: !firstScorerPicked
+                                      ? 'var(--muted)'
+                                      : firstScorerExact
+                                      ? '#94f0c0'
+                                      : '#ffb4b4',
+                                  }}
+                                >
+                                  ⚽ الهداف {firstScorerPicked ? (firstScorerExact ? '✓' : '✕') : '—'}
+                                </span>
+
+                                {extraChecks.length > 0 ? (
+                                  extraChecks.map((item: any, extraIdx: number) => {
+                                    const isCorrect = item.predicted === item.actual;
+                                    return (
+                                      <span
+                                        key={extraIdx}
+                                        style={{
+                                          fontSize: 11,
+                                          fontWeight: 800,
+                                          padding: '6px 10px',
+                                          borderRadius: 999,
+                                          border: isCorrect
+                                            ? '1px solid rgba(39,176,110,.24)'
+                                            : '1px solid rgba(201,58,47,.24)',
+                                          background: isCorrect
+                                            ? 'rgba(39,176,110,.12)'
+                                            : 'rgba(201,58,47,.12)',
+                                          color: isCorrect ? '#94f0c0' : '#ffb4b4',
+                                        }}
+                                      >
+                                        {item.label} {isCorrect ? '✓' : '✕'}
+                                      </span>
+                                    );
+                                  })
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 700,
+                                      padding: '6px 10px',
+                                      borderRadius: 999,
+                                      background: 'rgba(255,255,255,.03)',
+                                      border: '1px dashed var(--line)',
+                                      color: 'var(--muted)',
+                                    }}
+                                  >
+                                    لا توجد اختيارات إضافية
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            <div style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                              وقت إرسال التوقع: {pred.submitted_at ? new Date(pred.submitted_at).toLocaleString('ar-EG') : 'بدون تاريخ'}
+                            </div>
                           </div>
-                          <div style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{pred.submitted_at ? new Date(pred.submitted_at).toLocaleString('ar-EG') : 'بدون تاريخ'}</div>
+
+                          <div
+                            style={{
+                              padding: '10px 14px',
+                              borderRadius: 14,
+                              background: !hasResult
+                                ? 'var(--surface-3)'
+                                : (pred.points || 0) >= 10
+                                ? 'rgba(217,178,95,.12)'
+                                : (pred.points || 0) >= 5
+                                ? 'rgba(39,176,110,.12)'
+                                : 'var(--surface-3)',
+                              border: '1px solid var(--line)',
+                              color: !hasResult
+                                ? 'var(--muted)'
+                                : (pred.points || 0) >= 10
+                                ? '#ffe3a6'
+                                : (pred.points || 0) >= 5
+                                ? '#94f0c0'
+                                : 'var(--muted)',
+                              textAlign: 'center',
+                              minWidth: 88,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                              {hasResult ? (pred.points || 0) : '⏳'}
+                            </div>
+                            <div style={{ fontSize: 11, marginTop: 4, color: hasResult ? 'inherit' : 'var(--muted)' }}>
+                              {hasResult ? 'نقطة' : 'بانتظار'}
+                            </div>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 13, color: 'var(--muted)' }}>
-                          <span>النتيجة: <span style={{ color: 'var(--text)', fontWeight: 700 }}>{pred.home_score ?? '—'} - {pred.away_score ?? '—'}</span></span>
-                          <span>الهداف: <span style={{ color: 'var(--text)', fontWeight: 700 }}>{pred.goal_scorer || '—'}</span></span>
-                          <span>النقاط: <span style={{ color: 'var(--gold)', fontWeight: 800 }}>{pred.points ?? 0}</span></span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </>
