@@ -1713,7 +1713,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
   const dateB = matchB?.fixture?.date ? new Date(matchB.fixture.date).getTime() : 0;
 
   if (aFinished && bFinished) return dateA - dateB;
-  return dateB - dateA;
+  return dateA - dateB;
 });
          return (
   <div
