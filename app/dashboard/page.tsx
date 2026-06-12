@@ -1700,14 +1700,20 @@ const extraPredictions = [
     : []),
 ];
             // ✅ ترتيب توقعاتي من الأقدم إلى الأحدث حسب تاريخ المباراة
-const sortedPredictions = [...predictions].sort((a: any, b: any) => {
+const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
+  const aFinished = a.actual_home_score !== null && a.actual_home_score !== undefined;
+  const bFinished = b.actual_home_score !== null && b.actual_home_score !== undefined;
+
+  if (aFinished !== bFinished) return aFinished ? -1 : 1;
+
   const matchA = matches.find((m: any) => m.fixture.id === a.fixture_id);
   const matchB = matches.find((m: any) => m.fixture.id === b.fixture_id);
 
   const dateA = matchA?.fixture?.date ? new Date(matchA.fixture.date).getTime() : 0;
   const dateB = matchB?.fixture?.date ? new Date(matchB.fixture.date).getTime() : 0;
 
-  return aFinished ? dateA - dateB : dateB - dateA;
+  if (aFinished && bFinished) return dateA - dateB;
+  return dateB - dateA;
 });
          return (
   <div
