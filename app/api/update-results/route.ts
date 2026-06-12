@@ -91,14 +91,31 @@ async function cleanupPredictionFixtureLinks() {
 }
 
 export async function GET(request: NextRequest) {
-  try {
-    const cleanup = await cleanupPredictionFixtureLinks();
-    console.log('prediction cleanup summary:', cleanup);
 
-    const { data: fixturesRaw, error: fixError } = await supabaseAdmin
-      .from('fixtures')
-      .select('api_fixture_id, actual_home_score, actual_away_score, first_scorer, scorers_json, went_extra_time, red_card_in_match, penalty_in_match, both_teams_scored, round')
-      .not('actual_home_score', 'is', null);
+   try {
+  const { searchParams } = new URL(request.url);
+  const fixtureParam = searchParams.get('fixture');
+  const targetFixtureId = fixtureParam ? Number(fixtureParam) : null;
+  const shouldCleanup = searchParams.get('cleanup') === 'true';
+
+  const cleanup = shouldCleanup
+    ? await cleanupPredictionFixtureLinks()
+    : { scanned: 0, fixed: 0, deleted: 0, skipped: 0 };
+
+  if (shouldCleanup) {
+    console.log('prediction cleanup summary:', cleanup);
+  }
+
+    let fixturesQuery = supabaseAdmin
+  .from('fixtures')
+  .select('api_fixture_id, actual_home_score, actual_away_score, first_scorer, scorers_json, went_extra_time, red_card_in_match, penalty_in_match, both_teams_scored, round')
+  .not('actual_home_score', 'is', null);
+
+if (targetFixtureId) {
+  fixturesQuery = fixturesQuery.eq('api_fixture_id', targetFixtureId);
+}
+
+const { data: fixturesRaw, error: fixError } = await fixturesQuery;
 
     if (fixError) throw fixError;
 
@@ -153,7 +170,9 @@ export async function GET(request: NextRequest) {
     if (!preds || preds.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'لا توجد توقعات تحتاج تحديث',
+   message: targetFixtureId
+  ? 'لا توجد توقعات تحتاج تحديث لهذه المباراة'
+  : 'لا توجد توقعات تحتاج تحديث',
         updated: 0,
         cleanup,
       });
