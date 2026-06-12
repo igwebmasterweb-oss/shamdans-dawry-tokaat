@@ -1178,7 +1178,9 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>إجمالي النقاط</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.total_points ?? selectedLeader?.totalPoints ?? 0}</div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
+                      {(selectedLeaderSummary?.total_points ?? selectedLeader?.totalPoints ?? 0) + (selectedLeaderSummary?.profile_completed ? 5 : 0)}
+                    </div>
                   </div>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط التوقعات</div>
