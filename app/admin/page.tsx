@@ -243,19 +243,29 @@ const loadLeaderboard = useCallback(async () => {
   }
 }, []);
   const silentUpdateResults = useCallback(async () => {
-    if (updating) return;
-    setAutoUpdating(true);
-    try {
-      const res  = await fetch('/api/update-results');
-      const data = await res.json();
-      if (data.success && data.updated > 0) {
-        showMsg(`🔄 تحديث أوتوماتيك: ${data.message || `${data.updated} توقع`}`);
-        await loadPredictions(); await loadLeaderboard();
-      }
-      setLastAutoUpdate(new Date().toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'}));
-    } catch (err) { console.warn('silent update failed:', err); }
-    setAutoUpdating(false);
-  }, [updating, showMsg, loadPredictions, loadLeaderboard]);
+  if (updating) return;
+  setAutoUpdating(true);
+  try {
+    await fetch('/api/sync-fixtures');
+
+    const res = await fetch('/api/update-results');
+    const data = await res.json();
+
+    if (data.success && data.updated > 0) {
+      showMsg(`🔄 تحديث أوتوماتيك: ${data.message || `${data.updated} توقع`}`);
+      await loadMatches();
+      await loadPredictions();
+      await loadLeaderboard();
+    }
+
+    setLastAutoUpdate(
+      new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+    );
+  } catch (err) {
+    console.warn('silent update failed:', err);
+  }
+  setAutoUpdating(false);
+}, [updating, showMsg, loadMatches, loadPredictions, loadLeaderboard]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -411,15 +421,28 @@ const loadLeaderboard = useCallback(async () => {
   };
 
   const updateAllPoints = async () => {
-    setUpdating(true);
-    try {
-      const res = await fetch('/api/update-results');
-      const data = await res.json();
-      showMsg(data.success ? data.message||'✅ تم تحديث النقاط' : '❌ '+data.error, data.success?'success':'error');
-      if (data.success) { await loadPredictions(); await loadLeaderboard(); }
-    } catch { showMsg('❌ خطأ في الاتصال','error'); }
-    setUpdating(false);
-  };
+  setUpdating(true);
+  try {
+    await fetch('/api/sync-fixtures');
+
+    const res = await fetch('/api/update-results');
+    const data = await res.json();
+
+    showMsg(
+      data.success ? data.message || '✅ تم مزامنة النتائج وتحديث النقاط' : '❌ ' + data.error,
+      data.success ? 'success' : 'error'
+    );
+
+    if (data.success) {
+      await loadMatches();
+      await loadPredictions();
+      await loadLeaderboard();
+    }
+  } catch {
+    showMsg('❌ خطأ في الاتصال', 'error');
+  }
+  setUpdating(false);
+};
 
   const syncFixtures = async () => {
     setSyncing(true);
