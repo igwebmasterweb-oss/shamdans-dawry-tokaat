@@ -12,6 +12,11 @@ async function apiFetch(path: string) {
   const res = await fetch(`https://v3.football.api-sports.io${path}`, {
     headers: { 'x-apisports-key': process.env.FOOTBALL_API_KEY || '' },
   });
+
+  if (!res.ok) {
+    throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+  }
+
   return res.json();
 }
 
@@ -21,6 +26,7 @@ function normalizeScorerName(name: string): string {
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
+
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -29,19 +35,24 @@ export async function GET(request: Request) {
     const now = new Date();
     const log: string[] = [];
 
-    const cutoff = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+    const cutoff = new Date(now.getTime() - 20 * 60 * 1000).toISOString();
 
-    const { data: pendingFixtures } = await supabaseAdmin
+    const { data: pendingFixtures, error: pendingError } = await supabaseAdmin
       .from('fixtures')
-      .select('api_fixture_id, home_team_name, away_team_name')
+      .select('api_fixture_id, home_team_name, away_team_name, match_date')
       .is('actual_home_score', null)
       .lt('match_date', cutoff);
+
+    if (pendingError) throw pendingError;
 
     if (!pendingFixtures || pendingFixtures.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'لا توجد ماتشات تحتاج مزامنة',
         apiCalls: 0,
+        synced: 0,
+        log,
+        timestamp: now.toISOString(),
       });
     }
 
@@ -49,6 +60,7 @@ export async function GET(request: Request) {
 
     let syncedCount = 0;
     let apiCalls = 0;
+    const syncedFixtureIds: number[] = [];
 
     for (const fixture of pendingFixtures) {
       const apiId = fixture.api_fixture_id;
@@ -58,9 +70,12 @@ export async function GET(request: Request) {
       apiCalls++;
 
       const match = fixtureData.response?.[0];
-      if (!match) continue;
+      if (!match) {
+        log.push(`⚠️ لم نجد بيانات API للمباراة ${apiId}`);
+        continue;
+      }
 
-      const status = match.fixture.status.short;
+      const status = match.fixture?.status?.short;
       const isFinished = ['FT', 'AET', 'PEN'].includes(status);
 
       if (!isFinished) {
@@ -71,9 +86,10 @@ export async function GET(request: Request) {
       const goalsHome = match.goals?.home ?? null;
       const goalsAway = match.goals?.away ?? null;
       const wentExtraTime = status === 'AET' || status === 'PEN';
-      const bothTeamsScored = goalsHome !== null && goalsAway !== null
-        ? goalsHome > 0 && goalsAway > 0
-        : false;
+      const bothTeamsScored =
+        goalsHome !== null && goalsAway !== null
+          ? goalsHome > 0 && goalsAway > 0
+          : false;
 
       let redCard = false;
       let penalty = false;
@@ -94,18 +110,20 @@ export async function GET(request: Request) {
         }
 
         if (ev.type === 'Goal' && ev.detail !== 'Own Goal') {
-          const scorerName = ev.player?.name ? normalizeScorerName(ev.player.name) : null;
+          const scorerName = ev.player?.name
+            ? normalizeScorerName(ev.player.name)
+            : null;
 
           if (scorerName) {
             if (!firstScorer) firstScorer = scorerName;
-            if (!allScorers.some(name => name === scorerName)) {
+            if (!allScorers.includes(scorerName)) {
               allScorers.push(scorerName);
             }
           }
         }
       }
 
-      await supabaseAdmin
+      const { error: updateFixtureError } = await supabaseAdmin
         .from('fixtures')
         .update({
           actual_home_score: goalsHome,
@@ -119,19 +137,37 @@ export async function GET(request: Request) {
         })
         .eq('api_fixture_id', apiId);
 
+      if (updateFixtureError) throw updateFixtureError;
+
       log.push(`✅ ${fixture.home_team_name} ${goalsHome} - ${goalsAway} ${fixture.away_team_name}`);
       syncedCount++;
+      syncedFixtureIds.push(apiId);
     }
 
-    if (syncedCount > 0) {
-      const updateRes = await fetch(
-        `${process.env.NEXT_PUBLIC_SITE_URL}/api/update-results`,
-        {
-          headers: { 'x-internal-key': process.env.CRON_SECRET || '' },
+    if (syncedFixtureIds.length > 0) {
+      for (const apiId of syncedFixtureIds) {
+        const updateRes = await fetch(
+          `${process.env.NEXT_PUBLIC_SITE_URL}/api/update-results?fixture=${apiId}`,
+          {
+            headers: { 'x-internal-key': process.env.CRON_SECRET || '' },
+          }
+        );
+
+        const updateData = await updateRes.json();
+
+        if (!updateRes.ok || !updateData.success) {
+          log.push(
+            `⚠️ فشل تحديث النقاط للمباراة ${apiId}: ${updateData.error || updateRes.statusText}`
+          );
+          continue;
         }
-      );
-      const updateData = await updateRes.json();
-      log.push(`⚡ تحديث النقاط: ${updateData.message || updateData.updated + ' توقع'}`);
+
+        log.push(
+          `⚡ تحديث النقاط للمباراة ${apiId}: ${
+            updateData.message || `${updateData.updated} توقع`
+          }`
+        );
+      }
     }
 
     return NextResponse.json({
@@ -141,9 +177,11 @@ export async function GET(request: Request) {
       log,
       timestamp: now.toISOString(),
     });
-
   } catch (err: any) {
     console.error('auto-sync error:', err);
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: err.message },
+      { status: 500 }
+    );
   }
 }
