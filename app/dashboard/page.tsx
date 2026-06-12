@@ -717,7 +717,28 @@ const quickJoinLeague = async () => {
         facebook_bonus_awarded: currentProfile?.facebook_bonus_awarded ?? false,
       };
       const { error } = await supabase.from('profiles').upsert(updates);
-      if (error) throw error;
+if (error) throw error;
+
+const { error: syncUserPointsError } = await supabase
+  .from('user_points')
+  .upsert(
+    {
+      user_id: user.id,
+      full_name: profileForm.display_name.trim(),
+      profile_completed: true,
+      bonus_points: 5,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'user_id' }
+  );
+
+if (syncUserPointsError) throw syncUserPointsError;
+
+const { error: refreshPointsError } = await supabase.rpc('refreshuserpoints', {
+  p_userid: user.id,
+});
+
+if (refreshPointsError) throw refreshPointsError;
       if (!profile?.bonus_points_awarded) {
         await supabase.from('social_feed').insert({
           user_id: user.id,
