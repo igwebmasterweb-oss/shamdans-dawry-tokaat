@@ -92,7 +92,7 @@ function LoginContent() {
       if ((!existingProfile.avatar_url || existingProfile.avatar_url.trim() === '') && metaAvatar)
         update.avatar_url = metaAvatar;
       if (!alreadyCompleted && hasName) update.profile_completed = true;
-      if (hasName && !alreadyHasPoints) { update.bonus_points = 5; update.bonus_points_awarded = true; }
+      if (hasName && !alreadyHasPoints) {update.bonus_points_awarded = true;}
       if (!alreadyHasReferral) update.referral_code = generateReferralCode();
 
       if (provider === 'facebook') {
