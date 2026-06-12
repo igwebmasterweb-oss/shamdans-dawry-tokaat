@@ -14,8 +14,87 @@ function normalizeName(s: string): string {
     .replace(/\s+/g, ' ');
 }
 
+async function cleanupPredictionFixtureLinks() {
+  const { data: unresolvedPredictions, error } = await supabaseAdmin
+    .from('predictions')
+    .select('id, user_id, fixture_id, points')
+    .is('points', null);
+
+  if (error) throw error;
+
+  if (!unresolvedPredictions || unresolvedPredictions.length === 0) {
+    return { scanned: 0, fixed: 0, deleted: 0, skipped: 0 };
+  }
+
+  let fixed = 0;
+  let deleted = 0;
+  let skipped = 0;
+
+  for (const pred of unresolvedPredictions) {
+    const { data: alreadyValid, error: validError } = await supabaseAdmin
+      .from('fixtures')
+      .select('api_fixture_id')
+      .eq('api_fixture_id', pred.fixture_id)
+      .maybeSingle();
+
+    if (validError) throw validError;
+    if (alreadyValid) continue;
+
+    const { data: localFixture, error: localError } = await supabaseAdmin
+      .from('fixtures')
+      .select('id, api_fixture_id')
+      .eq('id', pred.fixture_id)
+      .maybeSingle();
+
+    if (localError) throw localError;
+
+    if (!localFixture?.api_fixture_id) {
+      skipped++;
+      continue;
+    }
+
+    const { data: duplicateCorrectRow, error: duplicateError } = await supabaseAdmin
+      .from('predictions')
+      .select('id')
+      .eq('user_id', pred.user_id)
+      .eq('fixture_id', localFixture.api_fixture_id)
+      .maybeSingle();
+
+    if (duplicateError) throw duplicateError;
+
+    if (duplicateCorrectRow?.id) {
+      const { error: deleteError } = await supabaseAdmin
+        .from('predictions')
+        .delete()
+        .eq('id', pred.id);
+
+      if (deleteError) throw deleteError;
+      deleted++;
+      continue;
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from('predictions')
+      .update({ fixture_id: localFixture.api_fixture_id })
+      .eq('id', pred.id);
+
+    if (updateError) throw updateError;
+    fixed++;
+  }
+
+  return {
+    scanned: unresolvedPredictions.length,
+    fixed,
+    deleted,
+    skipped,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
+    const cleanup = await cleanupPredictionFixtureLinks();
+    console.log('prediction cleanup summary:', cleanup);
+
     const { data: fixturesRaw, error: fixError } = await supabaseAdmin
       .from('fixtures')
       .select('api_fixture_id, actual_home_score, actual_away_score, first_scorer, scorers_json, went_extra_time, red_card_in_match, penalty_in_match, both_teams_scored, round')
@@ -41,6 +120,7 @@ export async function GET(request: NextRequest) {
         success: true,
         message: 'لا توجد ماتشات بها نتائج بعد',
         updated: 0,
+        cleanup,
       });
     }
 
@@ -75,6 +155,7 @@ export async function GET(request: NextRequest) {
         success: true,
         message: 'لا توجد توقعات تحتاج تحديث',
         updated: 0,
+        cleanup,
       });
     }
 
@@ -100,12 +181,12 @@ export async function GET(request: NextRequest) {
       let points = 0;
       const actualHome = fixture.actual_home_score;
       const actualAway = fixture.actual_away_score;
-      const predHome   = pred.predicted_home_score;
-      const predAway   = pred.predicted_away_score;
+      const predHome = pred.predicted_home_score;
+      const predAway = pred.predicted_away_score;
 
       // ① النتيجة الأساسية
       if (predHome === actualHome && predAway === actualAway) {
-        points += 10;
+        points += 5;
       } else {
         const actualWinner =
           actualHome > actualAway ? 'home' :
@@ -119,42 +200,43 @@ export async function GET(request: NextRequest) {
       }
 
       // ② الهداف
-const actualFirstScorer = fixture.first_scorer
-  ? normalizeName(fixture.first_scorer)
-  : null;
+      const actualFirstScorer = fixture.first_scorer
+        ? normalizeName(fixture.first_scorer)
+        : null;
 
-const predictedScorer = pred.predicted_first_scorer
-  ? normalizeName(pred.predicted_first_scorer)
-  : null;
+      const predictedScorer = pred.predicted_first_scorer
+        ? normalizeName(pred.predicted_first_scorer)
+        : null;
 
-const allScorers = Array.isArray(fixture.scorers_json)
-  ? [...new Set(
-      fixture.scorers_json
-        .map(name => normalizeName(String(name)))
-        .filter(Boolean)
-    )]
-  : [];
+      const allScorers = Array.isArray(fixture.scorers_json)
+        ? [...new Set(
+            fixture.scorers_json
+              .map(name => normalizeName(String(name)))
+              .filter(Boolean)
+          )]
+        : [];
 
-if (predictedScorer) {
-  const isFirstScorer =
-    actualFirstScorer !== null &&
-    predictedScorer === actualFirstScorer;
+      if (predictedScorer) {
+        const isFirstScorer =
+          actualFirstScorer !== null &&
+          predictedScorer === actualFirstScorer;
 
-  const scoredInMatch =
-    allScorers.includes(predictedScorer);
+        const scoredInMatch =
+          allScorers.includes(predictedScorer);
 
-  if (isFirstScorer) {
-    points += 3;
-  } else if (scoredInMatch) {
-    points += 1;
-  }
-}
+        if (isFirstScorer) {
+          points += 3;
+        } else if (scoredInMatch) {
+          points += 1;
+        }
+      }
+
       // ③ التوقعات الإضافية
       const isGroupStage = fixture.round
         ? String(fixture.round).startsWith('Group Stage')
         : false;
 
-      // وقت إضافي — كما هو
+      // وقت إضافي — خارج دور المجموعات فقط
       if (!isGroupStage) {
         if (fixture.went_extra_time === true && pred.predicted_extra_time === true) {
           points += 2;
@@ -180,7 +262,7 @@ if (predictedScorer) {
         points -= 1;
       }
 
-      // الفريقان يسجلان — كما هو للسجلات القديمة
+      // الفريقان يسجلان
       if (fixture.both_teams_scored === true && pred.predicted_both_teams === true) {
         points += 2;
       }
@@ -257,8 +339,8 @@ if (predictedScorer) {
       message: `✅ تم تحديث ${predictionUpdates.length} توقع لـ ${affectedUsers.size} مستخدم`,
       updated: predictionUpdates.length,
       users: affectedUsers.size,
+      cleanup,
     });
-
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message },
