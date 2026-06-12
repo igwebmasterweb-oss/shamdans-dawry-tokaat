@@ -1007,7 +1007,20 @@ const quickJoinLeague = async () => {
   const medals      = ['🥇', '🥈', '🥉'];
   const displayName = profile?.full_name || user?.email?.split('@')[0];
   const profileIncomplete = !profile?.profile_completed;
+const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
+  const aFinished = a.actual_home_score !== null && a.actual_home_score !== undefined;
+  const bFinished = b.actual_home_score !== null && b.actual_home_score !== undefined;
 
+  if (aFinished !== bFinished) return aFinished ? -1 : 1;
+
+  const matchA = matches.find((m: any) => m.fixture.id === a.fixture_id);
+  const matchB = matches.find((m: any) => m.fixture.id === b.fixture_id);
+
+  const dateA = matchA?.fixture?.date ? new Date(matchA.fixture.date).getTime() : 0;
+  const dateB = matchB?.fixture?.date ? new Date(matchB.fixture.date).getTime() : 0;
+
+  return dateB - dateA;
+});
   return (
     <>
       <style>{`
@@ -1643,43 +1656,219 @@ const quickJoinLeague = async () => {
                 <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>لم تقدم أي توقعات بعد</div>
               </div>
-            ) : predictions.map((p, i) => {
+            ) : myPredictionsSorted.map((p, i) => {
               const hasResult = p.actual_home_score !== null;
-              return (
-                <div key={i} className="rank-item" style={(p.points || 0) >= 10 ? { borderColor: 'rgba(217,178,95,.28)', background: 'linear-gradient(90deg,rgba(217,178,95,.07),rgba(255,255,255,.015))' } : {}}>
-                  <div style={{ gridColumn: '1/-1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: 15 }}>{p.home_team} × {p.away_team}</div>
-                      <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-                        توقعك: <strong>{p.predicted_home_score} — {p.predicted_away_score}</strong>
-                        {p.predicted_first_scorer && <span style={{ marginRight: 8 }}>⚽ {p.predicted_first_scorer}</span>}
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-                        {p.predicted_extra_time && (
-                          <span style={{ fontSize: 11, fontWeight: 800, padding: '6px 10px', borderRadius: 999, background: 'rgba(217,178,95,.12)', border: '1px solid rgba(217,178,95,.22)', color: '#ffe3a6' }}>🕒 وقت إضافي</span>
-                        )}
-                        {p.predicted_red_card && (
-                          <span style={{ fontSize: 11, fontWeight: 800, padding: '6px 10px', borderRadius: 999, background: 'rgba(201,58,47,.12)', border: '1px solid rgba(201,58,47,.22)', color: '#ffb4b4' }}>🟥 كارت أحمر</span>
-                        )}
-                        {p.predicted_penalty && (
-                          <span style={{ fontSize: 11, fontWeight: 800, padding: '6px 10px', borderRadius: 999, background: 'rgba(39,176,110,.12)', border: '1px solid rgba(39,176,110,.22)', color: '#94f0c0' }}>⚽ ضربة جزاء</span>
-                        )}
-                        {p.predicted_both_teams && (
-                          <span style={{ fontSize: 11, fontWeight: 800, padding: '6px 10px', borderRadius: 999, background: 'rgba(102,163,255,.12)', border: '1px solid rgba(102,163,255,.22)', color: '#b9d6ff' }}>🥅 الفريقان يسجلان</span>
-                        )}
-                        {!p.predicted_extra_time && !p.predicted_red_card && !p.predicted_penalty && !p.predicted_both_teams && (
-                          <span style={{ fontSize: 11, color: 'var(--muted)' }}>لا توجد اختيارات إضافية</span>
-                        )}
-                      </div>
-                      {hasResult && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 10 }}>الفعلية: <strong>{p.actual_home_score} — {p.actual_away_score}</strong></div>}
-                    </div>
-                    <div style={{ padding: '10px 18px', borderRadius: 14, background: !hasResult ? 'var(--surface-3)' : (p.points || 0) >= 10 ? 'rgba(217,178,95,.12)' : (p.points || 0) >= 5 ? 'rgba(39,176,110,.12)' : 'var(--surface-3)', border: '1px solid var(--line)', color: !hasResult ? 'var(--muted)' : (p.points || 0) >= 10 ? '#ffe3a6' : (p.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)', textAlign: 'center', minWidth: 60 }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{hasResult ? (p.points || 0) : '⏳'}</div>
-                      {hasResult && <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>}
-                    </div>
-                  </div>
-                </div>
-              );
+            const matchInfo = matches.find((m: any) => m.fixture.id === p.fixture_id);
+const matchDate = matchInfo?.fixture?.date
+  ? new Date(matchInfo.fixture.date).toLocaleDateString('ar-EG', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  : '';
+const extraPredictions = [
+  p.predicted_extra_time ? '🕒 وقت إضافي' : null,
+  p.predicted_red_card ? '🟥 كارت أحمر' : null,
+  p.predicted_penalty ? '⚽ ضربة جزاء' : null,
+  p.predicted_both_teams ? '🥅 الفريقان يسجلان' : null,
+].filter(Boolean);
+         return (
+  <div
+    key={i}
+    className="rank-item"
+    style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr auto',
+      gap: 14,
+      alignItems: 'stretch',
+      ...(p.points || 0) >= 10
+        ? {
+            borderColor: 'rgba(217,178,95,.28)',
+            background: 'linear-gradient(90deg,rgba(217,178,95,.07),rgba(255,255,255,.015))',
+          }
+        : {},
+    }}
+  >
+    <div style={{ minWidth: 0 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>
+          {p.home_team} × {p.away_team}
+        </div>
+
+        <div
+          style={{
+            padding: '4px 10px',
+            borderRadius: 999,
+            background: hasResult ? 'rgba(39,176,110,.10)' : 'rgba(255,255,255,.04)',
+            border: '1px solid var(--line)',
+            color: hasResult ? '#94f0c0' : 'var(--muted)',
+            fontSize: 11,
+            fontWeight: 800,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {hasResult ? 'تم الحسم' : 'بانتظار النتيجة'}
+        </div>
+      </div>
+
+      {matchDate && (
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+          {matchDate}
+        </div>
+      )}
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 12px',
+            borderRadius: 12,
+            background: 'var(--surface-3)',
+            border: '1px solid var(--line)',
+          }}
+        >
+          <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>توقعك</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>
+            {p.predicted_home_score} — {p.predicted_away_score}
+          </div>
+        </div>
+
+        <div
+          style={{
+            padding: '10px 12px',
+            borderRadius: 12,
+            background: 'var(--surface-3)',
+            border: '1px solid var(--line)',
+          }}
+        >
+          <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>الهداف</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+            {p.predicted_first_scorer || '—'}
+          </div>
+        </div>
+
+        {hasResult && (
+          <div
+            style={{
+              padding: '10px 12px',
+              borderRadius: 12,
+              background: 'var(--surface-3)',
+              border: '1px solid var(--line)',
+            }}
+          >
+            <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>النتيجة الفعلية</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>
+              {p.actual_home_score} — {p.actual_away_score}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {extraPredictionChips.length > 0 ? (
+          extraPredictionChips.map((item, idx) => {
+            const isCorrect = hasResult && item.predicted === item.actual;
+
+            return (
+              <span
+                key={idx}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  padding: '6px 10px',
+                  borderRadius: 999,
+                  border: hasResult
+                    ? isCorrect
+                      ? '1px solid rgba(39,176,110,.24)'
+                      : '1px solid rgba(201,58,47,.24)'
+                    : '1px solid var(--line)',
+                  background: hasResult
+                    ? isCorrect
+                      ? 'rgba(39,176,110,.12)'
+                      : 'rgba(201,58,47,.12)'
+                    : 'rgba(255,255,255,.04)',
+                  color: hasResult
+                    ? isCorrect
+                      ? '#94f0c0'
+                      : '#ffb4b4'
+                    : 'var(--text)',
+                }}
+              >
+                {item.label} {hasResult ? (isCorrect ? '✓' : '✕') : ''}
+              </span>
+            );
+          })
+        ) : (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: '6px 10px',
+              borderRadius: 999,
+              background: 'rgba(255,255,255,.03)',
+              border: '1px dashed var(--line)',
+              color: 'var(--muted)',
+            }}
+          >
+            لا توجد اختيارات إضافية
+          </span>
+        )}
+      </div>
+    </div>
+
+    <div
+      style={{
+        padding: '10px 14px',
+        borderRadius: 14,
+        background: !hasResult
+          ? 'var(--surface-3)'
+          : (p.points || 0) >= 10
+          ? 'rgba(217,178,95,.12)'
+          : (p.points || 0) >= 5
+          ? 'rgba(39,176,110,.12)'
+          : 'var(--surface-3)',
+        border: '1px solid var(--line)',
+        color: !hasResult
+          ? 'var(--muted)'
+          : (p.points || 0) >= 10
+          ? '#ffe3a6'
+          : (p.points || 0) >= 5
+          ? '#94f0c0'
+          : 'var(--muted)',
+        textAlign: 'center',
+        minWidth: 74,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+        {hasResult ? (p.points || 0) : '⏳'}
+      </div>
+      <div style={{ fontSize: 11, marginTop: 4, color: hasResult ? 'inherit' : 'var(--muted)' }}>
+        {hasResult ? 'نقطة' : 'بانتظار'}
+      </div>
+    </div>
+  </div>
+);
             })}
           </div>
         )}
