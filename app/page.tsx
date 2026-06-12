@@ -32,7 +32,7 @@ export default function HomePage() {
   const pointsCards = [
     { pts: '+10', label: 'نتيجة كاملة', icon: '🎯', desc: 'توقعت النتيجة النهائية بدقة.' },
     { pts: '+5', label: 'فائز أو تعادل', icon: '✅', desc: 'اخترت اتجاه النتيجة بشكل صحيح.' },
-    { pts: '+3', label: 'أول هداف', icon: '⚽', desc: 'توقعت أول لاعب يسجل.' },
+    { pts: '+3', label: 'أول هداف', icon: '⚽', desc: 'توقعت أول لاعب يسجل. واذا كان من ضمن المسجلين +1' },
     { pts: '+3', label: 'كرت أحمر', icon: '🟥', desc: 'توقعت وجود بطاقة حمراء.' },
     { pts: '+3', label: 'ركلة جزاء', icon: '🥅', desc: 'توقعت وجود ركلة جزاء.' },
   ];
@@ -477,7 +477,7 @@ export default function HomePage() {
             <div className="callout-card">
               <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.9 }}>
                 <strong style={{ color: 'var(--text)' }}>مكافآت إضافية:</strong> +5 نقاط عند استكمال الملف الشخصي، +5
-                نقاط لكل دعوة ناجحة من رابطك، وبحد أقصى 50 نقطة من الدعوات.
+                نقاط لكل دعوة ناجحة من رابطك، وبحد أقصى 50 نقطة من الدعوات. واذا كنت من مشاركي مسابقة حلمك فيها هتاخد بونص توصل ل 50 نقطة
               </p>
             </div>
           </div>
