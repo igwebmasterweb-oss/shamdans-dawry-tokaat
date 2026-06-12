@@ -295,7 +295,7 @@ export default function HomePage() {
                   </>
                 ) : (
                   <>
-                    <Link href="/auth" className="cta-btn primary">
+                    <Link href="/login" className="cta-btn primary">
                       ابدأ الآن
                     </Link>
                     <Link href="/leaderboard" className="cta-btn secondary">
@@ -397,7 +397,7 @@ export default function HomePage() {
                 </>
               ) : (
                 <>
-                  <Link href="/auth" className="cta-btn primary">
+                  <Link href="/login" className="cta-btn primary">
                     ⚽ ابدأ التوقعات
                   </Link>
                   <Link href="/leaderboard" className="cta-btn secondary">
