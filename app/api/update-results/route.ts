@@ -1,4 +1,4 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseAdmin = createClient(
@@ -6,12 +6,38 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const UPDATE_CHUNK_SIZE = 100;
+const FEED_CHUNK_SIZE = 200;
+
 function normalizeName(s: string): string {
-  return s.trim().toLowerCase()
+  return s
+    .trim()
+    .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ');
+}
+
+function isInternalAuthorized(request: NextRequest) {
+  const authHeader = request.headers.get('authorization');
+  const internalKey = request.headers.get('x-internal-key');
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret) return true;
+
+  return (
+    authHeader === `Bearer ${cronSecret}` ||
+    internalKey === cronSecret
+  );
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
 }
 
 async function cleanupPredictionFixtureLinks() {
@@ -91,35 +117,46 @@ async function cleanupPredictionFixtureLinks() {
 }
 
 export async function GET(request: NextRequest) {
-
-   try {
-  const { searchParams } = new URL(request.url);
-  const fixtureParam = searchParams.get('fixture');
-  const targetFixtureId = fixtureParam ? Number(fixtureParam) : null;
-  const shouldCleanup = searchParams.get('cleanup') === 'true';
-
-  const cleanup = shouldCleanup
-    ? await cleanupPredictionFixtureLinks()
-    : { scanned: 0, fixed: 0, deleted: 0, skipped: 0 };
-
-  if (shouldCleanup) {
-    console.log('prediction cleanup summary:', cleanup);
+  if (!isInternalAuthorized(request)) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
+  try {
+    const { searchParams } = new URL(request.url);
+    const fixtureParam = searchParams.get('fixture');
+    const targetFixtureId = fixtureParam ? Number(fixtureParam) : null;
+    const shouldCleanup = searchParams.get('cleanup') === 'true';
+
+    if (fixtureParam && Number.isNaN(targetFixtureId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid fixture parameter' },
+        { status: 400 }
+      );
+    }
+
+    const cleanup = shouldCleanup
+      ? await cleanupPredictionFixtureLinks()
+      : { scanned: 0, fixed: 0, deleted: 0, skipped: 0 };
+
+    if (shouldCleanup) {
+      console.log('prediction cleanup summary:', cleanup);
+    }
+
     let fixturesQuery = supabaseAdmin
-  .from('fixtures')
-  .select('api_fixture_id, actual_home_score, actual_away_score, first_scorer, scorers_json, went_extra_time, red_card_in_match, penalty_in_match, both_teams_scored, round')
-  .not('actual_home_score', 'is', null);
+      .from('fixtures')
+      .select(
+        'api_fixture_id, actual_home_score, actual_away_score, first_scorer, scorers_json, went_extra_time, red_card_in_match, penalty_in_match, both_teams_scored, round'
+      )
+      .not('actual_home_score', 'is', null);
 
-if (targetFixtureId) {
-  fixturesQuery = fixturesQuery.eq('api_fixture_id', targetFixtureId);
-}
+    if (targetFixtureId) {
+      fixturesQuery = fixturesQuery.eq('api_fixture_id', targetFixtureId);
+    }
 
-const { data: fixturesRaw, error: fixError } = await fixturesQuery;
-
+    const { data: fixturesRaw, error: fixError } = await fixturesQuery;
     if (fixError) throw fixError;
 
-    const fixtures = fixturesRaw as Array<{
+    const fixtures = (fixturesRaw || []) as Array<{
       api_fixture_id: number;
       actual_home_score: number;
       actual_away_score: number;
@@ -132,27 +169,32 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
       round: string | null;
     }>;
 
-    if (!fixtures || fixtures.length === 0) {
+    if (fixtures.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'لا توجد ماتشات بها نتائج بعد',
+        message: targetFixtureId
+          ? 'لا توجد نتيجة محفوظة لهذه المباراة بعد'
+          : 'لا توجد ماتشات بها نتائج بعد',
         updated: 0,
+        users: 0,
         cleanup,
       });
     }
 
-    const fixtureMap = new Map(fixtures.map(f => [f.api_fixture_id, f]));
-    const fixtureIds = fixtures.map(f => f.api_fixture_id);
+    const fixtureMap = new Map(fixtures.map((f) => [f.api_fixture_id, f]));
+    const fixtureIds = fixtures.map((f) => f.api_fixture_id);
 
     const { data: predsRaw, error: predError } = await supabaseAdmin
       .from('predictions')
-      .select('id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team')
+      .select(
+        'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
+      )
       .in('fixture_id', fixtureIds)
       .is('points', null);
 
     if (predError) throw predError;
 
-    const preds = predsRaw as Array<{
+    const preds = (predsRaw || []) as Array<{
       id: number;
       user_id: string;
       fixture_id: number;
@@ -167,13 +209,14 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
       away_team: string;
     }>;
 
-    if (!preds || preds.length === 0) {
+    if (preds.length === 0) {
       return NextResponse.json({
         success: true,
-   message: targetFixtureId
-  ? 'لا توجد توقعات تحتاج تحديث لهذه المباراة'
-  : 'لا توجد توقعات تحتاج تحديث',
+        message: targetFixtureId
+          ? 'لا توجد توقعات تحتاج تحديث لهذه المباراة'
+          : 'لا توجد توقعات تحتاج تحديث',
         updated: 0,
+        users: 0,
         cleanup,
       });
     }
@@ -188,7 +231,12 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
     const socialFeedInserts: {
       user_id: string;
       type: string;
-      data: object;
+      data: {
+        points: number;
+        fixture_id: number;
+        home_team: string;
+        away_team: string;
+      };
     }[] = [];
 
     const affectedUsers = new Set<string>();
@@ -198,12 +246,12 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
       if (!fixture) continue;
 
       let points = 0;
+
       const actualHome = fixture.actual_home_score;
       const actualAway = fixture.actual_away_score;
       const predHome = pred.predicted_home_score;
       const predAway = pred.predicted_away_score;
 
-      // ① النتيجة الأساسية
       if (predHome === actualHome && predAway === actualAway) {
         points += 5;
       } else {
@@ -218,7 +266,6 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
         if (actualWinner === predWinner) points += 5;
       }
 
-      // ② الهداف
       const actualFirstScorer = fixture.first_scorer
         ? normalizeName(fixture.first_scorer)
         : null;
@@ -230,7 +277,7 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
       const allScorers = Array.isArray(fixture.scorers_json)
         ? [...new Set(
             fixture.scorers_json
-              .map(name => normalizeName(String(name)))
+              .map((name) => normalizeName(String(name)))
               .filter(Boolean)
           )]
         : [];
@@ -240,8 +287,7 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
           actualFirstScorer !== null &&
           predictedScorer === actualFirstScorer;
 
-        const scoredInMatch =
-          allScorers.includes(predictedScorer);
+        const scoredInMatch = allScorers.includes(predictedScorer);
 
         if (isFirstScorer) {
           points += 3;
@@ -250,12 +296,10 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
         }
       }
 
-      // ③ التوقعات الإضافية
       const isGroupStage = fixture.round
         ? String(fixture.round).startsWith('Group Stage')
         : false;
 
-      // وقت إضافي — خارج دور المجموعات فقط
       if (!isGroupStage) {
         if (fixture.went_extra_time === true && pred.predicted_extra_time === true) {
           points += 2;
@@ -265,7 +309,6 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
         }
       }
 
-      // بطاقة حمراء — +3 / -1
       if (fixture.red_card_in_match === true && pred.predicted_red_card === true) {
         points += 3;
       }
@@ -273,7 +316,6 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
         points -= 1;
       }
 
-      // ركلة جزاء — +3 / -1
       if (fixture.penalty_in_match === true && pred.predicted_penalty === true) {
         points += 3;
       }
@@ -281,7 +323,6 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
         points -= 1;
       }
 
-      // الفريقان يسجلان
       if (fixture.both_teams_scored === true && pred.predicted_both_teams === true) {
         points += 2;
       }
@@ -311,30 +352,34 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
       affectedUsers.add(pred.user_id);
     }
 
-    // STEP 4: UPDATE predictions
-    for (const update of predictionUpdates) {
-      const { error: updateError } = await supabaseAdmin
-        .from('predictions')
-        .update({
-          points: update.points,
-          actual_home_score: update.actual_home_score,
-          actual_away_score: update.actual_away_score,
-        })
-        .eq('id', update.id);
+    for (const chunk of chunkArray(predictionUpdates, UPDATE_CHUNK_SIZE)) {
+      const results = await Promise.all(
+        chunk.map((update) =>
+          supabaseAdmin
+            .from('predictions')
+            .update({
+              points: update.points,
+              actual_home_score: update.actual_home_score,
+              actual_away_score: update.actual_away_score,
+            })
+            .eq('id', update.id)
+        )
+      );
 
-      if (updateError) throw updateError;
+      const failed = results.find((r) => r.error);
+      if (failed?.error) throw failed.error;
     }
 
-    // STEP 5: Bulk insert social_feed
-    if (socialFeedInserts.length > 0) {
+    for (const chunk of chunkArray(socialFeedInserts, FEED_CHUNK_SIZE)) {
+      if (chunk.length === 0) continue;
+
       const { error: feedError } = await supabaseAdmin
         .from('social_feed')
-        .insert(socialFeedInserts);
+        .insert(chunk);
 
       if (feedError) throw feedError;
     }
 
-    // STEP 6: Batch refresh user_points
     const affectedUsersArray = Array.from(affectedUsers);
 
     if (affectedUsersArray.length > 0) {
@@ -347,8 +392,13 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
           batchRefreshError.message
         );
 
-        for (const userId of affectedUsers) {
-          await supabaseAdmin.rpc('refreshuserpoints', { p_userid: userId });
+        for (const userId of affectedUsersArray) {
+          const { error: singleRefreshError } = await supabaseAdmin
+            .rpc('refreshuserpoints', { p_userid: userId });
+
+          if (singleRefreshError) {
+            throw singleRefreshError;
+          }
         }
       }
     }
@@ -359,10 +409,12 @@ const { data: fixturesRaw, error: fixError } = await fixturesQuery;
       updated: predictionUpdates.length,
       users: affectedUsers.size,
       cleanup,
+      fixture: targetFixtureId,
     });
   } catch (error: any) {
+    console.error('update-results error:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error.message || 'Unknown error' },
       { status: 500 }
     );
   }
