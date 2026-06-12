@@ -80,6 +80,11 @@ export default function HomePage() {
     { rank: '🥉 المركز الثالث', reward: '1 سبيكة ذهب' },
   ];
 
+  const halamBonuses = [
+    { icon: '🏆', threshold: 'أكثر من 100 كود', bonus: '+50 نقطة بونص' },
+    { icon: '🎖️', threshold: 'أكثر من 10 أكواد', bonus: '+10 نقاط بونص' },
+  ];
+
   return (
     <>
       <style jsx global>{`
@@ -464,9 +469,10 @@ export default function HomePage() {
               ))}
             </div>
 
+            {/* callout 1 — max points per match */}
             <div className="callout-card">
               <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.9 }}>
-                <strong style={{ color: 'var(--text)' }}>حتى 25 نقطة</strong> في المباراة الواحدة، ويمكنك تعديل
+                <strong style={{ color: 'var(--text)' }}>حتى 19 نقطة</strong> في المباراة الواحدة، ويمكنك تعديل
                 توقعك قبل بداية المباراة. الخطأ في توقع <strong style={{ color: 'var(--text)' }}>الكرت الأحمر</strong>{' '}
                 أو <strong style={{ color: 'var(--text)' }}>ركلة الجزاء</strong> ={' '}
                 <strong style={{ color: 'var(--text)' }}>-1 نقطة</strong>، وبعد اعتماد النتائج تتم إضافة النقاط إلى
@@ -474,11 +480,38 @@ export default function HomePage() {
               </p>
             </div>
 
+            {/* callout 2 — bonus points */}
             <div className="callout-card">
               <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.9 }}>
                 <strong style={{ color: 'var(--text)' }}>مكافآت إضافية:</strong> +5 نقاط عند استكمال الملف الشخصي، +5
-                نقاط لكل دعوة ناجحة من رابطك، وبحد أقصى 50 نقطة من الدعوات. واذا كنت من مشاركي مسابقة حلمك فيها هتاخد بونص توصل ل 50 نقطة
+                نقاط لكل دعوة ناجحة من رابطك، وبحد أقصى 50 نقطة من الدعوات.
               </p>
+
+              {/* halam fi section */}
+              <div style={{ marginTop: 20 }}>
+                <div style={{ color: 'var(--muted)', fontSize: 12, fontWeight: 700, marginBottom: 4, letterSpacing: '0.04em' }}>
+                  إذا كنت من مشاركي
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)', marginBottom: 16 }}>
+                  مسابقة حلمك فيها
+                </div>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))',
+                    gap: 14,
+                  }}
+                >
+                  {halamBonuses.map((b, i) => (
+                    <div key={i} className="gold-card">
+                      <div style={{ fontSize: 28, marginBottom: 10 }}>{b.icon}</div>
+                      <div style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 6 }}>{b.threshold}</div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--gold)' }}>{b.bonus}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
