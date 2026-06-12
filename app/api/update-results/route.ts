@@ -119,40 +119,36 @@ export async function GET(request: NextRequest) {
       }
 
       // ② الهداف
-      const actualFirstScorer = fixture.first_scorer
-        ? normalizeName(fixture.first_scorer)
-        : null;
+const actualFirstScorer = fixture.first_scorer
+  ? normalizeName(fixture.first_scorer)
+  : null;
 
-      const predictedScorer = pred.predicted_first_scorer
-        ? normalizeName(pred.predicted_first_scorer)
-        : null;
+const predictedScorer = pred.predicted_first_scorer
+  ? normalizeName(pred.predicted_first_scorer)
+  : null;
 
-      const allScorers = Array.isArray(fixture.scorers_json)
-        ? fixture.scorers_json.map(name => normalizeName(String(name)))
-        : [];
+const allScorers = Array.isArray(fixture.scorers_json)
+  ? [...new Set(
+      fixture.scorers_json
+        .map(name => normalizeName(String(name)))
+        .filter(Boolean)
+    )]
+  : [];
 
-      if (predictedScorer) {
-        const isFirstScorer =
-          actualFirstScorer &&
-          (
-            actualFirstScorer === predictedScorer ||
-            actualFirstScorer.includes(predictedScorer) ||
-            predictedScorer.includes(actualFirstScorer)
-          );
+if (predictedScorer) {
+  const isFirstScorer =
+    actualFirstScorer !== null &&
+    predictedScorer === actualFirstScorer;
 
-        if (isFirstScorer) {
-          points += 3;
-        } else {
-          const scoredInMatch = allScorers.some(name =>
-            name === predictedScorer ||
-            name.includes(predictedScorer) ||
-            predictedScorer.includes(name)
-          );
+  const scoredInMatch =
+    allScorers.includes(predictedScorer);
 
-          if (scoredInMatch) points += 1;
-        }
-      }
-
+  if (isFirstScorer) {
+    points += 3;
+  } else if (scoredInMatch) {
+    points += 1;
+  }
+}
       // ③ التوقعات الإضافية
       const isGroupStage = fixture.round
         ? String(fixture.round).startsWith('Group Stage')
