@@ -1019,7 +1019,8 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
   const dateA = matchA?.fixture?.date ? new Date(matchA.fixture.date).getTime() : 0;
   const dateB = matchB?.fixture?.date ? new Date(matchB.fixture.date).getTime() : 0;
 
-  return dateA - dateB;
+  if (aFinished && bFinished) return dateA - dateB;
+  return dateB - dateA;
 });
   return (
     <>
