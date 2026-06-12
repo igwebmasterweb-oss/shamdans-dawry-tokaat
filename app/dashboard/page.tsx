@@ -1669,11 +1669,35 @@ const matchDate = matchInfo?.fixture?.date
     })
   : '';
 const extraPredictions = [
-  p.predicted_extra_time ? '🕒 وقت إضافي' : null,
-  p.predicted_red_card ? '🟥 كارت أحمر' : null,
-  p.predicted_penalty ? '⚽ ضربة جزاء' : null,
-  p.predicted_both_teams ? '🥅 الفريقان يسجلان' : null,
-].filter(Boolean);
+  ...(p.predicted_extra_time
+    ? [{
+        label: '🕒 وقت إضافي',
+        predicted: !!p.predicted_extra_time,
+        actual: !!matchInfo?.went_extra_time,
+      }]
+    : []),
+  ...(p.predicted_red_card
+    ? [{
+        label: '🟥 كارت أحمر',
+        predicted: !!p.predicted_red_card,
+        actual: !!matchInfo?.red_card_in_match,
+      }]
+    : []),
+  ...(p.predicted_penalty
+    ? [{
+        label: '⚽ ضربة جزاء',
+        predicted: !!p.predicted_penalty,
+        actual: !!matchInfo?.penalty_in_match,
+      }]
+    : []),
+  ...(p.predicted_both_teams
+    ? [{
+        label: '🥅 الفريقان يسجلان',
+        predicted: !!p.predicted_both_teams,
+        actual: !!matchInfo?.both_teams_scored,
+      }]
+    : []),
+];
          return (
   <div
     key={i}
