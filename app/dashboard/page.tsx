@@ -1782,8 +1782,8 @@ const extraPredictions = [
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {extraPredictionChips.length > 0 ? (
-          extraPredictionChips.map((item, idx) => {
+       {extraPredictions.length > 0 ? (
+  extraPredictions.map((item, idx) => {
             const isCorrect = hasResult && item.predicted === item.actual;
 
             return (
