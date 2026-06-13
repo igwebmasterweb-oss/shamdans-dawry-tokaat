@@ -19,19 +19,6 @@ function normalizeName(s: string): string {
     .replace(/\s+/g, ' ');
 }
 
-function isInternalAuthorized(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
-  const internalKey = request.headers.get('x-internal-key');
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (!cronSecret) return true;
-
-  return (
-    authHeader === `Bearer ${cronSecret}` ||
-    internalKey === cronSecret
-  );
-}
-
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -117,10 +104,6 @@ async function cleanupPredictionFixtureLinks() {
 }
 
 export async function GET(request: NextRequest) {
-  if (!isInternalAuthorized(request)) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
     const { searchParams } = new URL(request.url);
     const fixtureParam = searchParams.get('fixture');
@@ -190,7 +173,7 @@ export async function GET(request: NextRequest) {
         'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
       )
       .in('fixture_id', fixtureIds)
-      .is('points', null);
+      .or('points.is.null,points.eq.0');
 
     if (predError) throw predError;
 
@@ -413,6 +396,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('update-results error:', error);
+
     return NextResponse.json(
       { success: false, error: error.message || 'Unknown error' },
       { status: 500 }
