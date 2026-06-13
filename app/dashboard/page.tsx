@@ -711,7 +711,6 @@ const quickJoinLeague = async () => {
         facebook_url:         fbUrl,
         profile_completed:    true,
         bonus_points_awarded: true,
-        bonus_points:         5,
         updated_at:           new Date().toISOString(),
         referral_code:        currentProfile?.referral_code ?? null,
         facebook_bonus_awarded: currentProfile?.facebook_bonus_awarded ?? false,
@@ -726,7 +725,6 @@ const { error: syncUserPointsError } = await supabase
       user_id: user.id,
       full_name: profileForm.display_name.trim(),
       profile_completed: true,
-      bonus_points: 5,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'user_id' }
