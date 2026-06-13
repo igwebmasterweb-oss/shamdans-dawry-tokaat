@@ -467,15 +467,30 @@ export default function Dashboard() {
       const participantsCount  = participantsCountRes.count ?? 0;
       setTotalParticipants(participantsCount);
 
- const userNameMap: Record<string, string> = {};
+const userNameMap: Record<string, string> = {};
 
 (profilesData || []).forEach((row: any) => {
-  if (row?.id && row?.full_name) userNameMap[row.id] = row.full_name;
+  if (!row?.id) return;
+
+  const bestName =
+    row.full_name?.trim() ||
+    '';
+
+  if (bestName) {
+    userNameMap[row.id] = bestName;
+  }
 });
 
 (userPointsData || []).forEach((row: any) => {
-  if (!userNameMap[row.user_id]) {
-    userNameMap[row.user_id] = row.full_name || row.user_email?.split('@')[0] || 'لاعب';
+  if (!row?.user_id) return;
+
+  const bestName =
+    row.full_name?.trim() ||
+    row.user_email?.split('@')[0] ||
+    '';
+
+  if (!userNameMap[row.user_id] && bestName) {
+    userNameMap[row.user_id] = bestName;
   }
 });
 
@@ -560,19 +575,21 @@ export default function Dashboard() {
         setMyTotalPoints(myRow?.total_points || 0);
       }
 
-      setSocialFeed((feedData || []).map((item: any) => {
-        const fallbackName =
-          item?.data?.display_name ||
-          item?.data?.full_name ||
-          item?.data?.user_name ||
-          item?.data?.name ||
-          '';
-        return {
-          ...item,
-          user_name: userNameMap[item.user_id] || fallbackName || 'لاعب',
-        };
-      }));
+     setSocialFeed((feedData || []).map((item: any) => {
+  const fallbackName =
+    item?.data?.display_name?.trim() ||
+    item?.data?.full_name?.trim() ||
+    item?.data?.user_name?.trim() ||
+    item?.data?.name?.trim() ||
+    item?.data?.user_email?.split('@')[0] ||
+    item?.user_email?.split('@')[0] ||
+    '';
 
+  return {
+    ...item,
+    user_name: userNameMap[item.user_id] || fallbackName || 'لاعب',
+  };
+}));
       if (histData && histData.length > 0) {
         const normalizedHist = histData
           .map((row: any) => ({
@@ -591,9 +608,14 @@ export default function Dashboard() {
           return normalizedPrev && dates.includes(normalizedPrev) ? normalizedPrev : dates[0];
         });
         setHistoryRankings(normalizedHist.map((row: any) => ({
-          ...row,
-          display_name: userNameMap[row.user_id] || 'لاعب',
-        })));
+  ...row,
+  display_name:
+    userNameMap[row.user_id] ||
+    row.display_name?.trim() ||
+    row.full_name?.trim() ||
+    row.user_email?.split('@')[0] ||
+    'لاعب',
+})));
       } else {
         setHistoryDates([]);
         setActiveHistoryDate('');
