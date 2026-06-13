@@ -1161,7 +1161,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
         .save-btn { width:100%; padding:14px; border-radius:18px; background:linear-gradient(135deg,#e0bc73,#b9892d); border:none; color:#211708; font-weight:800; font-size:15px; font-family:'Cairo',sans-serif; cursor:pointer; box-shadow:0 8px 24px rgba(217,178,95,.2); transition:opacity .2s; }
         .save-btn:hover { opacity:.88; } .save-btn:disabled { opacity:.5; cursor:not-allowed; }
         .pred-box { background:rgba(217,178,95,.08); border:1px solid rgba(217,178,95,.18); border-radius:18px; padding:12px 16px; }
-        .stat-card { background:var(--surface); border:1px solid var(--line); border-radius:22px; padding:18px; }
+        .stat-card { background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:12px 10px; }
         .rank-item { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:14px; padding:14px 18px; background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01)); border:1px solid var(--line); border-radius:20px; margin-bottom:10px; transition:border-color .2s; }
         .rank-item.me { border-color:rgba(217,178,95,.28); background:linear-gradient(90deg,rgba(217,178,95,.10),rgba(255,255,255,.02)); }
         .medal-box { width:44px; height:44px; border-radius:14px; background:rgba(217,178,95,.1); display:grid; place-items:center; font-size:22px; }
@@ -1692,11 +1692,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
             { label: 'دقة التوقع', value: resolvedPreds.length > 0 ? `${accuracyPct}%` : '—',        color: '#c084fc', icon: '🎯' },
             { label: 'الجولات',    value: streakCount > 0 ? `${streakCount} 🔥` : '—',               color: '#f97316', icon: '📅' },
           ].map((s: any) => (
-            <div key={s.label} className="stat-card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{s.label}</div>
-            </div>
+           
+<div key={s.label} className="stat-card" style={{ textAlign: 'center' }}>
+  <div style={{ fontSize: 16, marginBottom: 2 }}>{s.icon}</div>
+  <div style={{ fontSize: 18, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
+  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{s.label}</div>
+</div>
           ))}
         </div>
 
