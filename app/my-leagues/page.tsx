@@ -20,7 +20,7 @@ export default function MyLeaguesPage() {
   const [copyFeedback, setCopyFeedback] = useState('');
   const [shareLeague, setShareLeague] = useState<any>(null);
   const router = useRouter();
-  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
+  const { notifications, unreadCount, markRead } = useNotifications();
 
   const showMsg = (msg: string, type: 'success' | 'error' = 'success') => {
     setMessage(msg);
