@@ -920,12 +920,15 @@ if (refreshPointsError) throw refreshPointsError;
   const fixtureId = pred.fixture_id || pred.api_fixture_id;
   const matchNames = fixtureNameMap.get(fixtureId);
   const matchInfo = fixtureDetailsMap.get(fixtureId);
+
   return {
     ...pred,
     home_team: pred.home_team || matchNames?.home_team || '',
     away_team: pred.away_team || matchNames?.away_team || '',
     fixture_date: matchInfo?.fixture?.date || null,
     round: matchInfo?.round || matchInfo?.league?.round || null,
+    actual_home_score: matchInfo?.actual_home_score ?? pred.actual_home_score ?? null,
+    actual_away_score: matchInfo?.actual_away_score ?? pred.actual_away_score ?? null,
     first_scorer_actual: matchInfo?.first_scorer || null,
     red_card_in_match: matchInfo?.red_card_in_match ?? null,
     penalty_in_match: matchInfo?.penalty_in_match ?? null,
@@ -1197,36 +1200,49 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
             ) : (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
-                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>إجمالي النقاط</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
-                      {selectedLeaderSummary?.total_points ?? selectedLeader?.totalPoints ?? 0}
-                    </div>
-                  </div>
-                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط التوقعات</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: '#ffe3a6', fontVariantNumeric: 'tabular-nums' }}>
-                      {selectedLeaderPredictions.reduce((sum: number, pred: any) => sum + (pred.points || 0), 0)}
-                    </div>
-                  </div>
-                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>عدد التوقعات</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderPredictions.length}</div>
-                  </div>
-                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط بونص مسابقة حلمك فيها</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: '#5effa8', fontVariantNumeric: 'tabular-nums' }}>
-                      {selectedLeaderSummary?.bonus_points ?? 0}
-                    </div>
-                    <a
-                      href="https://forms.gle/1pftaR7rV9SAJ2VL6"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ marginTop: 8, display: 'inline-block', fontSize: 12, color: '#7db1ff', textDecoration: 'underline' }}
-                    >
-                      شارك في مسابقة حلمك فيها
-                    </a>
-                  </div>
+  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>إجمالي النقاط</div>
+    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
+      {selectedLeaderSummary?.total_points ?? selectedLeader?.totalPoints ?? 0}
+    </div>
+  </div>
+
+  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط التوقعات</div>
+    <div style={{ fontSize: 24, fontWeight: 800, color: '#ffe3a6', fontVariantNumeric: 'tabular-nums' }}>
+      {selectedLeaderPredictions.reduce((sum: number, pred: any) => sum + (pred.points || 0), 0)}
+    </div>
+  </div>
+
+  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط الدعوات</div>
+    <div style={{ fontSize: 24, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
+      {selectedLeaderSummary?.referral_points ?? 0}
+    </div>
+  </div>
+
+  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط إكمال البروفايل</div>
+    <div style={{ fontSize: 24, fontWeight: 800, color: '#7db1ff', fontVariantNumeric: 'tabular-nums' }}>
+      {selectedLeaderSummary?.profile_completed ? 5 : 0}
+    </div>
+  </div>
+
+  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
+    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط بونص مسابقة حلمك فيها</div>
+    <div style={{ fontSize: 24, fontWeight: 800, color: '#5effa8', fontVariantNumeric: 'tabular-nums' }}>
+      {selectedLeaderSummary?.bonus_points ?? 0}
+    </div>
+    <a
+      href="https://forms.gle/1pftaR7rV9SAJ2VL6"
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ marginTop: 8, display: 'inline-block', fontSize: 12, color: '#7db1ff', textDecoration: 'underline' }}
+    >
+      شارك في مسابقة حلمك فيها
+    </a>
+  </div>
+</div>
                   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط الدعوات</div>
                     <div style={{ fontSize: 24, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.referral_points ?? 0}</div>
