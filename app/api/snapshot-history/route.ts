@@ -35,7 +35,8 @@ async function runSnapshot() {
   const { data: pointsRows, error: pointsErr } = await supabase
     .from('user_points')
     .select('user_id, total_points')
-    .order('total_points', { ascending: false });
+    .order('total_points', { ascending: false })
+    .limit(25);
 
   if (pointsErr) {
     console.error('Error fetching user_points:', pointsErr);
