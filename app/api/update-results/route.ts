@@ -8,6 +8,8 @@ const supabaseAdmin = createClient(
 
 const UPDATE_CHUNK_SIZE = 100;
 const FEED_CHUNK_SIZE = 200;
+const PROCESS_BATCH_SIZE = 1000;
+const MAX_PASSES = 20;
 
 function normalizeName(s: string): string {
   return s
@@ -103,6 +105,126 @@ async function cleanupPredictionFixtureLinks() {
   };
 }
 
+type FixtureResult = {
+  api_fixture_id: number;
+  actual_home_score: number;
+  actual_away_score: number;
+  first_scorer: string | null;
+  scorers_json: string[] | null;
+  went_extra_time: boolean;
+  red_card_in_match: boolean;
+  penalty_in_match: boolean;
+  both_teams_scored: boolean;
+  round: string | null;
+};
+
+type PredictionRow = {
+  id: number;
+  user_id: string;
+  fixture_id: number;
+  predicted_home_score: number;
+  predicted_away_score: number;
+  predicted_first_scorer: string | null;
+  predicted_extra_time: boolean;
+  predicted_red_card: boolean;
+  predicted_penalty: boolean;
+  predicted_both_teams: boolean;
+  home_team: string;
+  away_team: string;
+};
+
+function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) {
+  let points = 0;
+
+  const actualHome = fixture.actual_home_score;
+  const actualAway = fixture.actual_away_score;
+  const predHome = pred.predicted_home_score;
+  const predAway = pred.predicted_away_score;
+
+  if (predHome === actualHome && predAway === actualAway) {
+    points += 5;
+  } else {
+    const actualWinner =
+      actualHome > actualAway ? 'home' :
+      actualAway > actualHome ? 'away' : 'draw';
+
+    const predWinner =
+      predHome > predAway ? 'home' :
+      predAway > predHome ? 'away' : 'draw';
+
+    if (actualWinner === predWinner) points += 5;
+  }
+
+  const actualFirstScorer = fixture.first_scorer
+    ? normalizeName(fixture.first_scorer)
+    : null;
+
+  const predictedScorer = pred.predicted_first_scorer
+    ? normalizeName(pred.predicted_first_scorer)
+    : null;
+
+  const allScorers = Array.isArray(fixture.scorers_json)
+    ? [...new Set(
+        fixture.scorers_json
+          .map((name) => normalizeName(String(name)))
+          .filter(Boolean)
+      )]
+    : [];
+
+  if (predictedScorer) {
+    const isFirstScorer =
+      actualFirstScorer !== null &&
+      predictedScorer === actualFirstScorer;
+
+    const scoredInMatch = allScorers.includes(predictedScorer);
+
+    if (isFirstScorer) {
+      points += 3;
+    } else if (scoredInMatch) {
+      points += 1;
+    }
+  }
+
+  const isGroupStage = fixture.round
+    ? String(fixture.round).startsWith('Group Stage')
+    : false;
+
+  if (!isGroupStage) {
+    if (fixture.went_extra_time === true && pred.predicted_extra_time === true) {
+      points += 2;
+    }
+    if (fixture.went_extra_time === false && pred.predicted_extra_time === true) {
+      points -= 1;
+    }
+  }
+
+  if (fixture.red_card_in_match === true && pred.predicted_red_card === true) {
+    points += 3;
+  }
+  if (fixture.red_card_in_match === false && pred.predicted_red_card === true) {
+    points -= 1;
+  }
+
+  if (fixture.penalty_in_match === true && pred.predicted_penalty === true) {
+    points += 3;
+  }
+  if (fixture.penalty_in_match === false && pred.predicted_penalty === true) {
+    points -= 1;
+  }
+
+  if (fixture.both_teams_scored === true && pred.predicted_both_teams === true) {
+    points += 2;
+  }
+
+  if (points < 0) points = 0;
+
+  return {
+    points,
+    actual_home_score: actualHome,
+    actual_away_score: actualAway,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -139,18 +261,7 @@ export async function GET(request: NextRequest) {
     const { data: fixturesRaw, error: fixError } = await fixturesQuery;
     if (fixError) throw fixError;
 
-    const fixtures = (fixturesRaw || []) as Array<{
-      api_fixture_id: number;
-      actual_home_score: number;
-      actual_away_score: number;
-      first_scorer: string | null;
-      scorers_json: string[] | null;
-      went_extra_time: boolean;
-      red_card_in_match: boolean;
-      penalty_in_match: boolean;
-      both_teams_scored: boolean;
-      round: string | null;
-    }>;
+    const fixtures = (fixturesRaw || []) as FixtureResult[];
 
     if (fixtures.length === 0) {
       return NextResponse.json({
@@ -167,200 +278,111 @@ export async function GET(request: NextRequest) {
     const fixtureMap = new Map(fixtures.map((f) => [f.api_fixture_id, f]));
     const fixtureIds = fixtures.map((f) => f.api_fixture_id);
 
-    const { data: predsRaw, error: predError } = await supabaseAdmin
-      .from('predictions')
-      .select(
-        'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
-      )
-      .in('fixture_id', fixtureIds)
-      .or('points.is.null,points.eq.0');
-
-    if (predError) throw predError;
-
-    const preds = (predsRaw || []) as Array<{
-      id: number;
-      user_id: string;
-      fixture_id: number;
-      predicted_home_score: number;
-      predicted_away_score: number;
-      predicted_first_scorer: string | null;
-      predicted_extra_time: boolean;
-      predicted_red_card: boolean;
-      predicted_penalty: boolean;
-      predicted_both_teams: boolean;
-      home_team: string;
-      away_team: string;
-    }>;
-
-    if (preds.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: targetFixtureId
-          ? 'لا توجد توقعات تحتاج تحديث لهذه المباراة'
-          : 'لا توجد توقعات تحتاج تحديث',
-        updated: 0,
-        users: 0,
-        cleanup,
-      });
-    }
-
-    const predictionUpdates: {
-      id: number;
-      points: number;
-      actual_home_score: number;
-      actual_away_score: number;
-    }[] = [];
-
-    const socialFeedInserts: {
-      user_id: string;
-      type: string;
-      data: {
-        points: number;
-        fixture_id: number;
-        home_team: string;
-        away_team: string;
-      };
-    }[] = [];
-
+    let totalUpdated = 0;
     const affectedUsers = new Set<string>();
+    let totalPasses = 0;
 
-    for (const pred of preds) {
-      const fixture = fixtureMap.get(pred.fixture_id);
-      if (!fixture) continue;
+    for (let pass = 1; pass <= MAX_PASSES; pass++) {
+      totalPasses = pass;
 
-      let points = 0;
-
-      const actualHome = fixture.actual_home_score;
-      const actualAway = fixture.actual_away_score;
-      const predHome = pred.predicted_home_score;
-      const predAway = pred.predicted_away_score;
-
-      if (predHome === actualHome && predAway === actualAway) {
-        points += 5;
-      } else {
-        const actualWinner =
-          actualHome > actualAway ? 'home' :
-          actualAway > actualHome ? 'away' : 'draw';
-
-        const predWinner =
-          predHome > predAway ? 'home' :
-          predAway > predHome ? 'away' : 'draw';
-
-        if (actualWinner === predWinner) points += 5;
-      }
-
-      const actualFirstScorer = fixture.first_scorer
-        ? normalizeName(fixture.first_scorer)
-        : null;
-
-      const predictedScorer = pred.predicted_first_scorer
-        ? normalizeName(pred.predicted_first_scorer)
-        : null;
-
-      const allScorers = Array.isArray(fixture.scorers_json)
-        ? [...new Set(
-            fixture.scorers_json
-              .map((name) => normalizeName(String(name)))
-              .filter(Boolean)
-          )]
-        : [];
-
-      if (predictedScorer) {
-        const isFirstScorer =
-          actualFirstScorer !== null &&
-          predictedScorer === actualFirstScorer;
-
-        const scoredInMatch = allScorers.includes(predictedScorer);
-
-        if (isFirstScorer) {
-          points += 3;
-        } else if (scoredInMatch) {
-          points += 1;
-        }
-      }
-
-      const isGroupStage = fixture.round
-        ? String(fixture.round).startsWith('Group Stage')
-        : false;
-
-      if (!isGroupStage) {
-        if (fixture.went_extra_time === true && pred.predicted_extra_time === true) {
-          points += 2;
-        }
-        if (fixture.went_extra_time === false && pred.predicted_extra_time === true) {
-          points -= 1;
-        }
-      }
-
-      if (fixture.red_card_in_match === true && pred.predicted_red_card === true) {
-        points += 3;
-      }
-      if (fixture.red_card_in_match === false && pred.predicted_red_card === true) {
-        points -= 1;
-      }
-
-      if (fixture.penalty_in_match === true && pred.predicted_penalty === true) {
-        points += 3;
-      }
-      if (fixture.penalty_in_match === false && pred.predicted_penalty === true) {
-        points -= 1;
-      }
-
-      if (fixture.both_teams_scored === true && pred.predicted_both_teams === true) {
-        points += 2;
-      }
-
-      if (points < 0) points = 0;
-
-      predictionUpdates.push({
-        id: pred.id,
-        points,
-        actual_home_score: actualHome,
-        actual_away_score: actualAway,
-      });
-
-      if (points > 0) {
-        socialFeedInserts.push({
-          user_id: pred.user_id,
-          type: 'points_earned',
-          data: {
-            points,
-            fixture_id: pred.fixture_id,
-            home_team: pred.home_team,
-            away_team: pred.away_team,
-          },
-        });
-      }
-
-      affectedUsers.add(pred.user_id);
-    }
-
-    for (const chunk of chunkArray(predictionUpdates, UPDATE_CHUNK_SIZE)) {
-      const results = await Promise.all(
-        chunk.map((update) =>
-          supabaseAdmin
-            .from('predictions')
-            .update({
-              points: update.points,
-              actual_home_score: update.actual_home_score,
-              actual_away_score: update.actual_away_score,
-            })
-            .eq('id', update.id)
+      let predsQuery = supabaseAdmin
+        .from('predictions')
+        .select(
+          'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
         )
-      );
+        .in('fixture_id', fixtureIds)
+        .or('points.is.null,points.eq.0')
+        .limit(PROCESS_BATCH_SIZE);
 
-      const failed = results.find((r) => r.error);
-      if (failed?.error) throw failed.error;
-    }
+      const { data: predsRaw, error: predError } = await predsQuery;
+      if (predError) throw predError;
 
-    for (const chunk of chunkArray(socialFeedInserts, FEED_CHUNK_SIZE)) {
-      if (chunk.length === 0) continue;
+      const preds = (predsRaw || []) as PredictionRow[];
 
-      const { error: feedError } = await supabaseAdmin
-        .from('social_feed')
-        .insert(chunk);
+      if (preds.length === 0) {
+        break;
+      }
 
-      if (feedError) throw feedError;
+      const predictionUpdates: {
+        id: number;
+        points: number;
+        actual_home_score: number;
+        actual_away_score: number;
+      }[] = [];
+
+      const socialFeedInserts: {
+        user_id: string;
+        type: string;
+        data: {
+          points: number;
+          fixture_id: number;
+          home_team: string;
+          away_team: string;
+        };
+      }[] = [];
+
+      for (const pred of preds) {
+        const fixture = fixtureMap.get(pred.fixture_id);
+        if (!fixture) continue;
+
+        const calc = calculatePredictionPoints(pred, fixture);
+
+        predictionUpdates.push({
+          id: pred.id,
+          points: calc.points,
+          actual_home_score: calc.actual_home_score,
+          actual_away_score: calc.actual_away_score,
+        });
+
+        if (calc.points > 0) {
+          socialFeedInserts.push({
+            user_id: pred.user_id,
+            type: 'points_earned',
+            data: {
+              points: calc.points,
+              fixture_id: pred.fixture_id,
+              home_team: pred.home_team,
+              away_team: pred.away_team,
+            },
+          });
+        }
+
+        affectedUsers.add(pred.user_id);
+      }
+
+      for (const chunk of chunkArray(predictionUpdates, UPDATE_CHUNK_SIZE)) {
+        const results = await Promise.all(
+          chunk.map((update) =>
+            supabaseAdmin
+              .from('predictions')
+              .update({
+                points: update.points,
+                actual_home_score: update.actual_home_score,
+                actual_away_score: update.actual_away_score,
+              })
+              .eq('id', update.id)
+          )
+        );
+
+        const failed = results.find((r) => r.error);
+        if (failed?.error) throw failed.error;
+      }
+
+      for (const chunk of chunkArray(socialFeedInserts, FEED_CHUNK_SIZE)) {
+        if (chunk.length === 0) continue;
+
+        const { error: feedError } = await supabaseAdmin
+          .from('social_feed')
+          .insert(chunk);
+
+        if (feedError) throw feedError;
+      }
+
+      totalUpdated += predictionUpdates.length;
+
+      if (preds.length < PROCESS_BATCH_SIZE) {
+        break;
+      }
     }
 
     const affectedUsersArray = Array.from(affectedUsers);
@@ -388,11 +410,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `✅ تم تحديث ${predictionUpdates.length} توقع لـ ${affectedUsers.size} مستخدم`,
-      updated: predictionUpdates.length,
+      message: `✅ تم تحديث ${totalUpdated} توقع لـ ${affectedUsers.size} مستخدم`,
+      updated: totalUpdated,
       users: affectedUsers.size,
       cleanup,
       fixture: targetFixtureId,
+      passes: totalPasses,
     });
   } catch (error: any) {
     console.error('update-results error:', error);
