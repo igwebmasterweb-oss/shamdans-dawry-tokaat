@@ -34,7 +34,7 @@ async function runSnapshot() {
 
   const { data: pointsRows, error: pointsErr } = await supabase
     .from('user_points')
-    .select('user_id, total_points, referral_count, full_name, user_email')
+    .select('user_id, total_points')
     .order('total_points', { ascending: false });
 
   if (pointsErr) {
@@ -51,14 +51,9 @@ async function runSnapshot() {
 
   const rowsToInsert = pointsRows.map((row, index) => ({
     user_id: row.user_id,
-    total_points: row.total_points ?? 0,
-    referral_count: row.referral_count ?? 0,
+    rank_week: index + 1,
     week_start: isoDate,
-    rank: index + 1,
-    display_name:
-      row.full_name?.trim() ||
-      row.user_email?.split('@')[0] ||
-      'لاعب',
+    total_points: row.total_points ?? 0,
   }));
 
   const { error: insertErr } = await supabase
@@ -66,17 +61,17 @@ async function runSnapshot() {
     .insert(rowsToInsert);
 
   if (insertErr) {
-  console.error('Error inserting snapshot:', insertErr);
-  return NextResponse.json(
-    {
-      error: 'insert_failed',
-      details: insertErr.message,
-      code: insertErr.code,
-      hint: insertErr.hint,
-    },
-    { status: 500 }
-  );
-}
+    console.error('Error inserting snapshot:', insertErr);
+    return NextResponse.json(
+      {
+        error: 'insert_failed',
+        details: insertErr.message,
+        code: insertErr.code,
+        hint: insertErr.hint,
+      },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json(
     {
