@@ -400,10 +400,19 @@ export default function Dashboard() {
         });
         if (!refErr) {
           await supabase.from('social_feed').insert({
-            user_id: userId,
-            type: 'invite_friend',
-            data: { referral_code: pendingRef },
-          });
+  user_id: userId,
+  type: 'invite_friend',
+  data: {
+    referral_code: pendingRef,
+    display_name:
+      profileData?.full_name?.trim() ||
+      sessionData?.session?.user?.user_metadata?.full_name?.trim() ||
+      sessionData?.session?.user?.user_metadata?.name?.trim() ||
+      sessionData?.session?.user?.email?.split('@')[0] ||
+      '',
+    user_email: sessionData?.session?.user?.email || null,
+  },
+});
         }
       }
 
@@ -423,10 +432,20 @@ export default function Dashboard() {
             if (!alreadyMember) {
               await supabase.from('mini_league_members').insert({ league_id: lgData.id, user_id: userId, role: 'member' });
               await supabase.from('social_feed').insert({
-                user_id: userId,
-                type: 'joined_league',
-                data: { league_name: lgData.name, league_id: lgData.id },
-              });
+  user_id: userId,
+  type: 'joined_league',
+  data: {
+    league_name: lgData.name,
+    league_id: lgData.id,
+    display_name:
+      profileData?.full_name?.trim() ||
+      sessionData?.session?.user?.user_metadata?.full_name?.trim() ||
+      sessionData?.session?.user?.user_metadata?.name?.trim() ||
+      sessionData?.session?.user?.email?.split('@')[0] ||
+      '',
+    user_email: sessionData?.session?.user?.email || null,
+  },
+});
               if (typeof window !== 'undefined')
                 window.sessionStorage.setItem('leagueJoinedMsg', `✅ انضممت لليج "${lgData.name}" بنجاح! 🏆`);
             }
@@ -761,10 +780,13 @@ const { error: refreshPointsError } = await supabase.rpc('refreshuserpoints', {
 if (refreshPointsError) throw refreshPointsError;
       if (!profile?.bonus_points_awarded) {
         await supabase.from('social_feed').insert({
-          user_id: user.id,
-          type: 'completed_profile',
-          data: { display_name: profileForm.display_name.trim() },
-        });
+  user_id: user.id,
+  type: 'completed_profile',
+  data: {
+    display_name: profileForm.display_name.trim(),
+    user_email: user.email || null,
+  },
+});
       }
       setProfileMsg('✅ تم الحفظ! حصلت على 5 نقاط مكافأة 🎉');
       await loadData(user.id);
@@ -816,10 +838,20 @@ if (refreshPointsError) throw refreshPointsError;
       } else {
         await supabase.from('predictions').insert(payload);
         await supabase.from('social_feed').insert({
-          user_id: user.id,
-          type: 'share_predictions',
-          data: { home: match.teams.home.name, away: match.teams.away.name, fixture_id: match.fixture.id },
-        });
+  user_id: user.id,
+  type: 'share_predictions',
+  data: {
+    home: match.teams.home.name,
+    away: match.teams.away.name,
+    fixture_id: match.fixture.id,
+    display_name:
+      profile?.full_name?.trim() ||
+      profileForm.display_name?.trim() ||
+      user.email?.split('@')[0] ||
+      '',
+    user_email: user.email || null,
+  },
+});
       }
       const { data } = await supabase.from('predictions').select('*').eq('user_id', user.id);
       setPredictions(data || []);
