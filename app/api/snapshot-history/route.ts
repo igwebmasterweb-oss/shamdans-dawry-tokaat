@@ -66,9 +66,17 @@ async function runSnapshot() {
     .insert(rowsToInsert);
 
   if (insertErr) {
-    console.error('Error inserting snapshot:', insertErr);
-    return NextResponse.json({ error: 'insert_failed' }, { status: 500 });
-  }
+  console.error('Error inserting snapshot:', insertErr);
+  return NextResponse.json(
+    {
+      error: 'insert_failed',
+      details: insertErr.message,
+      code: insertErr.code,
+      hint: insertErr.hint,
+    },
+    { status: 500 }
+  );
+}
 
   return NextResponse.json(
     {
