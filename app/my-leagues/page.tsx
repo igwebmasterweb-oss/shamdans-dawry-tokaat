@@ -138,40 +138,84 @@ export default function MyLeaguesPage() {
   };
 
   // ✅ FIX: 'invite' بدل 'league_invite' ليطابق AppNotification type
-  const respondToInvite = async (notif: any, accept: boolean) => {
-    const { league_id, league_name, from_user_id } = notif.data;
-    try {
-      await supabase
-        .from('mini_league_invitations')
-        .update({ status: accept ? 'accepted' : 'declined' })
-        .eq('league_id', league_id)
-        .eq('invited_user', user.id);
-      if (accept) {
-        await supabase.from('mini_league_members').insert({
-          league_id,
-          user_id: user.id,
-          role: 'member',
-        });
-        await sendNotification(from_user_id, 'invite_accepted', {
-          league_id,
-          league_name,
-          invited_user_name: userName,
-        });
-        showMsg(`✅ انضممت لـ "${league_name}"`);
-        await loadData(user.id);
-      } else {
-        await sendNotification(from_user_id, 'invite_declined', {
-          league_id,
-          league_name,
-          invited_user_name: userName,
-        });
-        showMsg('تم رفض الدعوة');
-      }
+ const respondToInvite = async (notif: any, accept: boolean) => {
+  const { league_id, league_name, from_user_id } = notif.data;
+
+  try {
+    const { data: inviteRow, error: inviteErr } = await supabase
+      .from('mini_league_invitations')
+      .select('id, status')
+      .eq('league_id', league_id)
+      .eq('invited_user', user.id)
+      .maybeSingle();
+
+    if (inviteErr) throw inviteErr;
+
+    if (!inviteRow) {
+      showMsg('❌ الدعوة غير موجودة أو تم حذفها', 'error');
       await markRead(notif.id);
-    } catch (err: any) {
-      showMsg('❌ ' + err.message, 'error');
+      return;
     }
-  };
+
+    if (inviteRow.status !== 'pending') {
+      showMsg('ℹ️ تم التعامل مع هذه الدعوة بالفعل');
+      await markRead(notif.id);
+      await loadData(user.id);
+      return;
+    }
+
+    const { error: updateInviteErr } = await supabase
+      .from('mini_league_invitations')
+      .update({ status: accept ? 'accepted' : 'declined' })
+      .eq('id', inviteRow.id);
+
+    if (updateInviteErr) throw updateInviteErr;
+
+    if (accept) {
+      const { data: existingMember, error: existingErr } = await supabase
+        .from('mini_league_members')
+        .select('league_id')
+        .eq('league_id', league_id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existingErr) throw existingErr;
+
+      if (!existingMember) {
+        const { error: memberInsertErr } = await supabase
+          .from('mini_league_members')
+          .insert({
+            league_id,
+            user_id: user.id,
+            role: 'member',
+          });
+
+        if (memberInsertErr) throw memberInsertErr;
+      }
+
+      await sendNotification(from_user_id, 'invite_accepted', {
+        league_id,
+        league_name,
+        invited_user_name: userName,
+      });
+
+      showMsg(`✅ انضممت لـ "${league_name}"`);
+      await loadData(user.id);
+    } else {
+      await sendNotification(from_user_id, 'invite_declined', {
+        league_id,
+        league_name,
+        invited_user_name: userName,
+      });
+
+      showMsg('تم رفض الدعوة');
+    }
+
+    await markRead(notif.id);
+  } catch (err: any) {
+    showMsg('❌ ' + (err.message || 'حدث خطأ أثناء التعامل مع الدعوة'), 'error');
+  }
+};
 
   const leaveLeague = async (lg: any) => {
     if (!confirm(`هل تريد مغادرة "${lg.name}"؟`)) return;
@@ -269,7 +313,7 @@ export default function MyLeaguesPage() {
 
           {/* ✅ FIX: markAllRead عند فتح modal + badge يدعم 9+ */}
           <button
-            onClick={() => { setShowNotif(true); markAllRead(); }}
+            onClick={() => { setShowNotif(true); }}
             className="nav-pill"
             style={{ position: 'relative' }}
           >
