@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     const now = new Date();
     const log: string[] = [];
 
-    const cutoff = new Date(now.getTime() - 20 * 60 * 1000).toISOString();
+    const cutoff = new Date(now.getTime() - 115 * 60 * 1000).toISOString();
 
     const { data: pendingFixtures, error: pendingError } = await supabaseAdmin
       .from('fixtures')
