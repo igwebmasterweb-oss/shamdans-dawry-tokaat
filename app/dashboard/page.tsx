@@ -917,29 +917,31 @@ if (refreshPointsError) throw refreshPointsError;
       const fixtureDetailsMap = new Map<number, any>(matches.map((m: any) => [m.fixture.id, m]));
 
       const normalizedPreds = (predsData || []).map((pred: any) => {
-        const fixtureId = pred.fixture_id || pred.api_fixture_id;
-        const matchNames = fixtureNameMap.get(fixtureId);
-        const matchInfo = fixtureDetailsMap.get(fixtureId);
-        return {
-          ...pred,
-          home_team: pred.home_team || matchNames?.home_team || '',
-          away_team: pred.away_team || matchNames?.away_team || '',
-          fixture_date: matchInfo?.fixture?.date || null,
-          round: matchInfo?.round || matchInfo?.league?.round || null,
-          first_scorer_actual: matchInfo?.first_scorer || null,
-          red_card_in_match: matchInfo?.red_card_in_match ?? null,
-          penalty_in_match: matchInfo?.penalty_in_match ?? null,
-          both_teams_scored: matchInfo?.both_teams_scored ?? null,
-          went_extra_time: matchInfo?.went_extra_time ?? null,
-        };
-      }).sort((a: any, b: any) => {
-        const dateA = a.fixture_date ? new Date(a.fixture_date).getTime() : 0;
-        const dateB = b.fixture_date ? new Date(b.fixture_date).getTime() : 0;
-        return dateA - dateB;
-      });
+  const fixtureId = pred.fixture_id || pred.api_fixture_id;
+  const matchNames = fixtureNameMap.get(fixtureId);
+  const matchInfo = fixtureDetailsMap.get(fixtureId);
+  return {
+    ...pred,
+    home_team: pred.home_team || matchNames?.home_team || '',
+    away_team: pred.away_team || matchNames?.away_team || '',
+    fixture_date: matchInfo?.fixture?.date || null,
+    round: matchInfo?.round || matchInfo?.league?.round || null,
+    first_scorer_actual: matchInfo?.first_scorer || null,
+    red_card_in_match: matchInfo?.red_card_in_match ?? null,
+    penalty_in_match: matchInfo?.penalty_in_match ?? null,
+    both_teams_scored: matchInfo?.both_teams_scored ?? null,
+    went_extra_time: matchInfo?.went_extra_time ?? null,
+  };
+})
+.filter((pred: any) => pred.actual_home_score !== null && pred.actual_home_score !== undefined)
+.sort((a: any, b: any) => {
+  const dateA = a.fixture_date ? new Date(a.fixture_date).getTime() : 0;
+  const dateB = b.fixture_date ? new Date(b.fixture_date).getTime() : 0;
+  return dateA - dateB;
+});
 
-      setSelectedLeaderSummary(summaryData || null);
-      setSelectedLeaderPredictions(normalizedPreds);
+setSelectedLeaderSummary(summaryData || null);
+setSelectedLeaderPredictions(normalizedPreds);
     } catch (err) {
       console.error('openLeaderDetails error:', err);
       setSelectedLeaderSummary(null);
