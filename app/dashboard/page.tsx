@@ -2373,7 +2373,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           <div>
             <div style={{ marginBottom: 20 }}>
               <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>📈 السجل التاريخي للترتيب</h2>
-              <p style={{ fontSize: 13, color: 'var(--muted)' }}>لقطات أسبوعية للترتيب منذ بداية البطولة</p>
+             <p style={{ fontSize: 13, color: 'var(--muted)' }}>لقطات يومية لأفضل 25 لاعب منذ بداية البطولة</p>
             </div>
             {historyDates.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
