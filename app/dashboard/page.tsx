@@ -916,7 +916,7 @@ if (refreshPointsError) throw refreshPointsError;
 
       const fixtureDetailsMap = new Map<number, any>(matches.map((m: any) => [m.fixture.id, m]));
 
-      const normalizedPreds = (predsData || []).map((pred: any) => {
+    const normalizedPreds = (predsData || []).map((pred: any) => {
   const fixtureId = pred.fixture_id || pred.api_fixture_id;
   const matchNames = fixtureNameMap.get(fixtureId);
   const matchInfo = fixtureDetailsMap.get(fixtureId);
@@ -1243,17 +1243,6 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
     </a>
   </div>
 </div>
-                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط الدعوات</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>{selectedLeaderSummary?.referral_points ?? 0}</div>
-                  </div>
-                  <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط إكمال البروفايل</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: '#7db1ff', fontVariantNumeric: 'tabular-nums' }}>
-                      {selectedLeaderSummary?.profile_completed ? 5 : 0}
-                    </div>
-                  </div>
-                </div>
 
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>📋 توقعات العضو</div>
 
