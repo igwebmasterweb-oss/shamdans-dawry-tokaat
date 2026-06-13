@@ -405,12 +405,11 @@ export default function Dashboard() {
   data: {
     referral_code: pendingRef,
     display_name:
-      profileData?.full_name?.trim() ||
-      sessionData?.session?.user?.user_metadata?.full_name?.trim() ||
-      sessionData?.session?.user?.user_metadata?.name?.trim() ||
-      sessionData?.session?.user?.email?.split('@')[0] ||
+      profile?.full_name?.trim() ||
+      profileForm.display_name?.trim() ||
+      user?.email?.split('@')[0] ||
       '',
-    user_email: sessionData?.session?.user?.email || null,
+    user_email: user?.email || null,
   },
 });
         }
@@ -438,12 +437,11 @@ export default function Dashboard() {
     league_name: lgData.name,
     league_id: lgData.id,
     display_name:
-      profileData?.full_name?.trim() ||
-      sessionData?.session?.user?.user_metadata?.full_name?.trim() ||
-      sessionData?.session?.user?.user_metadata?.name?.trim() ||
-      sessionData?.session?.user?.email?.split('@')[0] ||
+      profile?.full_name?.trim() ||
+      profileForm.display_name?.trim() ||
+      user?.email?.split('@')[0] ||
       '',
-    user_email: sessionData?.session?.user?.email || null,
+    user_email: user?.email || null,
   },
 });
               if (typeof window !== 'undefined')
@@ -710,7 +708,16 @@ const quickJoinLeague = async () => {
       .insert({
         user_id: user.id,
         type: 'joined_league',
-        data: { league_name: lgData.name, league_id: lgData.id },
+        data: {
+          league_name: lgData.name,
+          league_id: lgData.id,
+          display_name:
+            profile?.full_name?.trim() ||
+            profileForm.display_name?.trim() ||
+            user.email?.split('@')[0] ||
+            '',
+          user_email: user.email || null,
+        },
       });
 
     if (feedErr) console.error('social_feed insert error:', feedErr);
