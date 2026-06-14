@@ -185,19 +185,6 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
     }
   }
 
-  const isGroupStage = fixture.round
-    ? String(fixture.round).startsWith('Group Stage')
-    : false;
-
-  if (!isGroupStage) {
-    if (fixture.went_extra_time === true && pred.predicted_extra_time === true) {
-      points += 2;
-    }
-    if (fixture.went_extra_time === false && pred.predicted_extra_time === true) {
-      points -= 1;
-    }
-  }
-
   if (fixture.red_card_in_match === true && pred.predicted_red_card === true) {
     points += 3;
   }
@@ -210,10 +197,6 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
   }
   if (fixture.penalty_in_match === false && pred.predicted_penalty === true) {
     points -= 1;
-  }
-
-  if (fixture.both_teams_scored === true && pred.predicted_both_teams === true) {
-    points += 2;
   }
 
 
@@ -397,30 +380,4 @@ while (true) {
 
         for (const userId of affectedUsersArray) {
           const { error: singleRefreshError } = await supabaseAdmin
-            .rpc('refreshuserpoints', { p_userid: userId });
-
-          if (singleRefreshError) {
-            throw singleRefreshError;
-          }
-        }
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `✅ تم تحديث ${totalUpdated} توقع لـ ${affectedUsers.size} مستخدم`,
-      updated: totalUpdated,
-      users: affectedUsers.size,
-      cleanup,
-      fixture: targetFixtureId,
-      passes: totalPasses,
-    });
-  } catch (error: any) {
-    console.error('update-results error:', error);
-
-    return NextResponse.json(
-      { success: false, error: error.message || 'Unknown error' },
-      { status: 500 }
-    );
-  }
-}
+            .rpc('refreshuserpoints', { p_userid: userId
