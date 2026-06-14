@@ -1701,114 +1701,144 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
             )}
           </div>
         </div>
-      )}
-      {showTerms && (
-        <div className="modal-overlay" onClick={() => setShowTerms(false)}>
-          <div
-            className="modal-box"
-            onClick={e => e.stopPropagation()}
-            style={{ maxWidth: 760, maxHeight: '88vh', overflowY: 'auto' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--gold)', marginBottom: 4 }}>📜 الشروط والأحكام</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>قواعد المشاركة واستخدام منصة الشمعدان للتوقعات</div>
-              </div>
-              <button
-                onClick={() => setShowTerms(false)}
-                style={{
-                  background: 'var(--surface-3)',
-                  border: '1px solid var(--line)',
-                  borderRadius: 10,
-                  width: 34,
-                  height: 34,
-                  cursor: 'pointer',
-                  color: 'var(--text)',
-                  fontSize: 16,
-                  display: 'grid',
-                  placeItems: 'center'
-                }}
-              >
-                ✕
-              </button>
-            </div>
+      )}{showTerms && (
+  <div className="modal-overlay" onClick={() => setShowTerms(false)}>
+    <div
+      className="modal-box"
+      onClick={e => e.stopPropagation()}
+      style={{ maxWidth: 720, maxHeight: '88vh', overflowY: 'auto' }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--gold)', marginBottom: 4 }}>📜 الشروط والأحكام</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>دوري توقعات الشمعدان — كأس العالم 2026</div>
+        </div>
+        <button
+          onClick={() => setShowTerms(false)}
+          style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center', flexShrink: 0 }}
+        >✕</button>
+      </div>
 
-            <div
-              style={{
-                background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))',
-                border: '1px solid var(--line)',
-                borderRadius: 20,
-                padding: '18px 18px',
-                marginBottom: 16,
-              }}
-            >
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginBottom: 8 }}>
-                الشمعدان × كأس العالم
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
-                باستخدامك للمنصة فإنك توافق على القواعد المنظمة للتوقعات، احتساب النقاط، الجوائز، والإحالات، مع احتفاظ إدارة المنصة بحق مراجعة النتائج أو تعديل السياسات عند الحاجة بما يحافظ على عدالة المنافسة.
-              </div>
-            </div>
+      {/* Intro */}
+      <div style={{ background: 'linear-gradient(180deg,rgba(217,178,95,.08),rgba(217,178,95,.03))', border: '1px solid rgba(217,178,95,.2)', borderRadius: 18, padding: '16px 18px', marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginBottom: 8 }}>أهلاً بيك في دوري توقعات الشمعدان لكأس العالم 2026! 🏆</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
+          عشان تكون في الصدارة وتكسب الجوائز الكبرى وسبائك الذهب، عملنالك نظام نقاط ممتع وسهل. هتقدر تجمع النقاط مش بس من توقعك لنتائج الماتشات، ده كمان من تفاعلك ودعوة أصحابك!
+        </div>
+      </div>
 
-            {[
-              {
-                title: '١. القبول والمشاركة',
-                body: 'باستخدامك للمنصة أو تسجيل حساب جديد، فإنك توافق على الالتزام بالشروط والأحكام المنظمة لاستخدام المنصة والمشاركة في التوقعات.',
-              },
-              {
-                title: '٢. طبيعة المسابقة',
-                body: 'المنصة مخصصة للتوقعات الترفيهية والمنافسة بين المشتركين، ويتم احتساب النقاط والمراكز بناءً على التوقعات الصحيحة وفق النظام المعتمد داخل التطبيق.',
-              },
-              {
-                title: '٣. احتساب النقاط',
-                body: 'يتم احتساب النقاط تلقائياً بعد اعتماد نتائج المباريات والبيانات المرتبطة بها. ويحق للإدارة تصحيح أي خطأ ناتج عن تأخر أو تغيّر في البيانات القادمة من مزود النتائج.',
-              },
-              {
-                title: '٤. التوقعات والإغلاق',
-                body: 'يمكن للمستخدم إدخال أو تعديل توقعه فقط قبل إغلاق المباراة. بعد الإغلاق لا يمكن تعديل التوقع، ويتم اعتماد آخر نسخة محفوظة قبل الإغلاق.',
-              },
-              {
-                title: '٥. الجوائز والترتيب',
-                body: 'الترتيب والجوائز يخضعان للنقاط المعتمدة داخل المنصة. وفي حال التساوي أو وجود ظروف استثنائية، تحتفظ الإدارة بحق تطبيق آلية عادلة للفصل أو توزيع الجوائز.',
-              },
-              {
-                title: '٦. الإحالات والبونص',
-                body: 'قد يحصل المستخدم على نقاط إضافية من استكمال الملف الشخصي أو دعوة الأصدقاء أو العروض الخاصة. ويحق للإدارة إلغاء أي نقاط ناتجة عن استخدام غير مشروع أو إحالات غير حقيقية.',
-              },
-              {
-                title: '٧. السلوك والاستخدام المقبول',
-                body: 'يُمنع استخدام المنصة بشكل مسيء أو يضر بالمنافسة أو بالمستخدمين الآخرين، ويحق للإدارة تعليق أو حذف أي حساب يثبت مخالفته للقواعد.',
-              },
-              {
-                title: '٨. التعديلات',
-                body: 'تحتفظ إدارة المنصة بحق تعديل هذه الشروط أو تحديثها في أي وقت، ويُعد استمرارك في استخدام المنصة موافقة على النسخة المحدثة.',
-              },
-            ].map((section, i) => (
-              <div
-                key={i}
-                style={{
-                  background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))',
-                  border: '1px solid var(--line)',
-                  borderRadius: 18,
-                  padding: '16px 16px 14px',
-                  marginBottom: 12,
-                }}
-              >
-                <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)', marginBottom: 8 }}>
-                  {section.title}
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
-                  {section.body}
-                </div>
-              </div>
-            ))}
+      {/* Section 1 */}
+      <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', border: '1px solid var(--line)', borderRadius: 18, padding: '16px 18px', marginBottom: 10 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)', marginBottom: 12 }}>١. إزاي بنحسب نقاطك في كل ماتش؟ ⚽</div>
+        {[
+          { pts: '+10', text: 'التوقع المظبوط للنتيجة بالكامل (مثلاً تتوقع 2-1 والماتش يخلص 2-1)', color: '#8ae0b3' },
+          { pts: '+5',  text: 'توقع الفائز أو التعادل صح (من غير النتيجة الرقمية بالظبط)', color: '#8ae0b3' },
+          { pts: '+3',  text: 'توقع اسم أول هدّاف في الماتش', color: '#7db1ff' },
+          { pts: '+1',  text: 'لو توقعك لأول هدّاف غلط بس اللاعب سجل عموماً في الماتش', color: '#7db1ff' },
+          { pts: '+3',  text: 'توقع إن الماتش يروح لوقت إضافي (بداية من دور الـ 32)', color: '#c084fc' },
+          { pts: '+3',  text: 'توقعك الصح إن هيكون فيه كارت أحمر في الماتش (أيوة/لأ)', color: '#f97316' },
+          { pts: '+3',  text: 'توقعك الصح إن هيكون فيه ضربة جزاء في الماتش (أيوة/لأ)', color: '#f97316' },
+        ].map((item, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+            <span style={{ fontWeight: 800, fontSize: 13, color: item.color, minWidth: 32, flexShrink: 0 }}>{item.pts}</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.7 }}>{item.text}</span>
+          </div>
+        ))}
+        <div style={{ marginTop: 12, background: 'rgba(255,80,80,.06)', border: '1px solid rgba(255,80,80,.15)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#ff9e9e', lineHeight: 1.8 }}>
+          ⚠️ لو توقعت غلط في حوار الكارت الأحمر أو ضربة الجزاء أو الوقت الإضافي، هتتخصم منك نقطة (-1). فركّز كويس في توقعاتك!
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)', lineHeight: 1.8, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+          📌 تقدر تعدّل توقعاتك براحتك طول ما الماتش لسه مبدأش، بس أول ما صفارة البداية تضرب، باب التوقعات هيتقفل ومش هتقدر تعدل توقعك تاني.
+        </div>
+      </div>
 
-            <div style={{ borderTop: '1px solid var(--line)', marginTop: 8, paddingTop: 14, fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
-              آخر تحديث: يونيو 2026
+      {/* Section 2 */}
+      <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', border: '1px solid var(--line)', borderRadius: 18, padding: '16px 18px', marginBottom: 10 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)', marginBottom: 12 }}>٢. كبّر رصيدك بنقاط المكافآت 🎁</div>
+        {[
+          { icon: '👤', text: 'كمّل بيانات ملفك الشخصي (اسمك، رقم تليفونك، واربط حساب الفيسبوك) وهتاخد', pts: '+5 نقاط', note: 'تأكد إن البيانات صحيحة عشان نتواصل معاك لو كنت من الفايزين.' },
+          { icon: '👥', text: 'اعزم أصحابك — شارك رابط الدعوة بتاعك وعلى كل صاحب يسجل من خلالك هتاخد', pts: '+5 نقاط', note: 'الحد الأقصى لدعوات الأصحاب هو 50 نقطة.' },
+          { icon: '🏆', text: 'أبطال "حلمك فيها" — لو شاركت قبل كده بأكتر من 10 أكواد، ليك نقاط هدية! لازم تكون مسجل بنفس بيانات مسابقة "حلمك فيها".' , pts: '', note: '' },
+        ].map((item, i) => (
+          <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+            <span style={{ fontSize: 18, flexShrink: 0, marginTop: 2 }}>{item.icon}</span>
+            <div>
+              <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>{item.text} </span>
+              {item.pts && <span style={{ fontWeight: 800, color: '#8ae0b3', fontSize: 13 }}>{item.pts}</span>}
+              {item.note && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, opacity: 0.7 }}>{item.note}</div>}
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* Section 3 */}
+      <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', border: '1px solid var(--line)', borderRadius: 18, padding: '16px 18px', marginBottom: 10 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)', marginBottom: 8 }}>٣. نافس أصحابك في "الميني ليج" 👥</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
+          التحدي مش بس على الترتيب العام — تقدر تعمل دوري خاص بيك (ميني ليج) وتبعت كود الدعوة (6 حروف) لأصحابك عشان تتنافسوا براحتكم وتشوفوا مين أحسن محلل في الشلة!
         </div>
-      )}
+      </div>
+
+      {/* Section 4 */}
+      <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', border: '1px solid var(--line)', borderRadius: 18, padding: '16px 18px', marginBottom: 10 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)', marginBottom: 12 }}>٤. الجوائز ومواعيدها 🥇</div>
+
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#fff1ce', marginBottom: 8 }}>🏆 جوائز المراحل — 5,000 جنيه لكل بطل مرحلة</div>
+        {[
+          'نهاية الجولة الأولى (المجموعات): 17 يونيو 2026',
+          'نهاية الجولة الثانية (المجموعات): 23 يونيو 2026',
+          'نهاية دور المجموعات: 27 يونيو 2026',
+          'نهاية دور الـ 32: 3 يوليو 2026',
+        ].map((item, i) => (
+          <div key={i} style={{ fontSize: 13, color: 'var(--muted)', padding: '5px 0', borderBottom: '1px solid var(--line)', lineHeight: 1.7 }}>🗓️ {item}</div>
+        ))}
+
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#fff1ce', marginTop: 14, marginBottom: 8 }}>🌟 الجوائز الكبرى التراكمية — سبائك الذهب!</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>
+          بعد الماتش النهائي يوم 19 يوليو 2026، أصحاب أعلى نقاط من بداية البطولة (نقاط التوقعات + نقاط المكافآت) هيكسبوا:
+        </div>
+        {[
+          { rank: '🥇 المركز الأول', reward: '3 سبائك ذهب' },
+          { rank: '🥈 المركز الثاني', reward: '2 سبيكة ذهب' },
+          { rank: '🥉 المركز الثالث', reward: '1 سبيكة ذهب' },
+        ].map((item, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(217,178,95,.06)', border: '1px solid rgba(217,178,95,.15)', borderRadius: 12, marginBottom: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--gold)' }}>{item.rank}</span>
+            <span style={{ fontWeight: 800, fontSize: 13, color: '#fff1ce' }}>{item.reward}</span>
+          </div>
+        ))}
+
+        <div style={{ marginTop: 12, background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.15)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#93c5fd', lineHeight: 1.8 }}>
+          🔵 في حالة التعادل: يُقدَّم من لديه نقاط مكافآت وبونص أكثر، ثم من لديه نقاط بونص من حملة "حلمك فيها" أكثر.
+        </div>
+      </div>
+
+      {/* Section 5 */}
+      <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', border: '1px solid var(--line)', borderRadius: 18, padding: '16px 18px', marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)', marginBottom: 12 }}>٥. مين يقدر يشارك؟</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.8 }}>أي حد يقدر يشارك بدون أي شروط معقدة. بس عشان تستلم الجايزة لو كسبت، لازم:</div>
+        {[
+          'تكون موجود جوه جمهورية مصر العربية.',
+          'ماتكونش من فريق عمل شركة الشمعدان أو شركائها، ولا قريب ليهم من الدرجة الأولى.',
+          'ماتكونش من فريق عمل شركة KOR Platforms أو شركائها ولا قريب ليهم من الدرجة الأولى.',
+          'تكون حققت شروط الفوز سواء في مراحل البطولة أو في نهايتها.',
+        ].map((item, i) => (
+          <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+            <span style={{ color: 'var(--gold)', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>{i + 1}.</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>{item}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, fontSize: 12, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.9 }}>
+        بنتمنى لكم وقت ممتع مع مسابقات الشمعدان وبطولة كأس العالم 2026 🇪🇬<br />
+        <span style={{ color: 'var(--gold)', fontWeight: 700 }}>فريق الشمعدان و KOR Platforms</span> — 11 يونيو 2026
+      </div>
+    </div>
+  </div>
+)}
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 16 }}>
           {[
