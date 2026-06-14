@@ -329,6 +329,9 @@ export default function Dashboard() {
   const [profileMsg, setProfileMsg]         = useState('');
   const [referralCode, setReferralCode]     = useState('');
   const [referralCount, setReferralCount]   = useState(0);
+  const [referralPoints, setReferralPoints]   = useState(0);
+const [bonusPoints, setBonusPoints]         = useState(0);
+const [profileCompleted, setProfileCompleted] = useState(false);
   const [myTotalPoints, setMyTotalPoints]   = useState(0);
   const [showReferral, setShowReferral]     = useState(false);
   const [referralCopied, setReferralCopied] = useState(false);
@@ -581,15 +584,21 @@ const userNameMap: Record<string, string> = {};
 
       setPredictions(normalizedUserPreds);
 
-      if (myPointsRow) {
-        setReferralCode(finalReferralCode);
-        setReferralCount(myPointsRow.referral_count || 0);
-        setMyTotalPoints(myPointsRow.total_points || 0);
-      } else {
-        const myRow = (userPointsData || []).find((r: any) => r.user_id === userId);
-        setReferralCode(finalReferralCode);
-        setReferralCount(myRow?.referral_count || 0);
-        setMyTotalPoints(myRow?.total_points || 0);
+     if (myPointsRow) {
+  setReferralCode(finalReferralCode);
+  setReferralCount(myPointsRow.referral_count || 0);
+  setMyTotalPoints(myPointsRow.total_points || 0);
+  setReferralPoints(myPointsRow.referral_points || 0);
+  setBonusPoints(myPointsRow.bonus_points || 0);
+  setProfileCompleted(myPointsRow.profile_completed || false);
+} else {
+  const myRow = (userPointsData || []).find((r: any) => r.user_id === userId);
+  setReferralCode(finalReferralCode);
+  setReferralCount(myRow?.referral_count || 0);
+  setMyTotalPoints(myRow?.total_points || 0);
+  setReferralPoints(myRow?.referral_points || 0);
+  setBonusPoints(myRow?.bonus_points || 0);
+  setProfileCompleted(myRow?.profile_completed || false);
       }
 
      setSocialFeed((feedData || []).map((item: any) => {
@@ -1719,6 +1728,26 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>#{myRank}</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>من {totalParticipants || leaderboard.length} متسابق</div>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{animatedPoints} نقطة</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 8 }}>
+  {(() => {
+    const predPoints = myPoints - referralPoints - bonusPoints - (profileCompleted ? 5 : 0);
+    const chips = [
+      { label: '⚽ توقعات', value: predPoints, color: 'rgba(138,224,179,.15)', border: 'rgba(138,224,179,.25)', text: '#8ae0b3' },
+      ...(referralPoints > 0 ? [{ label: '👥 دعوات', value: referralPoints, color: 'rgba(125,177,255,.15)', border: 'rgba(125,177,255,.25)', text: '#7db1ff' }] : []),
+      ...(bonusPoints > 0 ? [{ label: '🎁 بونص', value: bonusPoints, color: 'rgba(192,132,252,.15)', border: 'rgba(192,132,252,.25)', text: '#c084fc' }] : []),
+      ...(profileCompleted ? [{ label: '👤 بروفايل', value: 5, color: 'rgba(249,115,22,.15)', border: 'rgba(249,115,22,.25)', text: '#fb923c' }] : []),
+    ];
+    return chips.map((chip, i) => (
+      <div key={i} style={{
+        fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999,
+        background: chip.color, border: `1px solid ${chip.border}`, color: chip.text,
+        fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+      }}>
+        {chip.label}: {chip.value}
+      </div>
+    ));
+  })()}
+</div>
               </div>
               <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px', textAlign: 'center', border: '1px solid rgba(59,130,246,.2)' }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>
