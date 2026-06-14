@@ -141,18 +141,20 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
   const predHome = pred.predicted_home_score;
   const predAway = pred.predicted_away_score;
 
+  const actualWinner =
+    actualHome > actualAway ? 'home' :
+    actualAway > actualHome ? 'away' : 'draw';
+
+  const predWinner =
+    predHome > predAway ? 'home' :
+    predAway > predHome ? 'away' : 'draw';
+
+  if (actualWinner === predWinner) {
+    points += 5;
+  }
+
   if (predHome === actualHome && predAway === actualAway) {
     points += 5;
-  } else {
-    const actualWinner =
-      actualHome > actualAway ? 'home' :
-      actualAway > actualHome ? 'away' : 'draw';
-
-    const predWinner =
-      predHome > predAway ? 'home' :
-      predAway > predHome ? 'away' : 'draw';
-
-    if (actualWinner === predWinner) points += 5;
   }
 
   const actualFirstScorer = fixture.first_scorer
