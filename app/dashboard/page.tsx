@@ -2296,12 +2296,11 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
 اكسب 3 نقاط اضافية لكل توقع صحيح هنا 👇</span>
                             </div>
                             <div style={{ fontSize: 12, color: '#fdba74', background: 'rgba(251,146,60,.08)', border: '1px solid rgba(251,146,60,.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 12 }}>
-                              ⚠️ خد بالك، اختياراتك الغلط هنا هتخسرك نقاط لأن كل توقع غلط بـ -1 😉
+                              ⚠️ خد بالك، لو توقعت كارت أحمر أو ضربة جزاء بشكل غلط هتتخصم منك نقطة (-1) 😉
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                               {[
-                                ...(!match.league?.round?.startsWith('Group Stage') ? [{ key: 'extraTime', label: '⏱️ وقت إضافي؟' }] : []),
-                                { key: 'predicted_red_card', label: '🟥 بطاقة حمراء؟' },
+                                                                { key: 'predicted_red_card', label: '🟥 بطاقة حمراء؟' },
                                 { key: 'predicted_penalty',  label: '⚽ ركلة جزاء؟' },
                               ].map(({ key, label }) => (
                                 <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', borderRadius: 12, background: form[key] ? 'rgba(217,178,95,.08)' : 'var(--surface-3)', border: `1px solid ${form[key] ? 'rgba(217,178,95,.25)' : 'var(--line)'}`, transition: 'all .2s' }}>
