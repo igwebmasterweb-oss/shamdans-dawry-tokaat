@@ -466,7 +466,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
           'api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,red_card_in_match,penalty_in_match,both_teams_scored,home_team_name,away_team_name'
         ),
         supabase.from('predictions').select('*').eq('user_id', userId),
-        supabase.from('user_points').select('referral_count,total_points').eq('user_id', userId).maybeSingle(),
+        supabase.from('user_points').select('referral_count,total_points,referral_points,bonus_points,profile_completed').eq('user_id', userId).maybeSingle(),
         supabase.from('social_feed').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('historical_rankings').select('*').order('week_start', { ascending: false }).order('total_points', { ascending: false }),
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
