@@ -1412,60 +1412,34 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                               </div>
                             )}
 
-                            <div
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-                                gap: 10,
-                                marginBottom: 12,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  padding: '10px 12px',
-                                  borderRadius: 12,
-                                  background: 'var(--surface-3)',
-                                  border: '1px solid var(--line)',
-                                }}
-                              >
-                                <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>توقعه</div>
-                                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>
+                            {/* N5: 50/50 grid - توقعه | الفعلي */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                              {/* Left: توقعه */}
+                              <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
+                                <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعه</div>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
                                   {pred.predicted_home_score} — {pred.predicted_away_score}
                                 </div>
+                                {pred.predicted_first_scorer && (
+                                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {pred.predicted_first_scorer}</div>
+                                )}
                               </div>
-
-                              <div
-                                style={{
-                                  padding: '10px 12px',
-                                  borderRadius: 12,
-                                  background: 'var(--surface-3)',
-                                  border: '1px solid var(--line)',
-                                }}
-                              >
-                                <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>الهداف المتوقع</div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-                                  {pred.predicted_first_scorer || '—'}
-                                </div>
+                              {/* Right: الفعلي */}
+                              <div style={{ padding: '10px 12px', borderRadius: 12, background: hasResult ? 'rgba(39,176,110,.07)' : 'var(--surface-3)', border: hasResult ? '1px solid rgba(39,176,110,.2)' : '1px solid var(--line)' }}>
+                                <div style={{ color: hasResult ? '#94f0c0' : 'var(--muted)', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>الفعلي</div>
+                                {hasResult ? (
+                                  <>
+                                    <div style={{ fontSize: 18, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
+                                      {pred.actual_home_score} — {pred.actual_away_score}
+                                    </div>
+                                    {pred.first_scorer_actual && (
+                                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {pred.first_scorer_actual}</div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
+                                )}
                               </div>
-
-                              {hasResult && (
-                                <div
-                                  style={{
-                                    padding: '10px 12px',
-                                    borderRadius: 12,
-                                    background: 'var(--surface-3)',
-                                    border: '1px solid var(--line)',
-                                  }}
-                                >
-                                  <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>النتيجة الفعلية</div>
-                                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>
-                                    {pred.actual_home_score} — {pred.actual_away_score}
-                                  </div>
-                                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--muted)' }}>
-                                    ⚽ أول هدف: {pred.first_scorer_actual || '—'}
-                                  </div>
-                                </div>
-                              )}
                             </div>
 
                             {hasResult && (
@@ -1571,25 +1545,34 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                             </div>
                           </div>
 
+                          {/* N8: negative/zero/positive points in modal */}
                           <div
                             style={{
                               padding: '10px 14px',
                               borderRadius: 14,
                               background: !hasResult
                                 ? 'var(--surface-3)'
+                                : (pred.points || 0) < 0
+                                ? 'rgba(201,58,47,.13)'
+                                : (pred.points || 0) === 0
+                                ? 'var(--surface-3)'
                                 : (pred.points || 0) >= 10
                                 ? 'rgba(217,178,95,.12)'
-                                : (pred.points || 0) >= 5
-                                ? 'rgba(39,176,110,.12)'
-                                : 'var(--surface-3)',
-                              border: '1px solid var(--line)',
+                                : 'rgba(39,176,110,.12)',
+                              border: !hasResult
+                                ? '1px solid var(--line)'
+                                : (pred.points || 0) < 0
+                                ? '1px solid rgba(201,58,47,.3)'
+                                : '1px solid var(--line)',
                               color: !hasResult
+                                ? 'var(--muted)'
+                                : (pred.points || 0) < 0
+                                ? '#ffb4b4'
+                                : (pred.points || 0) === 0
                                 ? 'var(--muted)'
                                 : (pred.points || 0) >= 10
                                 ? '#ffe3a6'
-                                : (pred.points || 0) >= 5
-                                ? '#94f0c0'
-                                : 'var(--muted)',
+                                : '#94f0c0',
                               textAlign: 'center',
                               minWidth: 88,
                               display: 'flex',
@@ -1599,7 +1582,11 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                             }}
                           >
                             <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-                              {hasResult ? (pred.points || 0) : '⏳'}
+                              {hasResult
+                                ? (pred.points || 0) < 0
+                                  ? <>⚠ {pred.points}</>
+                                  : (pred.points || 0)
+                                : '⏳'}
                             </div>
                             <div style={{ fontSize: 11, marginTop: 4, color: hasResult ? 'inherit' : 'var(--muted)' }}>
                               {hasResult ? 'نقطة' : 'بانتظار'}
@@ -1908,6 +1895,11 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                       <div style={{ fontSize: 32, fontWeight: 800, color: '#93c5fd', fontVariantNumeric: 'tabular-nums' }}>{myRoundPts}</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>نقطة في هذه الجولة</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>من {roundFixtureIds.length} مباراة</div>
+                      {myRank > 0 && (
+                        <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
+                          🏅 ترتيبك الكلي #{myRank}
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div style={{ fontSize: 24, color: 'var(--muted)', marginTop: 16 }}>—</div>
@@ -2058,8 +2050,13 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                         : <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--surface-2)', display: 'grid', placeItems: 'center', fontSize: 20 }}>⚽</div>}
                       <span style={{ fontWeight: 800, fontSize: 15 }}>{match.teams.home.name}</span>
                     </div>
-                    <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--gold)', padding: '0 16px', textAlign: 'center', minWidth: 80 }}>
-                      {hasResult ? `${match.actual_home_score} — ${match.actual_away_score}` : 'VS'}
+                    <div style={{ padding: '0 16px', textAlign: 'center', minWidth: 80 }}>
+                      {hasResult && (
+                        <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--gold)', opacity: 0.7, letterSpacing: '0.05em', marginBottom: 2, textTransform: 'uppercase' }}>النتيجة الفعلية</div>
+                      )}
+                      <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--gold)' }}>
+                        {hasResult ? `${match.actual_home_score} — ${match.actual_away_score}` : 'VS'}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, justifyContent: 'flex-end' }}>
                       <span style={{ fontWeight: 800, fontSize: 15 }}>{match.teams.away.name}</span>
@@ -2089,15 +2086,45 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
 
                   {!isCollapsed && (
                     <>
-                      {hasResult && (
-                        <div className="pred-box" style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, marginBottom: 6 }}>النتيجة الفعلية</div>
-                          {match.first_scorer && <div style={{ fontSize: 13, color: 'var(--muted)' }}>⚽ أول هدف: {match.first_scorer}</div>}
-                          {existing && (
-                            <div style={{ marginTop: 8, fontSize: 15, fontWeight: 800, color: (existing.points || 0) >= 10 ? '#ffe3a6' : (existing.points || 0) >= 5 ? '#94f0c0' : 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
-                              نقاطك: <strong>{existing.points || 0}</strong> نقطة
+                      {/* N7: 50/50 grid replacing gold box */}
+                      {existing && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                          {/* توقعي */}
+                          <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
+                            <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعي</div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                              {existing.predicted_home_score} — {existing.predicted_away_score}
                             </div>
-                          )}
+                            {existing.predicted_first_scorer && (
+                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {existing.predicted_first_scorer}</div>
+                            )}
+                          </div>
+                          {/* الفعلي */}
+                          <div style={{ padding: '10px 12px', borderRadius: 12, background: hasResult ? 'rgba(39,176,110,.07)' : 'var(--surface-3)', border: hasResult ? '1px solid rgba(39,176,110,.2)' : '1px solid var(--line)' }}>
+                            <div style={{ color: hasResult ? '#94f0c0' : 'var(--muted)', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>الفعلي</div>
+                            {hasResult ? (
+                              <>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
+                                  {match.actual_home_score} — {match.actual_away_score}
+                                </div>
+                                {match.first_scorer && (
+                                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {match.first_scorer}</div>
+                                )}
+                              </>
+                            ) : (
+                              <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {existing && hasResult && (
+                        <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 10,
+                          background: (existing.points || 0) < 0 ? 'rgba(201,58,47,.1)' : (existing.points || 0) >= 10 ? 'rgba(217,178,95,.08)' : 'rgba(39,176,110,.08)',
+                          border: (existing.points || 0) < 0 ? '1px solid rgba(201,58,47,.2)' : '1px solid var(--line)',
+                          fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                          color: (existing.points || 0) < 0 ? '#ffb4b4' : (existing.points || 0) >= 10 ? '#ffe3a6' : '#94f0c0'
+                        }}>
+                          {(existing.points || 0) < 0 ? <>⚠ نقاطك: {existing.points} نقطة</> : <>نقاطك: <strong>{existing.points || 0}</strong> نقطة</>}
                         </div>
                       )}
 
@@ -2201,7 +2228,9 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 {pointsBreakdown.map((p: any, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < pointsBreakdown.length - 1 ? '1px solid var(--line)' : 'none' }}>
                     <span style={{ fontSize: 14, fontWeight: 700 }}>{p.home_team} × {p.away_team}</span>
-                    <span style={{ fontWeight: 800, color: (p.points || 0) >= 10 ? 'var(--gold)' : '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>+{p.points} نقطة</span>
+                    <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                      color: (p.points || 0) < 0 ? '#ffb4b4' : (p.points || 0) === 0 ? 'var(--muted)' : (p.points || 0) >= 10 ? 'var(--gold)' : '#94f0c0'
+                    }}>{(p.points || 0) < 0 ? <>⚠ {p.points} نقطة</> : <>+{p.points} نقطة</>}</span>
                   </div>
                 ))}
               </div>
@@ -2297,8 +2326,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           marginBottom: 8,
         }}
       >
-        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>
-          {p.home_team} × {p.away_team}
+        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {matchInfo?.teams?.home?.logo && <img src={matchInfo.teams.home.logo} alt="" width={18} height={18} style={{ objectFit: 'contain', borderRadius: 3 }} />}
+          {p.home_team}
+          <span style={{ color: 'var(--muted)', fontWeight: 400, margin: '0 2px' }}>×</span>
+          {p.away_team}
+          {matchInfo?.teams?.away?.logo && <img src={matchInfo.teams.away.logo} alt="" width={18} height={18} style={{ objectFit: 'contain', borderRadius: 3 }} />}
         </div>
 
         <div
@@ -2323,57 +2356,42 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
         </div>
       )}
 
+      {/* N4: 50/50 grid - توقعي | الفعلي */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+          gridTemplateColumns: '1fr 1fr',
           gap: 10,
           marginBottom: 12,
         }}
       >
-        <div
-          style={{
-            padding: '10px 12px',
-            borderRadius: 12,
-            background: 'var(--surface-3)',
-            border: '1px solid var(--line)',
-          }}
-        >
-          <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>توقعك</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>
+        {/* Left: توقعي */}
+        <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
+          <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعي</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
             {p.predicted_home_score} — {p.predicted_away_score}
           </div>
+          {p.predicted_first_scorer && (
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {p.predicted_first_scorer}</div>
+          )}
         </div>
 
-        <div
-          style={{
-            padding: '10px 12px',
-            borderRadius: 12,
-            background: 'var(--surface-3)',
-            border: '1px solid var(--line)',
-          }}
-        >
-          <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>الهداف</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
-            {p.predicted_first_scorer || '—'}
-          </div>
+        {/* Right: الفعلي */}
+        <div style={{ padding: '10px 12px', borderRadius: 12, background: hasResult ? 'rgba(39,176,110,.07)' : 'var(--surface-3)', border: hasResult ? '1px solid rgba(39,176,110,.2)' : '1px solid var(--line)' }}>
+          <div style={{ color: hasResult ? '#94f0c0' : 'var(--muted)', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>الفعلي</div>
+          {hasResult ? (
+            <>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
+                {p.actual_home_score} — {p.actual_away_score}
+              </div>
+              {(matchInfo?.first_scorer || p.first_scorer_actual) && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {matchInfo?.first_scorer || p.first_scorer_actual}</div>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
+          )}
         </div>
-
-        {hasResult && (
-          <div
-            style={{
-              padding: '10px 12px',
-              borderRadius: 12,
-              background: 'var(--surface-3)',
-              border: '1px solid var(--line)',
-            }}
-          >
-            <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 6 }}>النتيجة الفعلية</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)' }}>
-              {p.actual_home_score} — {p.actual_away_score}
-            </div>
-          </div>
-        )}
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -2428,25 +2446,34 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
       </div>
     </div>
 
+    {/* N8: Points box with negative/zero/positive visual treatment */}
     <div
       style={{
         padding: '10px 14px',
         borderRadius: 14,
         background: !hasResult
           ? 'var(--surface-3)'
+          : (p.points || 0) < 0
+          ? 'rgba(201,58,47,.13)'
+          : (p.points || 0) === 0
+          ? 'var(--surface-3)'
           : (p.points || 0) >= 10
           ? 'rgba(217,178,95,.12)'
-          : (p.points || 0) >= 5
-          ? 'rgba(39,176,110,.12)'
-          : 'var(--surface-3)',
-        border: '1px solid var(--line)',
+          : 'rgba(39,176,110,.12)',
+        border: !hasResult
+          ? '1px solid var(--line)'
+          : (p.points || 0) < 0
+          ? '1px solid rgba(201,58,47,.3)'
+          : '1px solid var(--line)',
         color: !hasResult
+          ? 'var(--muted)'
+          : (p.points || 0) < 0
+          ? '#ffb4b4'
+          : (p.points || 0) === 0
           ? 'var(--muted)'
           : (p.points || 0) >= 10
           ? '#ffe3a6'
-          : (p.points || 0) >= 5
-          ? '#94f0c0'
-          : 'var(--muted)',
+          : '#94f0c0',
         textAlign: 'center',
         minWidth: 74,
         display: 'flex',
@@ -2456,7 +2483,11 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
       }}
     >
       <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-        {hasResult ? (p.points || 0) : '⏳'}
+        {hasResult
+          ? (p.points || 0) < 0
+            ? <>⚠ {p.points}</>
+            : (p.points || 0)
+          : '⏳'}
       </div>
       <div style={{ fontSize: 11, marginTop: 4, color: hasResult ? 'inherit' : 'var(--muted)' }}>
         {hasResult ? 'نقطة' : 'بانتظار'}
