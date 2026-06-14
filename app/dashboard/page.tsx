@@ -315,6 +315,8 @@ export default function Dashboard() {
   const [loadError, setLoadError]           = useState(false);
   const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'feed' | 'history'>('predict');
   const [activeRound, setActiveRound]       = useState('');
+  const [roundLeaderboard, setRoundLeaderboard] = useState<Record<string, number>>({});
+  const [roundLeaderLoading, setRoundLeaderLoading] = useState(false);
   const [predForms, setPredForms]           = useState<Record<number, any>>({});
   const [submitting, setSubmitting]         = useState<number | null>(null);
   const [messages, setMessages]             = useState<Record<number, string>>({});
@@ -536,6 +538,7 @@ const userNameMap: Record<string, string> = {};
           actual_home_score: sb?.actual_home_score ?? null,
           actual_away_score: sb?.actual_away_score ?? null,
           first_scorer:      sb?.first_scorer      ?? '',
+          scorers_json:      sb?.scorers_json      ?? null,
           went_extra_time:   sb?.went_extra_time   ?? false,
           red_card_in_match: sb?.red_card_in_match ?? false,
           penalty_in_match:  sb?.penalty_in_match  ?? false,
@@ -659,7 +662,7 @@ const userNameMap: Record<string, string> = {};
       })));
 
       const breakdown = normalizedUserPreds
-        .filter((p: any) => p.points !== null && p.points > 0)
+        .filter((p: any) => p.points !== null && p.points !== 0)
         .sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
         .slice(0, 10);
       setPointsBreakdown(breakdown);
@@ -667,6 +670,49 @@ const userNameMap: Record<string, string> = {};
     } catch (err) { console.error(err); setLoadError(true); }
     setLoading(false);
   };
+
+useEffect(() => {
+  if (!activeRound || !matches.length) return;
+
+  const roundFixtureIds = matches
+    .filter((m: any) => m.league?.round === activeRound)
+    .map((m: any) => m.fixture.id);
+
+  if (!roundFixtureIds.length) {
+    setRoundLeaderboard({});
+    return;
+  }
+
+  let cancelled = false;
+  setRoundLeaderLoading(true);
+
+  supabase
+    .from('predictions')
+    .select('user_id, fixture_id, points')
+    .in('fixture_id', roundFixtureIds)
+    .then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        console.error('round leaderboard load error', error);
+        setRoundLeaderboard({});
+        setRoundLeaderLoading(false);
+        return;
+      }
+
+      const map: Record<string, number> = {};
+      (data || []).forEach((row: any) => {
+        if (!row?.user_id) return;
+        if (!map[row.user_id]) map[row.user_id] = 0;
+        map[row.user_id] += row.points || 0;
+      });
+      setRoundLeaderboard(map);
+      setRoundLeaderLoading(false);
+    });
+
+  return () => {
+    cancelled = true;
+  };
+}, [activeRound, matches]);
 
 const quickJoinLeague = async () => {
   if (!user || !leagueCode.trim()) return;
@@ -1432,9 +1478,26 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                                     <div style={{ fontSize: 18, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
                                       {pred.actual_home_score} — {pred.actual_away_score}
                                     </div>
-                                    {pred.first_scorer_actual && (
-                                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {pred.first_scorer_actual}</div>
-                                    )}
+                                    {(() => {
+                                      const matchInfo = matches.find((m: any) => m.fixture.id === (pred.fixture_id || pred.api_fixture_id));
+                                      const scorers: string[] = [];
+                                      if (pred.first_scorer_actual) scorers.push(pred.first_scorer_actual);
+                                      try {
+                                        const json = matchInfo?.scorers_json;
+                                        if (json) {
+                                          const parsed = typeof json === 'string' ? JSON.parse(json) : json;
+                                          (parsed || []).forEach((s: any) => {
+                                            const name = s?.player?.name || s?.name || s?.player_name;
+                                            if (name && !scorers.includes(name)) scorers.push(name);
+                                          });
+                                        }
+                                      } catch {}
+                                      return scorers.length > 0 ? (
+                                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}>
+                                          {scorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
+                                        </div>
+                                      ) : null;
+                                    })()}
                                   </>
                                 ) : (
                                   <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
@@ -1895,11 +1958,20 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                       <div style={{ fontSize: 32, fontWeight: 800, color: '#93c5fd', fontVariantNumeric: 'tabular-nums' }}>{myRoundPts}</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>نقطة في هذه الجولة</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>من {roundFixtureIds.length} مباراة</div>
-                      {myRank > 0 && (
-                        <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
-                          🏅 ترتيبك الكلي #{myRank}
-                        </div>
-                      )}
+                      {(() => {
+                        if (roundLeaderLoading) {
+                          return <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>⏳ جاري حساب ترتيب الجولة</div>;
+                        }
+                        if (!user?.id || !Object.keys(roundLeaderboard).length) return null;
+                        const sortedRound = Object.entries(roundLeaderboard).sort(([, a], [, b]) => Number(b) - Number(a));
+                        const roundRankIdx = sortedRound.findIndex(([uid]) => uid === user.id);
+                        const myRoundRank = roundRankIdx >= 0 ? roundRankIdx + 1 : null;
+                        return myRoundRank ? (
+                          <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
+                            🏅 ترتيبك في الجولة #{myRoundRank}
+                          </div>
+                        ) : null;
+                      })()}
                     </>
                   ) : (
                     <div style={{ fontSize: 24, color: 'var(--muted)', marginTop: 16 }}>—</div>
@@ -2107,9 +2179,25 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                                 <div style={{ fontSize: 18, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
                                   {match.actual_home_score} — {match.actual_away_score}
                                 </div>
-                                {match.first_scorer && (
-                                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {match.first_scorer}</div>
-                                )}
+                                {(() => {
+                                  const scorers: string[] = [];
+                                  if (match.first_scorer) scorers.push(match.first_scorer);
+                                  try {
+                                    const json = match.scorers_json;
+                                    if (json) {
+                                      const parsed = typeof json === 'string' ? JSON.parse(json) : json;
+                                      (parsed || []).forEach((s: any) => {
+                                        const name = s?.player?.name || s?.name || s?.player_name;
+                                        if (name && !scorers.includes(name)) scorers.push(name);
+                                      });
+                                    }
+                                  } catch {}
+                                  return scorers.length > 0 ? (
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}>
+                                      {scorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
+                                    </div>
+                                  ) : null;
+                                })()}
                               </>
                             ) : (
                               <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
@@ -2384,9 +2472,26 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
               <div style={{ fontSize: 18, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
                 {p.actual_home_score} — {p.actual_away_score}
               </div>
-              {(matchInfo?.first_scorer || p.first_scorer_actual) && (
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {matchInfo?.first_scorer || p.first_scorer_actual}</div>
-              )}
+              {(() => {
+                const scorers: string[] = [];
+                const first = matchInfo?.first_scorer || p.first_scorer_actual;
+                if (first) scorers.push(first);
+                try {
+                  const json = matchInfo?.scorers_json;
+                  if (json) {
+                    const parsed = typeof json === 'string' ? JSON.parse(json) : json;
+                    (parsed || []).forEach((s: any) => {
+                      const name = s?.player?.name || s?.name || s?.player_name;
+                      if (name && !scorers.includes(name)) scorers.push(name);
+                    });
+                  }
+                } catch {}
+                return scorers.length > 0 ? (
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}>
+                    {scorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
+                  </div>
+                ) : null;
+              })()}
             </>
           ) : (
             <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
