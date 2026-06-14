@@ -1083,7 +1083,10 @@ setSelectedLeaderPredictions(normalizedPreds);
   const resolvedPreds  = predictions.filter((p: any) => p.actual_home_score !== null);
   const correctPreds   = resolvedPreds.filter((p: any) => p.points && p.points > 0);
   const accuracyPct    = resolvedPreds.length > 0
-    ? Math.round((correctPreds.length / resolvedPreds.length) * 100) : 0;
+  ? Math.round((correctPreds.length / resolvedPreds.length) * 100) : 0;
+const maxPossible    = resolvedPreds.length * 19;
+const efficiencyPct  = maxPossible > 0
+  ? Math.round((myPoints / maxPossible) * 100) : 0;
 
   const roundsWithPred = new Set(
     predictions.map((p: any) => {
@@ -1689,7 +1692,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           {[
             { label: 'توقعاتي',    value: predictions.length,                                        color: '#8ae0b3', icon: '⚽' },
             { label: 'المتسابقون', value: totalParticipants, color: '#7db1ff', icon: '👥' },
-            { label: 'دقة التوقع', value: resolvedPreds.length > 0 ? `${accuracyPct}%` : '—',        color: '#c084fc', icon: '🎯' },
+           { label: 'دقة التوقع', value: maxPossible > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: maxPossible > 0 ? `${myPoints} من ${maxPossible}` : '' },
             { label: 'الجولات',    value: streakCount > 0 ? `${streakCount} 🔥` : '—',               color: '#f97316', icon: '📅' },
           ].map((s: any) => (
            
@@ -1697,11 +1700,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
   <div style={{ fontSize: 16, marginBottom: 2 }}>{s.icon}</div>
   <div style={{ fontSize: 18, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{s.label}</div>
-  {s.label === 'دقة التوقع' && resolvedPreds.length > 0 && (
-    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-      {correctPreds.length} من {resolvedPreds.length}
-    </div>
-  )}
+  
+{s.sub && (
+  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+    {s.sub}
+  </div>
+)}
 </div>
           ))}
         </div>
