@@ -279,111 +279,110 @@ export async function GET(request: NextRequest) {
     const fixtureIds = fixtures.map((f) => f.api_fixture_id);
 
     let totalUpdated = 0;
-    const affectedUsers = new Set<string>();
-    let totalPasses = 0;
+const affectedUsers = new Set<string>();
+let totalPasses = 0;
+let lastId = 0;
 
-    for (let pass = 1; pass <= MAX_PASSES; pass++) {
-      totalPasses = pass;
+while (true) {
+  totalPasses++;
 
-      let predsQuery = supabaseAdmin
-        .from('predictions')
-        .select(
-          'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
-        )
-        .in('fixture_id', fixtureIds)
-        .or('points.is.null,points.eq.0')
-        .limit(PROCESS_BATCH_SIZE);
+  const { data: predsRaw, error: predError } = await supabaseAdmin
+    .from('predictions')
+    .select(
+      'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
+    )
+    .in('fixture_id', fixtureIds)
+    .or('points.is.null,points.eq.0')
+    .gt('id', lastId)
+    .order('id', { ascending: true })
+    .limit(PROCESS_BATCH_SIZE);
 
-      const { data: predsRaw, error: predError } = await predsQuery;
-      if (predError) throw predError;
+  if (predError) throw predError;
 
-      const preds = (predsRaw || []) as PredictionRow[];
+  const preds = (predsRaw || []) as PredictionRow[];
 
-      if (preds.length === 0) {
-        break;
-      }
+  if (preds.length === 0) break;
 
-      const predictionUpdates: {
-        id: number;
-        points: number;
-        actual_home_score: number;
-        actual_away_score: number;
-      }[] = [];
+  const predictionUpdates: {
+    id: number;
+    points: number;
+    actual_home_score: number;
+    actual_away_score: number;
+  }[] = [];
 
-      const socialFeedInserts: {
-        user_id: string;
-        type: string;
+  const socialFeedInserts: {
+    user_id: string;
+    type: string;
+    data: {
+      points: number;
+      fixture_id: number;
+      home_team: string;
+      away_team: string;
+    };
+  }[] = [];
+
+  for (const pred of preds) {
+    const fixture = fixtureMap.get(pred.fixture_id);
+    if (!fixture) continue;
+
+    const calc = calculatePredictionPoints(pred, fixture);
+
+    predictionUpdates.push({
+      id: pred.id,
+      points: calc.points,
+      actual_home_score: calc.actual_home_score,
+      actual_away_score: calc.actual_away_score,
+    });
+
+    affectedUsers.add(pred.user_id);
+
+    if (calc.points > 0) {
+      socialFeedInserts.push({
+        user_id: pred.user_id,
+        type: 'points_earned',
         data: {
-          points: number;
-          fixture_id: number;
-          home_team: string;
-          away_team: string;
-        };
-      }[] = [];
-
-      for (const pred of preds) {
-        const fixture = fixtureMap.get(pred.fixture_id);
-        if (!fixture) continue;
-
-        const calc = calculatePredictionPoints(pred, fixture);
-
-        predictionUpdates.push({
-          id: pred.id,
           points: calc.points,
-          actual_home_score: calc.actual_home_score,
-          actual_away_score: calc.actual_away_score,
-        });
-
-        if (calc.points > 0) {
-          socialFeedInserts.push({
-            user_id: pred.user_id,
-            type: 'points_earned',
-            data: {
-              points: calc.points,
-              fixture_id: pred.fixture_id,
-              home_team: pred.home_team,
-              away_team: pred.away_team,
-            },
-          });
-        }
-
-        affectedUsers.add(pred.user_id);
-      }
-
-      for (const chunk of chunkArray(predictionUpdates, UPDATE_CHUNK_SIZE)) {
-        const results = await Promise.all(
-          chunk.map((update) =>
-            supabaseAdmin
-              .from('predictions')
-              .update({
-                points: update.points,
-                actual_home_score: update.actual_home_score,
-                actual_away_score: update.actual_away_score,
-              })
-              .eq('id', update.id)
-          )
-        );
-
-        const failed = results.find((r) => r.error);
-        if (failed?.error) throw failed.error;
-      }
-
-      for (const chunk of chunkArray(socialFeedInserts, FEED_CHUNK_SIZE)) {
-        if (chunk.length === 0) continue;
-
-        const { error: feedError } = await supabaseAdmin
-          .from('social_feed')
-          .insert(chunk);
-
-        if (feedError) throw feedError;
-      }
-
-      totalUpdated += predictionUpdates.length;
-
-      if (preds.length < PROCESS_BATCH_SIZE) {
-        break;
-      }
+          fixture_id: pred.fixture_id,
+          home_team: pred.home_team,
+          away_team: pred.away_team,
+        },
+      });
     }
+  }
+
+  for (const chunk of chunkArray(predictionUpdates, UPDATE_CHUNK_SIZE)) {
+    const results = await Promise.all(
+      chunk.map((update) =>
+        supabaseAdmin
+          .from('predictions')
+          .update({
+            points: update.points,
+            actual_home_score: update.actual_home_score,
+            actual_away_score: update.actual_away_score,
+          })
+          .eq('id', update.id)
+      )
+    );
+
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw failed.error;
+  }
+
+  for (const chunk of chunkArray(socialFeedInserts, FEED_CHUNK_SIZE)) {
+    if (chunk.length === 0) continue;
+
+    const { error: feedError } = await supabaseAdmin
+      .from('social_feed')
+      .insert(chunk);
+
+    if (feedError) throw feedError;
+  }
+
+  totalUpdated += predictionUpdates.length;
+  lastId = preds[preds.length - 1].id;
+
+  if (preds.length < PROCESS_BATCH_SIZE) break;
+}
 
     const affectedUsersArray = Array.from(affectedUsers);
 
