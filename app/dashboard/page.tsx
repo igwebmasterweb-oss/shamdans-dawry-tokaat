@@ -1732,7 +1732,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
       <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))', border: '1px solid var(--line)', borderRadius: 18, padding: '16px 18px', marginBottom: 10 }}>
         <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)', marginBottom: 12 }}>١. إزاي بنحسب نقاطك في كل ماتش؟ ⚽</div>
         {[
-          { pts: '+10', text: 'التوقع المظبوط للنتيجة بالكامل (مثلاً تتوقع 2-1 والماتش يخلص 2-1)', color: '#8ae0b3' },
+          { pts: '+5', text: 'التوقع المظبوط للنتيجة بالكامل (مثلاً تتوقع 2-1 والماتش يخلص 2-1)', color: '#8ae0b3' },
           { pts: '+5',  text: 'توقع الفائز أو التعادل صح (من غير النتيجة الرقمية بالظبط)', color: '#8ae0b3' },
           { pts: '+3',  text: 'توقع اسم أول هدّاف في الماتش', color: '#7db1ff' },
           { pts: '+1',  text: 'لو توقعك لأول هدّاف غلط بس اللاعب سجل عموماً في الماتش', color: '#7db1ff' },
