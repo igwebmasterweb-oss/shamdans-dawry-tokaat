@@ -380,4 +380,30 @@ while (true) {
 
         for (const userId of affectedUsersArray) {
           const { error: singleRefreshError } = await supabaseAdmin
-            .rpc('refreshuserpoints', { p_userid: userId
+            .rpc('refreshuserpoints', { p_userid: userId });
+
+          if (singleRefreshError) {
+            throw singleRefreshError;
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `✅ تم تحديث ${totalUpdated} توقع لـ ${affectedUsers.size} مستخدم`,
+      updated: totalUpdated,
+      users: affectedUsers.size,
+      cleanup,
+      fixture: targetFixtureId,
+      passes: totalPasses,
+    });
+  } catch (error: any) {
+    console.error('update-results error:', error);
+
+    return NextResponse.json(
+      { success: false, error: error.message || 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
