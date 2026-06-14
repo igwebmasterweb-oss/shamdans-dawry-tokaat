@@ -315,42 +315,55 @@ export default function Dashboard() {
 
     addName(fallbackFirst || '');
 
-    const walk = (node: any) => {
-      if (!node) return;
-      if (Array.isArray(node)) {
-        node.forEach(walk);
-        return;
-      }
-      if (typeof node === 'string') {
-        addName(node);
-        return;
-      }
-      if (typeof node !== 'object') return;
-
-      addName(node.player_name);
-      addName(node.scorer_name);
-      addName(node.name);
-      addName(node.player?.name);
-
-      if (Array.isArray(node.players)) node.players.forEach(walk);
-      if (Array.isArray(node.scorers)) node.scorers.forEach(walk);
-      if (Array.isArray(node.goals)) node.goals.forEach(walk);
-      if (Array.isArray(node.events)) node.events.forEach(walk);
-      if (Array.isArray(node.home)) node.home.forEach(walk);
-      if (Array.isArray(node.away)) node.away.forEach(walk);
-
-      Object.values(node).forEach((value: any) => {
-        if (Array.isArray(value)) walk(value);
-      });
-    };
-
     try {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      walk(parsed);
-    } catch {}
+
+      if (Array.isArray(parsed)) {
+        parsed.forEach((item: any) => {
+          if (typeof item === 'string') {
+            addName(item);
+            return;
+          }
+          if (item && typeof item === 'object') {
+            addName(item.player_name);
+            addName(item.scorer_name);
+            addName(item.name);
+            addName(item.player?.name);
+          }
+        });
+
+        return names;
+      }
+
+      if (parsed && typeof parsed === 'object') {
+        const walk = (node: any) => {
+          if (!node) return;
+          if (Array.isArray(node)) {
+            node.forEach(walk);
+            return;
+          }
+          if (typeof node === 'string') {
+            addName(node);
+            return;
+          }
+          if (typeof node !== 'object') return;
+
+          addName(node.player_name);
+          addName(node.scorer_name);
+          addName(node.name);
+          addName(node.player?.name);
+          Object.values(node).forEach(walk);
+        };
+
+        walk(parsed);
+      }
+    } catch {
+      if (typeof raw === 'string') addName(raw);
+    }
 
     return names;
   };
+
   const [user, setUser]                     = useState<any>(null);
   const [profile, setProfile]               = useState<Profile | null>(null);
   const [matches, setMatches]               = useState<any[]>([]);
@@ -1528,8 +1541,8 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                                       const matchInfo = matches.find((m: any) => m.fixture.id === (pred.fixture_id || pred.api_fixture_id));
                                       const scorers = extractScorersList(matchInfo?.scorers_json, pred.first_scorer_actual);
                                       return scorers.length > 0 ? (
-                                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}>
-                                          {scorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
+                                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}><div style={{ color: 'var(--muted)', opacity: 0.8, marginBottom: 2 }}>الهدافون ({scorers.length})</div>
+                                          {scorers.map((s, si) => <div key={si} style={{ display: 'block' }}>⚽ {s}</div>)}
                                         </div>
                                       ) : null;
                                     })()}
@@ -2217,8 +2230,8 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                                 {(() => {
                                   const scorers = extractScorersList(match.scorers_json, match.first_scorer);
                                   return scorers.length > 0 ? (
-                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}>
-                                      {scorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}><div style={{ color: 'var(--muted)', opacity: 0.8, marginBottom: 2 }}>الهدافون ({scorers.length})</div>
+                                      {scorers.map((s, si) => <div key={si} style={{ display: 'block' }}>⚽ {s}</div>)}
                                     </div>
                                   ) : null;
                                 })()}
@@ -2499,8 +2512,8 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
               {(() => {
                 const scorers = extractScorersList(matchInfo?.scorers_json, matchInfo?.first_scorer || p.first_scorer_actual);
                 return scorers.length > 0 ? (
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}>
-                    {scorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}><div style={{ color: 'var(--muted)', opacity: 0.8, marginBottom: 2 }}>الهدافون ({scorers.length})</div>
+                    {scorers.map((s, si) => <div key={si} style={{ display: 'block' }}>⚽ {s}</div>)}
                   </div>
                 ) : null;
               })()}
