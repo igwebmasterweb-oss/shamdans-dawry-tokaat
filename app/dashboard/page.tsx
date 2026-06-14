@@ -334,6 +334,7 @@ const [bonusPoints, setBonusPoints]         = useState(0);
 const [profileCompleted, setProfileCompleted] = useState(false);
   const [myTotalPoints, setMyTotalPoints]   = useState(0);
   const [showReferral, setShowReferral]     = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [referralCopied, setReferralCopied] = useState(false);
   const [leagueJoinMsg, setLeagueJoinMsg]   = useState('');
   const [socialFeed, setSocialFeed]         = useState<any[]>([]);
@@ -1219,6 +1220,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
             >
               {pushEnabled ? '🔔 مفعّل' : pushLoading ? '...' : '🔔 إشعارات'}
             </button>
+            <button
+  onClick={() => setShowTerms(true)}
+  style={{ padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(255,255,255,.12)', background: 'var(--surface-2)', color: 'var(--muted)', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+>
+  📜 الشروط والأحكام
+</button>
           </div>
         </div>
       </div>
@@ -1695,7 +1702,113 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           </div>
         </div>
       )}
+      {showTerms && (
+        <div className="modal-overlay" onClick={() => setShowTerms(false)}>
+          <div
+            className="modal-box"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: 760, maxHeight: '88vh', overflowY: 'auto' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--gold)', marginBottom: 4 }}>📜 الشروط والأحكام</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>قواعد المشاركة واستخدام منصة الشمعدان للتوقعات</div>
+              </div>
+              <button
+                onClick={() => setShowTerms(false)}
+                style={{
+                  background: 'var(--surface-3)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 10,
+                  width: 34,
+                  height: 34,
+                  cursor: 'pointer',
+                  color: 'var(--text)',
+                  fontSize: 16,
+                  display: 'grid',
+                  placeItems: 'center'
+                }}
+              >
+                ✕
+              </button>
+            </div>
 
+            <div
+              style={{
+                background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))',
+                border: '1px solid var(--line)',
+                borderRadius: 20,
+                padding: '18px 18px',
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginBottom: 8 }}>
+                الشمعدان × كأس العالم
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
+                باستخدامك للمنصة فإنك توافق على القواعد المنظمة للتوقعات، احتساب النقاط، الجوائز، والإحالات، مع احتفاظ إدارة المنصة بحق مراجعة النتائج أو تعديل السياسات عند الحاجة بما يحافظ على عدالة المنافسة.
+              </div>
+            </div>
+
+            {[
+              {
+                title: '١. القبول والمشاركة',
+                body: 'باستخدامك للمنصة أو تسجيل حساب جديد، فإنك توافق على الالتزام بالشروط والأحكام المنظمة لاستخدام المنصة والمشاركة في التوقعات.',
+              },
+              {
+                title: '٢. طبيعة المسابقة',
+                body: 'المنصة مخصصة للتوقعات الترفيهية والمنافسة بين المشتركين، ويتم احتساب النقاط والمراكز بناءً على التوقعات الصحيحة وفق النظام المعتمد داخل التطبيق.',
+              },
+              {
+                title: '٣. احتساب النقاط',
+                body: 'يتم احتساب النقاط تلقائياً بعد اعتماد نتائج المباريات والبيانات المرتبطة بها. ويحق للإدارة تصحيح أي خطأ ناتج عن تأخر أو تغيّر في البيانات القادمة من مزود النتائج.',
+              },
+              {
+                title: '٤. التوقعات والإغلاق',
+                body: 'يمكن للمستخدم إدخال أو تعديل توقعه فقط قبل إغلاق المباراة. بعد الإغلاق لا يمكن تعديل التوقع، ويتم اعتماد آخر نسخة محفوظة قبل الإغلاق.',
+              },
+              {
+                title: '٥. الجوائز والترتيب',
+                body: 'الترتيب والجوائز يخضعان للنقاط المعتمدة داخل المنصة. وفي حال التساوي أو وجود ظروف استثنائية، تحتفظ الإدارة بحق تطبيق آلية عادلة للفصل أو توزيع الجوائز.',
+              },
+              {
+                title: '٦. الإحالات والبونص',
+                body: 'قد يحصل المستخدم على نقاط إضافية من استكمال الملف الشخصي أو دعوة الأصدقاء أو العروض الخاصة. ويحق للإدارة إلغاء أي نقاط ناتجة عن استخدام غير مشروع أو إحالات غير حقيقية.',
+              },
+              {
+                title: '٧. السلوك والاستخدام المقبول',
+                body: 'يُمنع استخدام المنصة بشكل مسيء أو يضر بالمنافسة أو بالمستخدمين الآخرين، ويحق للإدارة تعليق أو حذف أي حساب يثبت مخالفته للقواعد.',
+              },
+              {
+                title: '٨. التعديلات',
+                body: 'تحتفظ إدارة المنصة بحق تعديل هذه الشروط أو تحديثها في أي وقت، ويُعد استمرارك في استخدام المنصة موافقة على النسخة المحدثة.',
+              },
+            ].map((section, i) => (
+              <div
+                key={i}
+                style={{
+                  background: 'linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01))',
+                  border: '1px solid var(--line)',
+                  borderRadius: 18,
+                  padding: '16px 16px 14px',
+                  marginBottom: 12,
+                }}
+              >
+                <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--gold)', marginBottom: 8 }}>
+                  {section.title}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
+                  {section.body}
+                </div>
+              </div>
+            ))}
+
+            <div style={{ borderTop: '1px solid var(--line)', marginTop: 8, paddingTop: 14, fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+              آخر تحديث: يونيو 2026
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 16 }}>
           {[
