@@ -1697,6 +1697,11 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
   <div style={{ fontSize: 16, marginBottom: 2 }}>{s.icon}</div>
   <div style={{ fontSize: 18, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{s.label}</div>
+  {s.label === 'دقة التوقع' && resolvedPreds.length > 0 && (
+    <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+      {correctPreds.length} من {resolvedPreds.length}
+    </div>
+  )}
 </div>
           ))}
         </div>
