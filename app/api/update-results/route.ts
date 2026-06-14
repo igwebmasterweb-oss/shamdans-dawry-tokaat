@@ -216,7 +216,6 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
     points += 2;
   }
 
-  if (points < 0) points = 0;
 
   return {
     points,
@@ -336,18 +335,18 @@ while (true) {
 
     affectedUsers.add(pred.user_id);
 
-    if (calc.points > 0) {
-      socialFeedInserts.push({
-        user_id: pred.user_id,
-        type: 'points_earned',
-        data: {
-          points: calc.points,
-          fixture_id: pred.fixture_id,
-          home_team: pred.home_team,
-          away_team: pred.away_team,
-        },
-      });
-    }
+ if (calc.points !== 0) {
+  socialFeedInserts.push({
+    user_id: pred.user_id,
+    type: calc.points > 0 ? 'points_earned' : 'points_lost',
+    data: {
+      points: calc.points,
+      fixture_id: pred.fixture_id,
+      home_team: pred.home_team,
+      away_team: pred.away_team,
+    },
+  });
+}
   }
 
   for (const chunk of chunkArray(predictionUpdates, UPDATE_CHUNK_SIZE)) {
