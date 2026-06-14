@@ -1480,18 +1480,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                                     </div>
                                     {(() => {
                                       const matchInfo = matches.find((m: any) => m.fixture.id === (pred.fixture_id || pred.api_fixture_id));
-                                      const scorers: string[] = [];
-                                      if (pred.first_scorer_actual) scorers.push(pred.first_scorer_actual);
-                                      try {
-                                        const json = matchInfo?.scorers_json;
-                                        if (json) {
-                                          const parsed = typeof json === 'string' ? JSON.parse(json) : json;
-                                          (parsed || []).forEach((s: any) => {
-                                            const name = s?.player?.name || s?.name || s?.player_name;
-                                            if (name && !scorers.includes(name)) scorers.push(name);
-                                          });
-                                        }
-                                      } catch {}
+                                      const scorers = extractScorersList(matchInfo?.scorers_json, pred.first_scorer_actual);
                                       return scorers.length > 0 ? (
                                         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}>
                                           {scorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
@@ -2180,18 +2169,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                                   {match.actual_home_score} — {match.actual_away_score}
                                 </div>
                                 {(() => {
-                                  const scorers: string[] = [];
-                                  if (match.first_scorer) scorers.push(match.first_scorer);
-                                  try {
-                                    const json = match.scorers_json;
-                                    if (json) {
-                                      const parsed = typeof json === 'string' ? JSON.parse(json) : json;
-                                      (parsed || []).forEach((s: any) => {
-                                        const name = s?.player?.name || s?.name || s?.player_name;
-                                        if (name && !scorers.includes(name)) scorers.push(name);
-                                      });
-                                    }
-                                  } catch {}
+                                  const scorers = extractScorersList(match.scorers_json, match.first_scorer);
                                   return scorers.length > 0 ? (
                                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}>
                                       {scorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
@@ -2473,19 +2451,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 {p.actual_home_score} — {p.actual_away_score}
               </div>
               {(() => {
-                const scorers: string[] = [];
-                const first = matchInfo?.first_scorer || p.first_scorer_actual;
-                if (first) scorers.push(first);
-                try {
-                  const json = matchInfo?.scorers_json;
-                  if (json) {
-                    const parsed = typeof json === 'string' ? JSON.parse(json) : json;
-                    (parsed || []).forEach((s: any) => {
-                      const name = s?.player?.name || s?.name || s?.player_name;
-                      if (name && !scorers.includes(name)) scorers.push(name);
-                    });
-                  }
-                } catch {}
+                const scorers = extractScorersList(matchInfo?.scorers_json, matchInfo?.first_scorer || p.first_scorer_actual);
                 return scorers.length > 0 ? (
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}>
                     {scorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
