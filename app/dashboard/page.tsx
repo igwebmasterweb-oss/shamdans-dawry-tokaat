@@ -305,6 +305,52 @@ function useCountUp(target: number, duration = 800) {
 }
 
 export default function Dashboard() {
+  const extractScorersList = (raw: any, fallbackFirst?: string | null) => {
+    const names: string[] = [];
+    const addName = (value: any) => {
+      if (!value || typeof value !== 'string') return;
+      const cleaned = value.trim();
+      if (cleaned && !names.includes(cleaned)) names.push(cleaned);
+    };
+
+    addName(fallbackFirst || '');
+
+    const walk = (node: any) => {
+      if (!node) return;
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
+      }
+      if (typeof node === 'string') {
+        addName(node);
+        return;
+      }
+      if (typeof node !== 'object') return;
+
+      addName(node.player_name);
+      addName(node.scorer_name);
+      addName(node.name);
+      addName(node.player?.name);
+
+      if (Array.isArray(node.players)) node.players.forEach(walk);
+      if (Array.isArray(node.scorers)) node.scorers.forEach(walk);
+      if (Array.isArray(node.goals)) node.goals.forEach(walk);
+      if (Array.isArray(node.events)) node.events.forEach(walk);
+      if (Array.isArray(node.home)) node.home.forEach(walk);
+      if (Array.isArray(node.away)) node.away.forEach(walk);
+
+      Object.values(node).forEach((value: any) => {
+        if (Array.isArray(value)) walk(value);
+      });
+    };
+
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      walk(parsed);
+    } catch {}
+
+    return names;
+  };
   const [user, setUser]                     = useState<any>(null);
   const [profile, setProfile]               = useState<Profile | null>(null);
   const [matches, setMatches]               = useState<any[]>([]);
