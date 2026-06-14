@@ -9,7 +9,7 @@ const supabaseAdmin = createClient(
 const UPDATE_CHUNK_SIZE = 100;
 const FEED_CHUNK_SIZE = 200;
 const PROCESS_BATCH_SIZE = 1000;
-const MAX_PASSES = 20;
+
 
 function normalizeName(s: string): string {
   return s
