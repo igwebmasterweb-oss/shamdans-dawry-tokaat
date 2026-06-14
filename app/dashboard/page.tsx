@@ -1894,7 +1894,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           {[
             { label: 'توقعاتي',    value: predictions.length,                                        color: '#8ae0b3', icon: '⚽' },
             { label: 'المتسابقون', value: totalParticipants, color: '#7db1ff', icon: '👥' },
-           { label: 'دقة التوقع', value: maxPossible > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: maxPossible > 0 ? `${myPoints} من ${maxPossible}` : '' },
+           { label: 'دقة التوقع', value: maxPossible > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: maxPossible > 0 ? `${myPoints} من ${maxPossible} نقطة` : '' },
             { label: 'الجولات',    value: streakCount > 0 ? `${streakCount} 🔥` : '—',               color: '#f97316', icon: '📅' },
           ].map((s: any) => (
            
