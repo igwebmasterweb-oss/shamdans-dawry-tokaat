@@ -414,6 +414,8 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [round1Leaders, setRound1Leaders] = useState<any[]>([]);
   const [round1LeadersLoading, setRound1LeadersLoading] = useState(false);
   const [round1Debug, setRound1Debug] = useState<any>({ fixtureIds: [], rows: 0, users: 0, topSample: [] });
+  const addProfilePoints = (total = 0, completed = false) =>
+  total + (completed ? 5 : 0);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
