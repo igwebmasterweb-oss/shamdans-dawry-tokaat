@@ -372,7 +372,7 @@ export default function Dashboard() {
   const [totalParticipants, setTotalParticipants] = useState(0);
   const [loading, setLoading]               = useState(true);
   const [loadError, setLoadError]           = useState(false);
-  const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'feed' | 'history'>('predict');
+  const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'round1leaders' | 'feed' | 'history'>('predict');
   const [activeRound, setActiveRound]       = useState('');
   const [roundLeaderboard, setRoundLeaderboard] = useState<Record<string, number>>({});
   const [roundLeaderLoading, setRoundLeaderLoading] = useState(false);
