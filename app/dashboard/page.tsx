@@ -413,6 +413,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [leaderboardView, setLeaderboardView] = useState<'general' | 'round1'>('general');
   const [round1Leaders, setRound1Leaders] = useState<any[]>([]);
   const [round1LeadersLoading, setRound1LeadersLoading] = useState(false);
+  const [round1Debug, setRound1Debug] = useState<any>({ fixtureIds: [], rows: 0, users: 0, topSample: [] });
 
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -779,16 +780,23 @@ useEffect(() => {
 
 
 
+
 useEffect(() => {
   if (!matches.length || !leaderboard.length) return;
 
-  const round1FixtureIds = matches
-    .filter((m: any) => m.league?.round === 'Group Stage - 1')
-    .map((m: any) => m.fixture?.id)
-    .filter(Boolean);
+  const normalizeRound = (value: any) => String(value || '').trim().toLowerCase();
+  const round1Matches = matches.filter((m: any) => {
+    const roundValue = normalizeRound(m?.league?.round);
+    return roundValue === 'group stage - 1' || roundValue === 'group stage 1' || roundValue.includes('group stage - 1');
+  });
+
+  const round1FixtureIds = round1Matches
+    .map((m: any) => Number(m?.fixture?.id))
+    .filter((id: any) => Number.isFinite(id));
 
   if (!round1FixtureIds.length) {
     setRound1Leaders([]);
+    setRound1Debug({ fixtureIds: [], rows: 0, users: 0, topSample: [] });
     return;
   }
 
@@ -804,19 +812,21 @@ useEffect(() => {
       if (error) {
         console.error('round1 leaders load error', error);
         setRound1Leaders([]);
+        setRound1Debug({ fixtureIds: round1FixtureIds, rows: 0, users: 0, topSample: [], error: error.message || 'error' });
         setRound1LeadersLoading(false);
         return;
       }
 
+      const validRows = (data || []).filter((row: any) => row?.user_id && round1FixtureIds.includes(Number(row.fixture_id)));
       const pointsMap: Record<string, number> = {};
-      (data || []).forEach((row: any) => {
-        if (!row?.user_id) return;
-        pointsMap[row.user_id] = (pointsMap[row.user_id] || 0) + Number(row.points || 0);
+      validRows.forEach((row: any) => {
+        const uid = String(row.user_id);
+        pointsMap[uid] = (pointsMap[uid] || 0) + Number(row.points || 0);
       });
 
       const merged = Object.entries(pointsMap)
         .map(([user_id, total]) => {
-          const base = leaderboard.find((p: any) => p.user_id === user_id);
+          const base = leaderboard.find((p: any) => String(p.user_id) === String(user_id));
           return {
             user_id,
             user_email: base?.user_email || null,
@@ -832,6 +842,12 @@ useEffect(() => {
         });
 
       setRound1Leaders(merged);
+      setRound1Debug({
+        fixtureIds: round1FixtureIds,
+        rows: validRows.length,
+        users: merged.length,
+        topSample: merged.slice(0, 5).map((x: any) => ({ name: x.display_name || x.user_email || x.user_id, pts: x.totalPoints }))
+      });
       setRound1LeadersLoading(false);
     });
 
@@ -2097,13 +2113,15 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                         if (!user?.id) return null;
                         const leaderboardWithMe: Record<string, number> = {
                           ...roundLeaderboard,
-                          [String(user.id)]: Number(roundLeaderboard[String(user.id)] ?? myRoundPts ?? 0),
+                          [String(user.id)]: Number(myRoundPts ?? 0),
                         };
                         const myRoundUserId = String(user.id);
                         const myRoundScore = Number(leaderboardWithMe[myRoundUserId] ?? 0);
                         if (myRoundScore <= 0) return null;
-                        const higherScoresCount = Object.entries(leaderboardWithMe)
-                          .filter(([_, pts]) => Number(pts) > myRoundScore)
+                        const positiveRoundEntries = Object.entries(leaderboardWithMe)
+                          .filter(([_, pts]) => Number(pts) > 0);
+                        const higherScoresCount = positiveRoundEntries
+                          .filter(([uid, pts]) => String(uid) !== myRoundUserId && Number(pts) > myRoundScore)
                           .length;
                         const myRoundRank = higherScoresCount + 1;
                         return myRoundRank ? (
@@ -2732,6 +2750,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 ? <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link>
                 : <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>نقاط التوقعات فقط</span>}
             </div>
+
+            {activeTab === 'round1leaders' && !round1LeadersLoading && (
+              <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 12, background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.16)', fontSize: 11, color: '#93c5fd', lineHeight: 1.8 }}>
+                fixtures: {round1Debug?.fixtureIds?.length || 0} | rows: {round1Debug?.rows || 0} | users: {round1Debug?.users || 0}
+              </div>
+            )}
 
             {activeTab === 'round1leaders' && round1LeadersLoading ? (
               <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
