@@ -739,8 +739,9 @@ useEffect(() => {
   if (!activeRound || !matches.length) return;
 
   const roundFixtureIds = matches
-    .filter((m: any) => m.league?.round === activeRound)
-    .map((m: any) => m.fixture.id);
+  .filter((m: any) => m.league?.round === activeRound)
+  .map((m: any) => Number(m?.fixture?.id))
+  .filter((id: any) => Number.isFinite(id));
 
   if (!roundFixtureIds.length) {
     setRoundLeaderboard({});
@@ -817,31 +818,38 @@ useEffect(() => {
         return;
       }
 
-      const validRows = (data || []).filter((row: any) => row?.user_id && round1FixtureIds.includes(Number(row.fixture_id)));
-      const pointsMap: Record<string, number> = {};
-      validRows.forEach((row: any) => {
-        const uid = String(row.user_id);
-        pointsMap[uid] = (pointsMap[uid] || 0) + Number(row.points || 0);
-      });
+      const validRows = (data || []).filter(
+  (row: any) =>
+    row?.user_id &&
+    round1FixtureIds.includes(Number(row.fixture_id))
+);
 
-      const merged = Object.entries(pointsMap)
-        .map(([user_id, total]) => {
-          const base = leaderboard.find((p: any) => String(p.user_id) === String(user_id));
-          return {
-            user_id,
-            user_email: base?.user_email || null,
-            display_name: base?.display_name || null,
-            profile_completed: base?.profile_completed || false,
-            totalPoints: Number(total || 0),
-            count: 0,
-          };
-        })
-        .filter((row: any) => Number(row.totalPoints || 0) > 0)
-        .sort((a: any, b: any) => {
-          if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-          return String(a.display_name || a.user_email || '').localeCompare(String(b.display_name || b.user_email || ''), 'ar');
-        });
+const pointsMap: Record<string, number> = {};
+validRows.forEach((row: any) => {
+  const uid = String(row.user_id);
+  pointsMap[uid] = (pointsMap[uid] || 0) + Number(row.points || 0);
+});
 
+const merged = Object.entries(pointsMap)
+  .map(([user_id, total]) => {
+    const base = leaderboard.find((p: any) => String(p.user_id) === String(user_id));
+    return {
+      user_id,
+      user_email: base?.user_email || null,
+      display_name: base?.display_name || null,
+      profile_completed: base?.profile_completed || false,
+      totalPoints: Number(total || 0),
+      count: 0,
+    };
+  })
+  .filter((row: any) => Number(row.totalPoints || 0) > 0)
+  .sort((a: any, b: any) => {
+    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+    return String(a.display_name || a.user_email || '').localeCompare(
+      String(b.display_name || b.user_email || ''),
+      'ar'
+    );
+  });
       setRound1Leaders(merged);
       setRound1Debug({
         fixtureIds: round1FixtureIds,
@@ -2107,45 +2115,96 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                       <div style={{ fontSize: 32, fontWeight: 800, color: '#93c5fd', fontVariantNumeric: 'tabular-nums' }}>{myRoundPts}</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>نقطة في هذه الجولة</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>من {roundFixtureIds.length} مباراة</div>
-                      {(() => {
-                        if (!user?.id) return null;
-                        const myRoundUserId = String(user.id);
-                        const isRound1 = String(activeRound || '').trim() === 'Group Stage - 1';
+                 {(() => {
+  if (!user?.id) return null;
 
-                        if (isRound1) {
-                          if (round1LeadersLoading) {
-                            return <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>⏳ جاري حساب ترتيب الجولة</div>;
-                          }
-                          const myIndex = round1Leaders.findIndex((p: any) => String(p.user_id) === myRoundUserId);
-                          const myRoundRank = myIndex >= 0 ? myIndex + 1 : null;
-                          return myRoundRank ? (
-                            <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
-                              🏅 ترتيبك في الجولة #{myRoundRank}
-                            </div>
-                          ) : null;
-                        }
+  const myRoundUserId = String(user.id);
+  const isRound1 = String(activeRound || '').trim() === 'Group Stage - 1';
 
-                        if (roundLeaderLoading) {
-                          return <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>⏳ جاري حساب ترتيب الجولة</div>;
-                        }
-                        const leaderboardWithMe: Record<string, number> = {
-                          ...roundLeaderboard,
-                          [String(user.id)]: Number(myRoundPts ?? 0),
-                        };
-                        const myRoundScore = Number(leaderboardWithMe[myRoundUserId] ?? 0);
-                        if (myRoundScore <= 0) return null;
-                        const positiveRoundEntries = Object.entries(leaderboardWithMe)
-                          .filter(([_, pts]) => Number(pts) > 0);
-                        const higherScoresCount = positiveRoundEntries
-                          .filter(([uid, pts]) => String(uid) !== myRoundUserId && Number(pts) > myRoundScore)
-                          .length;
-                        const myRoundRank = higherScoresCount + 1;
-                        return myRoundRank ? (
-                          <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
-                            🏅 ترتيبك في الجولة #{myRoundRank}
-                          </div>
-                        ) : null;
-                      })()}
+  if (isRound1) {
+    if (round1LeadersLoading) {
+      return (
+        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>
+          ⏳ جاري حساب ترتيب الجولة
+        </div>
+      );
+    }
+
+    const myIndex = round1Leaders.findIndex(
+      (p: any) => String(p.user_id) === myRoundUserId
+    );
+
+    const myRoundRank = myIndex >= 0 ? myIndex + 1 : null;
+
+    return myRoundRank ? (
+      <div
+        style={{
+          marginTop: 8,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '3px 10px',
+          borderRadius: 999,
+          background: 'rgba(147,197,253,.1)',
+          border: '1px solid rgba(147,197,253,.2)',
+          fontSize: 10,
+          fontWeight: 800,
+          color: '#93c5fd',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        🏅 ترتيبك في الجولة #{myRoundRank}
+      </div>
+    ) : null;
+  }
+
+  if (roundLeaderLoading) {
+    return (
+      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>
+        ⏳ جاري حساب ترتيب الجولة
+      </div>
+    );
+  }
+
+  const leaderboardWithMe: Record<string, number> = {
+    ...roundLeaderboard,
+    [String(user.id)]: Number(myRoundPts ?? 0),
+  };
+
+  const myRoundScore = Number(leaderboardWithMe[myRoundUserId] ?? 0);
+  if (myRoundScore <= 0) return null;
+
+  const positiveRoundEntries = Object.entries(leaderboardWithMe).filter(
+    ([_, pts]) => Number(pts) > 0
+  );
+
+  const higherScoresCount = positiveRoundEntries.filter(
+    ([uid, pts]) => String(uid) !== myRoundUserId && Number(pts) > myRoundScore
+  ).length;
+
+  const myRoundRank = higherScoresCount + 1;
+
+  return myRoundRank ? (
+    <div
+      style={{
+        marginTop: 8,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '3px 10px',
+        borderRadius: 999,
+        background: 'rgba(147,197,253,.1)',
+        border: '1px solid rgba(147,197,253,.2)',
+        fontSize: 10,
+        fontWeight: 800,
+        color: '#93c5fd',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      🏅 ترتيبك في الجولة #{myRoundRank}
+    </div>
+  ) : null;
+})()}
                     </>
                   ) : (
                     <div style={{ fontSize: 24, color: 'var(--muted)', marginTop: 16 }}>—</div>
