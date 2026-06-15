@@ -1026,7 +1026,6 @@ const quickJoinLeague = async () => {
         id:                   user.id,
         full_name:            profileForm.display_name.trim(),
         phone:                profileForm.phone.trim() || null,
-        email:                emailValue,
         facebook_url:         fbUrl,
         profile_completed:    true,
         bonus_points_awarded: currentProfile?.bonus_points_awarded ?? false,
@@ -2973,7 +2972,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                     </button>
                   ))}
                 </div>
-                {historyRankings.filter((r: any) => r.week_start === activeHistoryDate).map((player: any, i: number) => {
+                {historyRankings.filter((r: any) => r.week_start === activeHistoryDate).slice(0, 25).map((player: any, i: number) => {
                   const isMe = player.user_id === user?.id;
                   return (
                     <div key={i} className={`rank-item${isMe ? ' me' : ''}`}>
