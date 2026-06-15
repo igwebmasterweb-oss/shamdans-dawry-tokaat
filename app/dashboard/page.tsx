@@ -414,7 +414,6 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [round1Leaders, setRound1Leaders] = useState<any[]>([]);
   const [round1LeadersLoading, setRound1LeadersLoading] = useState(false);
   const [round1Debug, setRound1Debug] = useState<any>({ fixtureIds: [], rows: 0, users: 0, topSample: [] });
-  const [round1UserPointsMap, setRound1UserPointsMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -782,7 +781,6 @@ useEffect(() => {
 
 
 
-
 useEffect(() => {
   if (!matches.length || !leaderboard.length) return;
 
@@ -798,7 +796,6 @@ useEffect(() => {
 
   if (!round1FixtureIds.length) {
     setRound1Leaders([]);
-    setRound1UserPointsMap({});
     setRound1Debug({ fixtureIds: [], rows: 0, users: 0, topSample: [] });
     return;
   }
@@ -815,7 +812,6 @@ useEffect(() => {
       if (error) {
         console.error('round1 leaders load error', error);
         setRound1Leaders([]);
-        setRound1UserPointsMap({});
         setRound1Debug({ fixtureIds: round1FixtureIds, rows: 0, users: 0, topSample: [], error: error.message || 'error' });
         setRound1LeadersLoading(false);
         return;
@@ -845,7 +841,6 @@ useEffect(() => {
           return String(a.display_name || a.user_email || '').localeCompare(String(b.display_name || b.user_email || ''), 'ar');
         });
 
-      setRound1UserPointsMap(pointsMap);
       setRound1Leaders(merged);
       setRound1Debug({
         fixtureIds: round1FixtureIds,
@@ -2103,48 +2098,24 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                   const roundFixtureIds = matches
                     .filter((m: any) => m.league.round === activeRound)
                     .map((m: any) => m.fixture.id);
-
-                  const isRound1 = String(activeRound || '').trim() === 'Group Stage - 1';
-                  const myRoundUserId = String(user?.id || '');
-
-                  const myRoundPts = isRound1
-                    ? Number(round1UserPointsMap[myRoundUserId] ?? 0)
-                    : predictions
-                        .filter((pr: any) => roundFixtureIds.includes(pr.fixture_id))
-                        .reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
-
+                  const myRoundPts = predictions
+                    .filter((pr: any) => roundFixtureIds.includes(pr.fixture_id))
+                    .reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
                   return roundFixtureIds.length > 0 ? (
                     <>
                       <div style={{ fontSize: 32, fontWeight: 800, color: '#93c5fd', fontVariantNumeric: 'tabular-nums' }}>{myRoundPts}</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>نقطة في هذه الجولة</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>من {roundFixtureIds.length} مباراة</div>
                       {(() => {
-                        if (!user?.id) return null;
-
-                        if (isRound1) {
-                          if (round1LeadersLoading) {
-                            return <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>⏳ جاري حساب ترتيب الجولة</div>;
-                          }
-                          const myRoundScore = Number(round1UserPointsMap[myRoundUserId] ?? 0);
-                          if (myRoundScore <= 0) return null;
-                          const higherScoresCount = Object.entries(round1UserPointsMap)
-                            .filter(([uid, pts]) => String(uid) !== myRoundUserId && Number(pts) > myRoundScore)
-                            .length;
-                          const myRoundRank = higherScoresCount + 1;
-                          return myRoundRank ? (
-                            <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
-                              🏅 ترتيبك في الجولة #{myRoundRank}
-                            </div>
-                          ) : null;
-                        }
-
                         if (roundLeaderLoading) {
                           return <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>⏳ جاري حساب ترتيب الجولة</div>;
                         }
+                        if (!user?.id) return null;
                         const leaderboardWithMe: Record<string, number> = {
                           ...roundLeaderboard,
-                          [myRoundUserId]: Number(myRoundPts ?? 0),
+                          [String(user.id)]: Number(myRoundPts ?? 0),
                         };
+                        const myRoundUserId = String(user.id);
                         const myRoundScore = Number(leaderboardWithMe[myRoundUserId] ?? 0);
                         if (myRoundScore <= 0) return null;
                         const positiveRoundEntries = Object.entries(leaderboardWithMe)
@@ -2779,6 +2750,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 ? <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link>
                 : <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>نقاط التوقعات فقط</span>}
             </div>
+
+            {activeTab === 'round1leaders' && !round1LeadersLoading && (
+              <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 12, background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.16)', fontSize: 11, color: '#93c5fd', lineHeight: 1.8 }}>
+                fixtures: {round1Debug?.fixtureIds?.length || 0} | rows: {round1Debug?.rows || 0} | users: {round1Debug?.users || 0}
+              </div>
+            )}
 
             {activeTab === 'round1leaders' && round1LeadersLoading ? (
               <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
