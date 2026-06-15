@@ -752,27 +752,51 @@ useEffect(() => {
   setRoundLeaderLoading(true);
 
   supabase
-    .from('predictions')
-    .select('user_id, fixture_id, points')
-    .in('fixture_id', roundFixtureIds)
-    .then(({ data, error }) => {
+   (async () => {
+  try {
+    const pageSize = 1000;
+    let from = 0;
+    let allRows: any[] = [];
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('predictions')
+        .select('user_id, fixture_id, points')
+        .in('fixture_id', roundFixtureIds)
+        .range(from, from + pageSize - 1);
+
       if (cancelled) return;
+
       if (error) {
-        console.error('round leaderboard load error', error);
-        setRoundLeaderboard({});
-        setRoundLeaderLoading(false);
-        return;
+        throw error;
       }
 
-      const map: Record<string, number> = {};
-      (data || []).forEach((row: any) => {
-        if (!row?.user_id) return;
-        if (!map[row.user_id]) map[row.user_id] = 0;
-        map[row.user_id] += row.points || 0;
-      });
-      setRoundLeaderboard(map);
-      setRoundLeaderLoading(false);
+      const batch = data || [];
+      allRows = allRows.concat(batch);
+
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
+
+    if (cancelled) return;
+
+    const map: Record<string, number> = {};
+    allRows.forEach((row: any) => {
+      if (!row?.user_id) return;
+      if (!map[row.user_id]) map[row.user_id] = 0;
+      map[row.user_id] += row.points || 0;
     });
+
+    setRoundLeaderboard(map);
+    setRoundLeaderLoading(false);
+  } catch (error) {
+    if (cancelled) return;
+
+    console.error('round leaderboard load error', error);
+    setRoundLeaderboard({});
+    setRoundLeaderLoading(false);
+  }
+})();
 
   return () => {
     cancelled = true;
