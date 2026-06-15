@@ -2100,11 +2100,18 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                   {roundLabels[activeRound] || activeRound || 'الجولة الحالية'}
                 </div>
                 {(() => {
+                  const normalizeRound = (value: any) => String(value || '').trim().toLowerCase();
+                  const currentRoundValue = String(activeRound || '').trim();
+                  const isRound1 = normalizeRound(currentRoundValue) === 'group stage - 1' || normalizeRound(currentRoundValue) === 'group stage 1';
+
                   const roundFixtureIds = matches
-                    .filter((m: any) => m.league.round === activeRound)
+                    .filter((m: any) => {
+                      const roundValue = normalizeRound(m?.league?.round);
+                      if (isRound1) return roundValue === 'group stage - 1' || roundValue === 'group stage 1' || roundValue.includes('group stage - 1');
+                      return roundValue === normalizeRound(currentRoundValue);
+                    })
                     .map((m: any) => m.fixture.id);
 
-                  const isRound1 = String(activeRound || '').trim() === 'Group Stage - 1';
                   const myRoundUserId = String(user?.id || '');
 
                   const myRoundPts = isRound1
@@ -2132,9 +2139,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                             .length;
                           const myRoundRank = higherScoresCount + 1;
                           return myRoundRank ? (
-                            <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
-                              🏅 ترتيبك في الجولة #{myRoundRank}
-                            </div>
+                            <>
+                              <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
+                                🏅 ترتيبك في الجولة #{myRoundRank}
+                              </div>
+                              <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>source: unified-round1</div>
+                            </>
                           ) : null;
                         }
 
