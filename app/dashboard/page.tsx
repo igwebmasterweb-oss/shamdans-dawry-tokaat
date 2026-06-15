@@ -585,6 +585,7 @@ const userNameMap: Record<string, string> = {};
           display_name: profileData.full_name || '',
           phone:        profileData.phone || '',
           facebook_url: profileData.facebook_url || fbMeta || '',
+          email:        sessionData?.session?.user?.email || '',
         });
       }
 
