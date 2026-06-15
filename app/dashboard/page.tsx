@@ -427,7 +427,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   }, []);
 
   const router = useRouter();
-  const animatedPoints = useCountUp(myTotalPoints);
+  const animatedPoints = useCountUp(myPoints);
   const countdown = useCountdown(upcomingAlert?.fixture?.date ?? null);
 
   const roundLabels: Record<string, string> = {
@@ -1330,6 +1330,9 @@ setSelectedLeaderPredictions(normalizedPreds);
  const myPoints = addProfilePoints(myTotalPoints, profileCompleted);
   const myRank      = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
+  const myRoundPts = predictions
+    .filter((pr: any) => filteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
+    .reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
 
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
@@ -2139,7 +2142,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{animatedPoints} نقطة</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 8 }}>
   {(() => {
-    const predPoints = myPoints - referralPoints - bonusPoints - (profileCompleted ? 5 : 0);
+    const predPoints = myRoundPts;
             const chips = [
       { label: '⚽ توقعات', value: predPoints, color: 'rgba(138,224,179,.15)', border: 'rgba(138,224,179,.25)', text: '#8ae0b3' },
       ...(referralPoints > 0 ? [{ label: '👥 دعوات', value: referralPoints, color: 'rgba(125,177,255,.15)', border: 'rgba(125,177,255,.25)', text: '#7db1ff' }] : []),
@@ -2166,12 +2169,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                   const roundFixtureIds = matches
                     .filter((m: any) => m.league.round === activeRound)
                     .map((m: any) => m.fixture.id);
-                  const myRoundPts = predictions
+                  const roundPoints = predictions
                     .filter((pr: any) => roundFixtureIds.includes(pr.fixture_id))
                     .reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
                   return roundFixtureIds.length > 0 ? (
                     <>
-                      <div style={{ fontSize: 32, fontWeight: 800, color: '#93c5fd', fontVariantNumeric: 'tabular-nums' }}>{myRoundPts}</div>
+                      <div style={{ fontSize: 32, fontWeight: 800, color: '#93c5fd', fontVariantNumeric: 'tabular-nums' }}>{roundPoints}</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>نقطة في هذه الجولة</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>من {roundFixtureIds.length} مباراة</div>
                  {(() => {
