@@ -2095,8 +2095,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                           return <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>⏳ جاري حساب ترتيب الجولة</div>;
                         }
                         if (!user?.id) return null;
-                        const leaderboardWithMe = { ...roundLeaderboard, [user.id]: roundLeaderboard[user.id] ?? myRoundPts ?? 0 };
-                        const myRoundScore = Number(leaderboardWithMe[user.id] ?? 0);
+                        const leaderboardWithMe: Record<string, number> = {
+                          ...roundLeaderboard,
+                          [String(user.id)]: Number(roundLeaderboard[String(user.id)] ?? myRoundPts ?? 0),
+                        };
+                        const myRoundUserId = String(user.id);
+                        const myRoundScore = Number(leaderboardWithMe[myRoundUserId] ?? 0);
                         if (myRoundScore <= 0) return null;
                         const higherScoresCount = Object.entries(leaderboardWithMe)
                           .filter(([_, pts]) => Number(pts) > myRoundScore)
