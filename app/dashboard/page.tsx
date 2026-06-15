@@ -721,7 +721,7 @@ const userNameMap: Record<string, string> = {};
         user_email:        row.user_email,
         display_name:      row.full_name || null,
         profile_completed: row.profile_completed || false,
-        totalPoints:       row.total_points || 0,
+        totalPoints: addProfilePoints(row.total_points || 0, !!row.profile_completed),
         count:             row.predictions_count || 0,
       })));
 
@@ -1325,7 +1325,7 @@ setSelectedLeaderPredictions(normalizedPreds);
     </div>
   );
 
-  const myPoints    = myTotalPoints;
+ const myPoints = addProfilePoints(myTotalPoints, profileCompleted);
   const myRank      = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
 
@@ -1544,7 +1544,10 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>إجمالي النقاط</div>
     <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
-      {selectedLeaderSummary?.total_points ?? selectedLeader?.totalPoints ?? 0}
+      {addProfilePoints(
+  selectedLeaderSummary?.total_points ?? selectedLeader?.totalPoints ?? 0,
+  selectedLeaderSummary?.profile_completed ?? selectedLeader?.profile_completed ?? false
+)}
     </div>
   </div>
 
@@ -2134,8 +2137,8 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{animatedPoints} نقطة</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 8 }}>
   {(() => {
-    const predPoints = myPoints - referralPoints - bonusPoints - (profileCompleted ? 5 : 0);
-    const chips = [
+    const predPoints = myRoundPts;
+            const chips = [
       { label: '⚽ توقعات', value: predPoints, color: 'rgba(138,224,179,.15)', border: 'rgba(138,224,179,.25)', text: '#8ae0b3' },
       ...(referralPoints > 0 ? [{ label: '👥 دعوات', value: referralPoints, color: 'rgba(125,177,255,.15)', border: 'rgba(125,177,255,.25)', text: '#7db1ff' }] : []),
       ...(bonusPoints > 0 ? [{ label: '🎁 بونص', value: bonusPoints, color: 'rgba(192,132,252,.15)', border: 'rgba(192,132,252,.25)', text: '#c084fc' }] : []),
