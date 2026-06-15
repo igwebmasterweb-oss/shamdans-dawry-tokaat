@@ -703,7 +703,31 @@ const userNameMap: Record<string, string> = {};
           const normalizedPrev = prev ? String(prev).slice(0, 10) : '';
           return normalizedPrev && dates.includes(normalizedPrev) ? normalizedPrev : dates[0];
         });
-        setHistoryRankings(normalizedHist.map((row: any) => ({
+        // dedupe: keep highest total_points per user_id per day, then top 25 per day
+        const dedupeMap = new Map<string, any>();
+        for (const row of normalizedHist) {
+          const key = `${row.week_start}__${row.user_id}`;
+          const existing = dedupeMap.get(key);
+          if (!existing || (row.total_points || 0) > (existing.total_points || 0)) {
+            dedupeMap.set(key, row);
+          }
+        }
+        const deduped = Array.from(dedupeMap.values())
+          .sort((a: any, b: any) => {
+            if (a.week_start === b.week_start) return (b.total_points || 0) - (a.total_points || 0);
+            return String(b.week_start).localeCompare(String(a.week_start));
+          });
+        // top 25 per day
+        const top25PerDay: any[] = [];
+        const dayCount = new Map<string, number>();
+        for (const row of deduped) {
+          const count = dayCount.get(row.week_start) || 0;
+          if (count < 25) {
+            top25PerDay.push(row);
+            dayCount.set(row.week_start, count + 1);
+          }
+        }
+        setHistoryRankings(top25PerDay.map((row: any) => ({
   ...row,
   display_name:
     userNameMap[row.user_id] ||
@@ -2972,7 +2996,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                     </button>
                   ))}
                 </div>
-                {historyRankings.filter((r: any) => r.week_start === activeHistoryDate).slice(0, 25).map((player: any, i: number) => {
+                {historyRankings.filter((r: any) => r.week_start === activeHistoryDate).map((player: any, i: number) => {
                   const isMe = player.user_id === user?.id;
                   return (
                     <div key={i} className={`rank-item${isMe ? ' me' : ''}`}>
