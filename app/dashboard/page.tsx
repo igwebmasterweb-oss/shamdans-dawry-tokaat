@@ -836,6 +836,7 @@ useEffect(() => {
             count: 0,
           };
         })
+        .filter((row: any) => Number(row.totalPoints || 0) > 0)
         .sort((a: any, b: any) => {
           if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
           return String(a.display_name || a.user_email || '').localeCompare(String(b.display_name || b.user_email || ''), 'ar');
@@ -2107,15 +2108,30 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>نقطة في هذه الجولة</div>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>من {roundFixtureIds.length} مباراة</div>
                       {(() => {
+                        if (!user?.id) return null;
+                        const myRoundUserId = String(user.id);
+                        const isRound1 = String(activeRound || '').trim() === 'Group Stage - 1';
+
+                        if (isRound1) {
+                          if (round1LeadersLoading) {
+                            return <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>⏳ جاري حساب ترتيب الجولة</div>;
+                          }
+                          const myIndex = round1Leaders.findIndex((p: any) => String(p.user_id) === myRoundUserId);
+                          const myRoundRank = myIndex >= 0 ? myIndex + 1 : null;
+                          return myRoundRank ? (
+                            <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
+                              🏅 ترتيبك في الجولة #{myRoundRank}
+                            </div>
+                          ) : null;
+                        }
+
                         if (roundLeaderLoading) {
                           return <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>⏳ جاري حساب ترتيب الجولة</div>;
                         }
-                        if (!user?.id) return null;
                         const leaderboardWithMe: Record<string, number> = {
                           ...roundLeaderboard,
                           [String(user.id)]: Number(myRoundPts ?? 0),
                         };
-                        const myRoundUserId = String(user.id);
                         const myRoundScore = Number(leaderboardWithMe[myRoundUserId] ?? 0);
                         if (myRoundScore <= 0) return null;
                         const positiveRoundEntries = Object.entries(leaderboardWithMe)
