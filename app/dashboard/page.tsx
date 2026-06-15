@@ -826,61 +826,93 @@ useEffect(() => {
   let cancelled = false;
   setRound1LeadersLoading(true);
 
-  supabase
-    .from('predictions')
-    .select('user_id, fixture_id, points')
-    .in('fixture_id', round1FixtureIds)
-    .then(({ data, error }) => {
+     (async () => {
+  try {
+    const pageSize = 1000;
+    let from = 0;
+    let allRows: any[] = [];
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('predictions')
+        .select('user_id, fixture_id, points')
+        .in('fixture_id', round1FixtureIds)
+        .range(from, from + pageSize - 1);
+
       if (cancelled) return;
+
       if (error) {
-        console.error('round1 leaders load error', error);
-        setRound1Leaders([]);
-        setRound1Debug({ fixtureIds: round1FixtureIds, rows: 0, users: 0, topSample: [], error: error.message || 'error' });
-        setRound1LeadersLoading(false);
-        return;
+        throw error;
       }
 
-      const validRows = (data || []).filter(
-  (row: any) =>
-    row?.user_id &&
-    round1FixtureIds.includes(Number(row.fixture_id))
-);
+      const batch = data || [];
+      allRows = allRows.concat(batch);
 
-const pointsMap: Record<string, number> = {};
-validRows.forEach((row: any) => {
-  const uid = String(row.user_id);
-  pointsMap[uid] = (pointsMap[uid] || 0) + Number(row.points || 0);
-});
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
 
-const merged = Object.entries(pointsMap)
-  .map(([user_id, total]) => {
-    const base = leaderboard.find((p: any) => String(p.user_id) === String(user_id));
-    return {
-      user_id,
-      user_email: base?.user_email || null,
-      display_name: base?.display_name || null,
-      profile_completed: base?.profile_completed || false,
-      totalPoints: Number(total || 0),
-      count: 0,
-    };
-  })
-  .filter((row: any) => Number(row.totalPoints || 0) > 0)
-  .sort((a: any, b: any) => {
-    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-    return String(a.display_name || a.user_email || '').localeCompare(
-      String(b.display_name || b.user_email || ''),
-      'ar'
+    if (cancelled) return;
+
+    const validRows = allRows.filter(
+      (row: any) =>
+        row?.user_id &&
+        round1FixtureIds.includes(Number(row.fixture_id))
     );
-  });
-      setRound1Leaders(merged);
-      setRound1Debug({
-        fixtureIds: round1FixtureIds,
-        rows: validRows.length,
-        users: merged.length,
-        topSample: merged.slice(0, 5).map((x: any) => ({ name: x.display_name || x.user_email || x.user_id, pts: x.totalPoints }))
-      });
-      setRound1LeadersLoading(false);
+
+    const pointsMap: Record<string, number> = {};
+    validRows.forEach((row: any) => {
+      const uid = String(row.user_id);
+      pointsMap[uid] = (pointsMap[uid] || 0) + Number(row.points || 0);
     });
+
+    const merged = Object.entries(pointsMap)
+      .map(([user_id, total]) => {
+        const base = leaderboard.find((p: any) => String(p.user_id) === String(user_id));
+        return {
+          user_id,
+          user_email: base?.user_email || null,
+          display_name: base?.display_name || null,
+          profile_completed: base?.profile_completed || false,
+          totalPoints: Number(total || 0),
+          count: 0,
+        };
+      })
+      .filter((row: any) => Number(row.totalPoints || 0) > 0)
+      .sort((a: any, b: any) => {
+        if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+        return String(a.display_name || a.user_email || '').localeCompare(
+          String(b.display_name || b.user_email || ''),
+          'ar'
+        );
+      });
+
+    setRound1Leaders(merged);
+    setRound1Debug({
+      fixtureIds: round1FixtureIds,
+      rows: validRows.length,
+      users: merged.length,
+      topSample: merged.slice(0, 5).map((x: any) => ({
+        name: x.display_name || x.user_email || x.user_id,
+        pts: x.totalPoints
+      }))
+    });
+    setRound1LeadersLoading(false);
+  } catch (error: any) {
+    if (cancelled) return;
+
+    console.error('round1 leaders load error', error);
+    setRound1Leaders([]);
+    setRound1Debug({
+      fixtureIds: round1FixtureIds,
+      rows: 0,
+      users: 0,
+      topSample: [],
+      error: error?.message || 'error'
+    });
+    setRound1LeadersLoading(false);
+  }
+})();
 
   return () => {
     cancelled = true;
