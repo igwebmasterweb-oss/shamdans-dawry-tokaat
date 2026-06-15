@@ -1835,8 +1835,8 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           { pts: '+3',  text: 'توقع اسم أول هدّاف في الماتش', color: '#7db1ff' },
           { pts: '+1',  text: 'لو توقعك لأول هدّاف غلط بس اللاعب سجل عموماً في الماتش', color: '#7db1ff' },
           { pts: '+3',  text: 'توقع إن الماتش يروح لوقت إضافي (بداية من دور الـ 32)', color: '#c084fc' },
-          { pts: '+3',  text: 'توقعك الصح إن هيكون فيه كارت أحمر في الماتش (أيوة/لأ)', color: '#f97316' },
-          { pts: '+3',  text: 'توقعك الصح إن هيكون فيه ضربة جزاء في الماتش (أيوة/لأ)', color: '#f97316' },
+          { pts: '+3',  text: 'توقعك الصح إن هيكون فيه كارت أحمر في الماتش (أيوة)', color: '#f97316' },
+          { pts: '+3',  text: 'توقعك الصح إن هيكون فيه ضربة جزاء في الماتش (أيوة)', color: '#f97316' },
         ].map((item, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
             <span style={{ fontWeight: 800, fontSize: 13, color: item.color, minWidth: 32, flexShrink: 0 }}>{item.pts}</span>
