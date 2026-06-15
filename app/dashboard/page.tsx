@@ -2096,9 +2096,12 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                         }
                         if (!user?.id) return null;
                         const leaderboardWithMe = { ...roundLeaderboard, [user.id]: roundLeaderboard[user.id] ?? myRoundPts ?? 0 };
-                        const sortedRound = Object.entries(leaderboardWithMe).sort(([, a], [, b]) => Number(b) - Number(a));
-                        const roundRankIdx = sortedRound.findIndex(([uid]) => uid === user.id);
-                        const myRoundRank = roundRankIdx >= 0 ? roundRankIdx + 1 : null;
+                        const myRoundScore = Number(leaderboardWithMe[user.id] ?? 0);
+                        if (myRoundScore <= 0) return null;
+                        const higherScoresCount = Object.entries(leaderboardWithMe)
+                          .filter(([_, pts]) => Number(pts) > myRoundScore)
+                          .length;
+                        const myRoundRank = higherScoresCount + 1;
                         return myRoundRank ? (
                           <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999, background: 'rgba(147,197,253,.1)', border: '1px solid rgba(147,197,253,.2)', fontSize: 10, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>
                             🏅 ترتيبك في الجولة #{myRoundRank}
@@ -2713,6 +2716,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           </div>
         )}
 
+
         {(activeTab === 'leaders' || activeTab === 'round1leaders') && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -2720,85 +2724,69 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 <button className={`round-btn ${activeTab === 'leaders' ? 'active' : ''}`} onClick={() => setActiveTab('leaders')}>الصدارة العامة</button>
                 <button className={`round-btn ${activeTab === 'round1leaders' ? 'active' : ''}`} onClick={() => setActiveTab('round1leaders')}>صدارة الجولة الأولى</button>
               </div>
-              {activeTab === 'leaders' ? <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link> : <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>أفضل متصدري الجولة</span>}
+              {activeTab === 'leaders'
+                ? <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link>
+                : <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>نقاط التوقعات فقط</span>}
             </div>
-            {leaderboard.length === 0 ? (
+
+            {activeTab === 'round1leaders' && round1LeadersLoading ? (
               <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🏆</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد نتائج بعد</div>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>جاري تحميل صدارة الجولة الأولى</div>
               </div>
-            ) : leaderboard.slice(0, 20).map((player: any, i) => {
-              const isMe = player.user_id === user?.id;
-              const name = player.display_name || player.user_email?.split('@')[0];
-              return (
-                <div
-                  key={i}
-                  className={`rank-item${isMe ? ' me' : ''}`}
-                  onClick={() => openLeaderDetails(player)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      openLeaderDetails(player);
-                    }
-                  }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}</div>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      {name}
-                      {isMe && <span style={{ fontSize: 11, background: 'rgba(217,178,95,.15)', color: '#ffe3a6', borderRadius: 999, padding: '2px 8px' }}>أنت</span>}
-                      {player.profile_completed && <span style={{ fontSize: 11 }}>✅</span>}
+            ) : (() => {
+              const rankingData = activeTab === 'round1leaders' ? round1Leaders : leaderboard;
+              if (rankingData.length === 0) {
+                return (
+                  <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>🏆</div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد نتائج بعد</div>
+                  </div>
+                );
+              }
+
+              return rankingData.slice(0, 20).map((player: any, i) => {
+                const isMe = player.user_id === user?.id;
+                const name = player.display_name || player.user_email?.split('@')[0];
+                return (
+                  <div
+                    key={`${activeTab}-${player.user_id}`}
+                    className={`rank-item${isMe ? ' me' : ''}`}
+                    onClick={() => openLeaderDetails(player)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openLeaderDetails(player);
+                      }
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}</div>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>
+                        {name}
+                        {isMe && <span style={{ marginRight: 8, fontSize: 11, color: 'var(--gold)' }}>(أنت)</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                        {activeTab === 'round1leaders'
+                          ? 'مجموع نقاط التوقعات في الجولة الأولى فقط'
+                          : `${player.count || 0} توقع`}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <span>{player.count} توقع</span>
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openLeaderDetails(player);
-                        }}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          padding: '4px 10px',
-                          borderRadius: 999,
-                          border: '1px solid rgba(217,178,95,.22)',
-                          background: 'rgba(217,178,95,.08)',
-                          color: '#ffe3a6',
-                          fontSize: 11,
-                          fontWeight: 800,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        التفاصيل
-                      </span>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: i < 3 ? 'var(--gold)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                        {player.totalPoints || 0}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
-                  </div>
-                </div>
-              );
-            })}
-            {leaderboard.length > 20 && (
-              <div style={{ textAlign: 'center', marginTop: 16 }}>
-                <Link href="/leaderboard" style={{
-                  display: 'inline-block', padding: '11px 32px',
-                  borderRadius: 14, border: '1px solid var(--line)',
-                  background: 'var(--surface-2)', color: 'var(--gold)',
-                  fontFamily: 'Cairo, sans-serif', fontSize: 14, fontWeight: 700,
-                  textDecoration: 'none',
-                }}>
-                  عرض الكل ({leaderboard.length}) ←
-                </Link>
-              </div>
-            )}
+                );
+              });
+            })()}
           </div>
         )}
-
 
         {activeTab === 'history' && (
           <div>
