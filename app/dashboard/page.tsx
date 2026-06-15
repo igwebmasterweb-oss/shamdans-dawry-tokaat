@@ -410,6 +410,8 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [pushEnabled, setPushEnabled]       = useState(false);
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
+  const [round1Leaders, setRound1Leaders] = useState<any[]>([]);
+  const [round1LeadersLoading, setRound1LeadersLoading] = useState(false);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -774,6 +776,63 @@ useEffect(() => {
   };
 }, [activeRound, matches]);
 
+
+useEffect(() => {
+  if (!matches.length || !leaderboard.length) return;
+
+  const round1Matches = matches.filter((m: any) => m.league?.round === 'Group Stage - 1' && m.fixture?.date);
+  if (!round1Matches.length) {
+    setRound1Leaders([]);
+    return;
+  }
+
+  const round1FixtureIds = round1Matches.map((m: any) => m.fixture.id);
+  let cancelled = false;
+  setRound1LeadersLoading(true);
+
+  supabase
+    .from('predictions')
+    .select('user_id, fixture_id, points')
+    .in('fixture_id', round1FixtureIds)
+    .then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        console.error('round1 leaders load error', error);
+        setRound1Leaders([]);
+        setRound1LeadersLoading(false);
+        return;
+      }
+
+      const pointsMap: Record<string, number> = {};
+      (data || []).forEach((row: any) => {
+        if (!row?.user_id) return;
+        if (!pointsMap[row.user_id]) pointsMap[row.user_id] = 0;
+        pointsMap[row.user_id] += Number(row.points || 0);
+      });
+
+      const leaders = Object.entries(pointsMap)
+        .map(([user_id, total]) => {
+          const userRow = leaderboard.find((p: any) => p.user_id === user_id);
+          return {
+            user_id,
+            totalPoints: Number(total || 0),
+            display_name: userRow?.display_name || null,
+            user_email: userRow?.user_email || null,
+            count: userRow?.count || 0,
+          };
+        })
+        .sort((a: any, b: any) => b.totalPoints - a.totalPoints)
+        .slice(0, 50);
+
+      setRound1Leaders(leaders);
+      setRound1LeadersLoading(false);
+    });
+
+  return () => {
+    cancelled = true;
+  };
+}, [matches, leaderboard]);
+
 const quickJoinLeague = async () => {
   if (!user || !leagueCode.trim()) return;
   setLeagueJoining(true);
@@ -882,7 +941,7 @@ const quickJoinLeague = async () => {
         email:                emailValue,
         facebook_url:         fbUrl,
         profile_completed:    true,
-        bonus_points_awarded: currentProfile?.bonus_points_awarded ?? currentProfile?.profile_completed ?? false ? true : true,
+        bonus_points_awarded: currentProfile?.bonus_points_awarded ?? false,
         updated_at:           new Date().toISOString(),
         referral_code:        currentProfile?.referral_code ?? null,
         facebook_bonus_awarded: currentProfile?.facebook_bonus_awarded ?? false,
@@ -910,7 +969,7 @@ const { error: refreshPointsError } = await supabase.rpc('refreshuserpoints', {
 });
 
 if (refreshPointsError) throw refreshPointsError;
-      const alreadyHadProfileBonus = !!(profile?.bonus_points_awarded || currentProfile?.bonus_points_awarded || currentProfile?.profile_completed || profileCompleted);
+      const alreadyHadProfileBonus = !!(profile?.bonus_points_awarded || currentProfile?.bonus_points_awarded || profileCompleted || currentProfile?.profile_completed);
       if (!alreadyHadProfileBonus) {
         await supabase.from('social_feed').insert({
   user_id: user.id,
@@ -1751,6 +1810,11 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -8, marginBottom: 12 }}>
               أدخل رقم الهاتف بشكل صحيح لأنه مطلوب لاستكمال الملف.
             </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6, fontWeight: 700 }}>البريد الإلكتروني <span style={{ color: 'var(--red)' }}>*</span></div>
+            <input type="email" value={profileForm.email} onChange={e => setProfileForm(f => ({ ...f, email: e.target.value }))} placeholder="name@example.com" className="modal-input" style={{ marginBottom: 14, direction: 'ltr', textAlign: 'right' }} />
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -8, marginBottom: 12 }}>
+              سيتم تعبئة الإيميل الحالي تلقائياً إن كان موجوداً، ويمكنك تعديله قبل الحفظ.
+            </div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
               رابط فيسبوك
               {profile?.facebook_bonus_awarded
@@ -2023,8 +2087,9 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                         if (roundLeaderLoading) {
                           return <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>⏳ جاري حساب ترتيب الجولة</div>;
                         }
-                        if (!user?.id || !Object.keys(roundLeaderboard).length) return null;
-                        const sortedRound = Object.entries(roundLeaderboard).sort(([, a], [, b]) => Number(b) - Number(a));
+                        if (!user?.id) return null;
+                        const leaderboardWithMe = { ...roundLeaderboard, [user.id]: roundLeaderboard[user.id] ?? myRoundPts ?? 0 };
+                        const sortedRound = Object.entries(leaderboardWithMe).sort(([, a], [, b]) => Number(b) - Number(a));
                         const roundRankIdx = sortedRound.findIndex(([uid]) => uid === user.id);
                         const myRoundRank = roundRankIdx >= 0 ? roundRankIdx + 1 : null;
                         return myRoundRank ? (
@@ -2061,7 +2126,8 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           {([
             { id: 'predict', label: openUnpredictedCount > 0 ? `⚽ التوقعات (${openUnpredictedCount})` : '⚽ التوقعات' },
             { id: 'my',      label: '📋 توقعاتي' },
-            { id: 'leaders', label: '🏆 الصدارة' },
+            { id: 'leaders', label: '🏆 الصدارة العامة' },
+            { id: 'round1leaders', label: '🥇 متصدرو الجولة الأولى' },
             { id: 'history', label: '📈 السجل التاريخي' },
             { id: 'feed',    label: '🌍 نشاط اللاعبين' },
           ] as const).map(({ id, label }) => (
@@ -2814,6 +2880,56 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 );
               });
             })()}
+          </div>
+        )}
+
+
+        {activeTab === 'round1leaders' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
+              <h2 style={{ fontWeight: 800, fontSize: 20 }}>متصدرو الجولة الأولى</h2>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>الترتيب هنا مبني على نقاط التوقعات فقط داخل مباريات الجولة الأولى</div>
+            </div>
+
+            {round1LeadersLoading ? (
+              <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
+                <div style={{ fontSize: 42, marginBottom: 12 }}>⏳</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>جاري تحميل صدارة الجولة الأولى...</div>
+              </div>
+            ) : round1Leaders.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🥇</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد بيانات صدارة للجولة الأولى حالياً</div>
+              </div>
+            ) : (
+              <div>
+                {round1Leaders.map((player: any, idx: number) => {
+                  const isMe = player.user_id === user?.id;
+                  const medal = medals[idx] || `#${idx + 1}`;
+                  return (
+                    <button
+                      key={player.user_id}
+                      onClick={() => openLeaderDetails(player)}
+                      className={`rank-item${isMe ? ' me' : ''}`}
+                      style={{ width: '100%', cursor: 'pointer', textAlign: 'right', border: '1px solid var(--line)' }}
+                    >
+                      <div className="medal-box">{medal}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {player.display_name || player.user_email?.split('@')[0] || 'لاعب'}
+                          {isMe && <span style={{ marginRight: 8, fontSize: 11, color: 'var(--gold)' }}>(أنت)</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>نقاط الجولة الأولى فقط</div>
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
