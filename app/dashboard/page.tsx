@@ -410,6 +410,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [pushEnabled, setPushEnabled]       = useState(false);
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
+  const [leaderboardView, setLeaderboardView] = useState<'general' | 'round1'>('general');
   const [round1Leaders, setRound1Leaders] = useState<any[]>([]);
   const [round1LeadersLoading, setRound1LeadersLoading] = useState(false);
 
@@ -777,16 +778,20 @@ useEffect(() => {
 }, [activeRound, matches]);
 
 
+
 useEffect(() => {
   if (!matches.length || !leaderboard.length) return;
 
-  const round1Matches = matches.filter((m: any) => m.league?.round === 'Group Stage - 1' && m.fixture?.date);
-  if (!round1Matches.length) {
+  const round1FixtureIds = matches
+    .filter((m: any) => m.league?.round === 'Group Stage - 1')
+    .map((m: any) => m.fixture?.id)
+    .filter(Boolean);
+
+  if (!round1FixtureIds.length) {
     setRound1Leaders([]);
     return;
   }
 
-  const round1FixtureIds = round1Matches.map((m: any) => m.fixture.id);
   let cancelled = false;
   setRound1LeadersLoading(true);
 
@@ -806,25 +811,27 @@ useEffect(() => {
       const pointsMap: Record<string, number> = {};
       (data || []).forEach((row: any) => {
         if (!row?.user_id) return;
-        if (!pointsMap[row.user_id]) pointsMap[row.user_id] = 0;
-        pointsMap[row.user_id] += Number(row.points || 0);
+        pointsMap[row.user_id] = (pointsMap[row.user_id] || 0) + Number(row.points || 0);
       });
 
-      const leaders = Object.entries(pointsMap)
+      const merged = Object.entries(pointsMap)
         .map(([user_id, total]) => {
-          const userRow = leaderboard.find((p: any) => p.user_id === user_id);
+          const base = leaderboard.find((p: any) => p.user_id === user_id);
           return {
             user_id,
+            user_email: base?.user_email || null,
+            display_name: base?.display_name || null,
+            profile_completed: base?.profile_completed || false,
             totalPoints: Number(total || 0),
-            display_name: userRow?.display_name || null,
-            user_email: userRow?.user_email || null,
-            count: userRow?.count || 0,
+            count: 0,
           };
         })
-        .sort((a: any, b: any) => b.totalPoints - a.totalPoints)
-        .slice(0, 50);
+        .sort((a: any, b: any) => {
+          if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+          return String(a.display_name || a.user_email || '').localeCompare(String(b.display_name || b.user_email || ''), 'ar');
+        });
 
-      setRound1Leaders(leaders);
+      setRound1Leaders(merged);
       setRound1LeadersLoading(false);
     });
 
@@ -2126,8 +2133,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           {([
             { id: 'predict', label: openUnpredictedCount > 0 ? `⚽ التوقعات (${openUnpredictedCount})` : '⚽ التوقعات' },
             { id: 'my',      label: '📋 توقعاتي' },
-            { id: 'leaders', label: '🏆 الصدارة العامة' },
-            { id: 'round1leaders', label: '🥇 متصدرو الجولة الأولى' },
+            { id: 'leaders', label: '🏆 الصدارة' },
             { id: 'history', label: '📈 السجل التاريخي' },
             { id: 'feed',    label: '🌍 نشاط اللاعبين' },
           ] as const).map(({ id, label }) => (
@@ -2793,145 +2799,6 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           </div>
         )}
 
-
-        {activeTab === 'round1leaders' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontWeight: 800, fontSize: 20 }}>🥇 صدارة الجولة الأولى</h2>
-              <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>حسب نقاط الجولة الأولى فقط</span>
-            </div>
-            {matches.filter((m: any) => m.league?.round === 'Group Stage - 1').length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🥇</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد بيانات للجولة الأولى بعد</div>
-              </div>
-            ) : (() => {
-              const roundOneIds = matches.filter((m: any) => m.league?.round === 'Group Stage - 1').map((m: any) => m.fixture.id);
-              const roundOnePlayers = leaderboard
-                .map((player: any) => {
-                  const total = predictions
-                    .filter((p: any) => p.user_id === player.user_id && roundOneIds.includes(p.fixture_id))
-                    .reduce((sum: number, p: any) => sum + (p.points || 0), 0);
-                  const count = predictions.filter((p: any) => p.user_id === player.user_id && roundOneIds.includes(p.fixture_id)).length;
-                  return { ...player, totalPoints: total, count };
-                })
-                .filter((player: any) => player.count > 0)
-                .sort((a: any, b: any) => b.totalPoints - a.totalPoints || b.count - a.count)
-                .slice(0, 20);
-              return roundOnePlayers.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>🥇</div>
-                  <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد نتائج الجولة الأولى بعد</div>
-                </div>
-              ) : roundOnePlayers.map((player: any, i: number) => {
-                const isMe = player.user_id === user?.id;
-                const name = player.display_name || player.user_email?.split('@')[0];
-                return (
-                  <div
-                    key={`r1-${player.user_id}`}
-                    className={`rank-item${isMe ? ' me' : ''}`}
-                    onClick={() => openLeaderDetails(player)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        openLeaderDetails(player);
-                      }
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}</div>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        {name}
-                        {isMe && <span style={{ fontSize: 11, background: 'rgba(217,178,95,.15)', color: '#ffe3a6', borderRadius: 999, padding: '2px 8px' }}>أنت</span>}
-                        {player.profile_completed && <span style={{ fontSize: 11 }}>✅</span>}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <span>{player.count} توقع</span>
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openLeaderDetails(player);
-                          }}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '4px 10px',
-                            borderRadius: 999,
-                            border: '1px solid rgba(217,178,95,.22)',
-                            background: 'rgba(217,178,95,.08)',
-                            color: '#ffe3a6',
-                            fontSize: 11,
-                            fontWeight: 800,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          التفاصيل
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        )}
-
-
-        {activeTab === 'round1leaders' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
-              <h2 style={{ fontWeight: 800, fontSize: 20 }}>متصدرو الجولة الأولى</h2>
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>الترتيب هنا مبني على نقاط التوقعات فقط داخل مباريات الجولة الأولى</div>
-            </div>
-
-            {round1LeadersLoading ? (
-              <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-                <div style={{ fontSize: 42, marginBottom: 12 }}>⏳</div>
-                <div style={{ fontSize: 15, fontWeight: 700 }}>جاري تحميل صدارة الجولة الأولى...</div>
-              </div>
-            ) : round1Leaders.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🥇</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد بيانات صدارة للجولة الأولى حالياً</div>
-              </div>
-            ) : (
-              <div>
-                {round1Leaders.map((player: any, idx: number) => {
-                  const isMe = player.user_id === user?.id;
-                  const medal = medals[idx] || `#${idx + 1}`;
-                  return (
-                    <button
-                      key={player.user_id}
-                      onClick={() => openLeaderDetails(player)}
-                      className={`rank-item${isMe ? ' me' : ''}`}
-                      style={{ width: '100%', cursor: 'pointer', textAlign: 'right', border: '1px solid var(--line)' }}
-                    >
-                      <div className="medal-box">{medal}</div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {player.display_name || player.user_email?.split('@')[0] || 'لاعب'}
-                          {isMe && <span style={{ marginRight: 8, fontSize: 11, color: 'var(--gold)' }}>(أنت)</span>}
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>نقاط الجولة الأولى فقط</div>
-                      </div>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{player.totalPoints}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
 
         {activeTab === 'history' && (
           <div>
