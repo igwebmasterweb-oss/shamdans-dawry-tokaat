@@ -750,8 +750,6 @@ useEffect(() => {
 
   let cancelled = false;
   setRoundLeaderLoading(true);
-
-  supabase
    (async () => {
   try {
     const pageSize = 1000;
