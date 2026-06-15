@@ -427,7 +427,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   }, []);
 
   const router = useRouter();
-  const animatedPoints = useCountUp(myPoints);
+  const animatedPoints = useCountUp(myTotalPoints);
   const countdown = useCountdown(upcomingAlert?.fixture?.date ?? null);
 
   const roundLabels: Record<string, string> = {
