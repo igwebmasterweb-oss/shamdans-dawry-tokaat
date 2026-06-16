@@ -1513,9 +1513,13 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                     })
                     .sort((a: any, b: any) => new Date(a.fixture.date).getTime() - new Date(b.fixture.date).getTime())[0];
 
+                  const currentFixtureId = Number(currentMatch?.fixture?.id);
                   const currentPrediction = currentMatch
-                    ? selectedLeaderPredictions.find((pred: any) => Number(pred.fixture_id || pred.api_fixture_id) === Number(currentMatch?.fixture?.id))
+                    ? selectedLeaderPredictions.find((pred: any) => Number(pred.fixture_id) === currentFixtureId || Number(pred.api_fixture_id) === currentFixtureId)
                     : null;
+                  const currentMatchPredictionCount = currentMatch
+                    ? selectedLeaderPredictions.filter((pred: any) => Number(pred.fixture_id) === currentFixtureId || Number(pred.api_fixture_id) === currentFixtureId).length
+                    : 0;
 
                   const currentMatchDate = currentMatch?.fixture?.date
                     ? new Date(currentMatch.fixture.date).toLocaleDateString('ar-EG', {
