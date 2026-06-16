@@ -1532,48 +1532,48 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                     : null;
 
                   return currentMatch ? (
-                    <div className="rank-item" style={{ marginBottom: 14, borderColor: 'rgba(59,130,246,.24)', background: 'linear-gradient(90deg,rgba(59,130,246,.10),rgba(255,255,255,.02))' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: '#93c5fd' }}>🔵 التوقع الحالي للماتش الجاري</div>
-                        <div style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 11, fontWeight: 800 }}>بدأت المباراة</div>
+                    <div className="rank-item" style={{ marginBottom: 14, borderColor: 'rgba(59,130,246,.24)', background: 'linear-gradient(90deg,rgba(59,130,246,.10),rgba(255,255,255,.02))', padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>🔵 التوقع الحالي للماتش الجاري</div>
+                        <div style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>بدأت المباراة</div>
                       </div>
 
-                      <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                        {currentMatch?.teams?.home?.logo && <img src={currentMatch.teams.home.logo} alt="" width={18} height={18} style={{ objectFit: 'contain', borderRadius: 3 }} />}
-                        {currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}
-                        {currentMatch?.teams?.away?.logo && <img src={currentMatch.teams.away.logo} alt="" width={18} height={18} style={{ objectFit: 'contain', borderRadius: 3 }} />}
+                      <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', marginBottom: 6, whiteSpace: 'nowrap', overflowX: 'auto', paddingBottom: 2 }}>
+                        {currentMatch?.teams?.home?.logo && <img src={currentMatch.teams.home.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
+                        <span>{currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}</span>
+                        {currentMatch?.teams?.away?.logo && <img src={currentMatch.teams.away.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
                       </div>
 
-                      {currentMatchDate && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{currentMatchDate}</div>}
+                      {currentMatchDate && <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10, whiteSpace: 'nowrap', overflowX: 'auto' }}>{currentMatchDate}</div>}
 
                       {currentPrediction ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.15fr .85fr', gap: 10 }}>
+                        <div style={{ display: 'grid', gap: 8 }}>
                           <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
-                            <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعه الآن</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', marginBottom: 8 }}>
-                              {currentPrediction.predicted_home_score} — {currentPrediction.predicted_away_score}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                              <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>توقعه الآن</div>
+                              <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                                {currentPrediction.predicted_home_score} — {currentPrediction.predicted_away_score}
+                              </div>
                             </div>
 
                             <div style={{ display: 'grid', gap: 6 }}>
-                              <div style={{ fontSize: 12, color: 'var(--text)' }}>
+                              <div style={{ fontSize: 12, color: 'var(--text)', whiteSpace: 'nowrap', overflowX: 'auto' }}>
                                 ⚽ الهداف الأول: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{currentPrediction.predicted_first_scorer || 'لم يحدد'}</span>
                               </div>
-                              <div style={{ fontSize: 12, color: 'var(--text)' }}>
-                                🟥 كارت أحمر: <span style={{ color: currentPrediction.predicted_red_card ? '#fca5a5' : 'var(--muted)', fontWeight: 700 }}>{currentPrediction.predicted_red_card ? 'نعم' : 'لا'}</span>
-                              </div>
-                              <div style={{ fontSize: 12, color: 'var(--text)' }}>
-                                ⚠️ ضربة جزاء: <span style={{ color: currentPrediction.predicted_penalty ? '#fde68a' : 'var(--muted)', fontWeight: 700 }}>{currentPrediction.predicted_penalty ? 'نعم' : 'لا'}</span>
-                              </div>
-                              <div style={{ fontSize: 12, color: 'var(--text)' }}>
-                                🔁 الفريقان يسجلان: <span style={{ color: currentPrediction.predicted_both_teams ? '#86efac' : 'var(--muted)', fontWeight: 700 }}>{currentPrediction.predicted_both_teams ? 'نعم' : 'لا'}</span>
+                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                <div style={{ fontSize: 12, color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                                  🟥 كارت أحمر: <span style={{ color: currentPrediction.predicted_red_card ? '#fca5a5' : 'var(--muted)', fontWeight: 700 }}>{currentPrediction.predicted_red_card ? 'نعم' : 'لا'}</span>
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--text)', whiteSpace: 'nowrap' }}>
+                                  ⚠️ ضربة جزاء: <span style={{ color: currentPrediction.predicted_penalty ? '#fde68a' : 'var(--muted)', fontWeight: 700 }}>{currentPrediction.predicted_penalty ? 'نعم' : 'لا'}</span>
+                                </div>
                               </div>
                             </div>
                           </div>
 
-                          <div style={{ padding: '10px 12px', borderRadius: 12, background: 'rgba(59,130,246,.07)', border: '1px solid rgba(59,130,246,.20)' }}>
-                            <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>حالة المباراة</div>
-                            <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 700 }}>المباراة بدأت ولم تُحسم بعد</div>
-                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>سيظهر كارت النتيجة والنقاط تلقائيًا بعد حفظ النتيجة النهائية.</div>
+                          <div style={{ padding: '9px 12px', borderRadius: 12, background: 'rgba(59,130,246,.07)', border: '1px solid rgba(59,130,246,.20)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                            <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>حالة المباراة</div>
+                            <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 700, whiteSpace: 'nowrap' }}>المباراة بدأت ولم تُحسم بعد</div>
                           </div>
                         </div>
                       ) : (
