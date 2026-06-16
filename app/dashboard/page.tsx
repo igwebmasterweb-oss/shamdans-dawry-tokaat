@@ -1177,7 +1177,7 @@ const submitPrediction = async (match: any) => {
     went_extra_time: matchInfo?.went_extra_time ?? null,
   };
 })
-.filter((pred: any) => pred.actual_home_score !== null && pred.actual_home_score !== undefined)
+.filter((pred: any) => pred.home_team || pred.away_team)
 .sort((a: any, b: any) => {
   const dateA = a.fixture_date ? new Date(a.fixture_date).getTime() : 0;
   const dateB = b.fixture_date ? new Date(b.fixture_date).getTime() : 0;
