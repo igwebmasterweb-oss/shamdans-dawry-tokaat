@@ -1235,12 +1235,13 @@ setSelectedLeaderPredictions(normalizedPreds);
   );
 
  const myPoints = addProfilePoints(myTotalPoints, profileCompleted);
+  const leaderboardMe = leaderboard.find((p: any) => p.user_id === user?.id);
+  const myPredictionPoints = leaderboardMe?.total_points ?? myTotalPoints ?? 0;
   const myRank      = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
   const myRoundPts = predictions
     .filter((pr: any) => filteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
-  const myPredictionPoints = predictions.reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
 
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
