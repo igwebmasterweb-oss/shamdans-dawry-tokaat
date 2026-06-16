@@ -21,6 +21,36 @@ function normalizeName(s: string): string {
     .replace(/\s+/g, ' ');
 }
 
+
+function tokenizeName(s: string | null | undefined): string[] {
+  if (!s) return [];
+  return normalizeName(s).split(' ').filter(Boolean);
+}
+
+function namesReferToSamePlayer(a: string | null | undefined, b: string | null | undefined): boolean {
+  const aa = normalizeName(a || '');
+  const bb = normalizeName(b || '');
+  if (!aa || !bb) return false;
+  if (aa === bb) return true;
+
+  const at = tokenizeName(aa);
+  const bt = tokenizeName(bb);
+  if (!at.length || !bt.length) return false;
+
+  const aLast = at[at.length - 1];
+  const bLast = bt[bt.length - 1];
+  if (!aLast || !bLast || aLast !== bLast) return false;
+
+  const aFirst = at[0];
+  const bFirst = bt[0];
+  if (!aFirst || !bFirst) return false;
+
+  if (aFirst === bFirst) return true;
+  if (aFirst[0] === bFirst[0]) return true;
+
+  return false;
+}
+
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -157,18 +187,13 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
     points += 5;
   }
 
-  const actualFirstScorer = fixture.first_scorer
-    ? normalizeName(fixture.first_scorer)
-    : null;
-
-  const predictedScorer = pred.predicted_first_scorer
-    ? normalizeName(pred.predicted_first_scorer)
-    : null;
+  const actualFirstScorer = fixture.first_scorer || null;
+  const predictedScorer = pred.predicted_first_scorer || null;
 
   const allScorers = Array.isArray(fixture.scorers_json)
     ? [...new Set(
         fixture.scorers_json
-          .map((name) => normalizeName(String(name)))
+          .map((name) => String(name).trim())
           .filter(Boolean)
       )]
     : [];
@@ -176,9 +201,9 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
   if (predictedScorer) {
     const isFirstScorer =
       actualFirstScorer !== null &&
-      predictedScorer === actualFirstScorer;
+      namesReferToSamePlayer(predictedScorer, actualFirstScorer);
 
-    const scoredInMatch = allScorers.includes(predictedScorer);
+    const scoredInMatch = allScorers.some((name) => namesReferToSamePlayer(predictedScorer, name));
 
     if (isFirstScorer) {
       points += 3;
