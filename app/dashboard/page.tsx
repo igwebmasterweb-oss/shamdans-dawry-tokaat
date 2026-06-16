@@ -1502,13 +1502,87 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
 
                 <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>📋 توقعات العضو</div>
 
+                {(() => {
+                  const now = new Date();
+                  const currentMatch = [...matches]
+                    .filter((m: any) => {
+                      const matchDate = m?.fixture?.date ? new Date(m.fixture.date) : null;
+                      const started = !!matchDate && matchDate <= now;
+                      const hasFinalResult = m?.actual_home_score !== null && m?.actual_home_score !== undefined;
+                      return started && !hasFinalResult;
+                    })
+                    .sort((a: any, b: any) => new Date(a.fixture.date).getTime() - new Date(b.fixture.date).getTime())[0];
+
+                  const currentPrediction = currentMatch
+                    ? selectedLeaderPredictions.find((pred: any) => Number(pred.fixture_id || pred.api_fixture_id) === Number(currentMatch?.fixture?.id))
+                    : null;
+
+                  const currentMatchDate = currentMatch?.fixture?.date
+                    ? new Date(currentMatch.fixture.date).toLocaleDateString('ar-EG', {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : null;
+
+                  return currentMatch ? (
+                    <div className="rank-item" style={{ marginBottom: 14, borderColor: 'rgba(59,130,246,.24)', background: 'linear-gradient(90deg,rgba(59,130,246,.10),rgba(255,255,255,.02))' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#93c5fd' }}>🔵 التوقع الحالي للماتش الجاري</div>
+                        <div style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 11, fontWeight: 800 }}>بدأت المباراة</div>
+                      </div>
+
+                      <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                        {currentMatch?.teams?.home?.logo && <img src={currentMatch.teams.home.logo} alt="" width={18} height={18} style={{ objectFit: 'contain', borderRadius: 3 }} />}
+                        {currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}
+                        {currentMatch?.teams?.away?.logo && <img src={currentMatch.teams.away.logo} alt="" width={18} height={18} style={{ objectFit: 'contain', borderRadius: 3 }} />}
+                      </div>
+
+                      {currentMatchDate && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{currentMatchDate}</div>}
+
+                      {currentPrediction ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                          <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
+                            <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعه الآن</div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                              {currentPrediction.predicted_home_score} — {currentPrediction.predicted_away_score}
+                            </div>
+                            {currentPrediction.predicted_first_scorer && (
+                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {currentPrediction.predicted_first_scorer}</div>
+                            )}
+                          </div>
+
+                          <div style={{ padding: '10px 12px', borderRadius: 12, background: 'rgba(59,130,246,.07)', border: '1px solid rgba(59,130,246,.20)' }}>
+                            <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>حالة المباراة</div>
+                            <div style={{ fontSize: 14, color: 'var(--text)', fontWeight: 700 }}>المباراة بدأت ولم تُحسم بعد</div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>سيظهر كارت النتيجة والنقاط تلقائيًا بعد حفظ النتيجة النهائية.</div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ padding: '12px 14px', borderRadius: 12, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.20)', color: '#ffb4b4', fontSize: 13, fontWeight: 700 }}>
+                          لا يوجد توقع لهذا العضو على الماتش الجاري.
+                        </div>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
+
                 {selectedLeaderPredictions.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 28, color: 'var(--muted)' }} className="stat-card">
                     لا توجد توقعات متاحة لهذا المتسابق
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gap: 12 }}>
-                    {selectedLeaderPredictions.map((pred: any, idx: number) => {
+                    {selectedLeaderPredictions
+                      .filter((pred: any) => {
+                        const matchInfo = matches.find((m: any) => Number(m.fixture.id) === Number(pred.fixture_id || pred.api_fixture_id));
+                        const started = matchInfo?.fixture?.date ? new Date(matchInfo.fixture.date) <= new Date() : false;
+                        const hasResult = pred.actual_home_score !== null && pred.actual_home_score !== undefined;
+                        return hasResult || !started;
+                      })
+                      .map((pred: any, idx: number) => {
                       const hasResult = pred.actual_home_score !== null && pred.actual_home_score !== undefined;
                       const matchDate = pred.fixture_date
                         ? new Date(pred.fixture_date).toLocaleDateString('ar-EG', {
@@ -2450,10 +2524,14 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
               <h2 style={{ fontWeight: 800, fontSize: 20 }}>توقعاتي</h2>
               <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '8px 16px', fontWeight: 800, color: 'var(--gold)' }}>🏅 {myPoints} نقطة</div>
             </div>
-            {pointsBreakdown.length > 0 && (
+            {(() => {
+              const topPredictionsWithZero = [...pointsBreakdown]
+                .sort((a: any, b: any) => Number(b.points ?? 0) - Number(a.points ?? 0));
+
+              return topPredictionsWithZero.length > 0 ? (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: '16px 20px', marginBottom: 20 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 12 }}>🔝 أفضل توقعاتك بالنقاط</div>
-                {pointsBreakdown.map((p: any, i) => (
+                {topPredictionsWithZero.map((p: any, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < pointsBreakdown.length - 1 ? '1px solid var(--line)' : 'none' }}>
                     <span style={{ fontSize: 14, fontWeight: 700 }}>{p.home_team} × {p.away_team}</span>
                     <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums',
@@ -2462,7 +2540,8 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                   </div>
                 ))}
               </div>
-            )}
+            ) : null;
+            })()}
             {predictions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
