@@ -372,9 +372,9 @@ export default function Dashboard() {
   const [totalParticipants, setTotalParticipants] = useState(0);
   const [loading, setLoading]               = useState(true);
   const [loadError, setLoadError]           = useState(false);
-  const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'round1leaders' | 'feed' | 'history'>('predict');
+  const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'roundleaders' | 'feed' | 'history'>('predict');
   const [activeRound, setActiveRound]       = useState('');
-  const [roundLeaderboard, setRoundLeaderboard] = useState<Record<string, number>>({});
+  const [roundLeaderboardRows, setRoundLeaderboardRows] = useState<any[]>([]);
   const [roundLeaderLoading, setRoundLeaderLoading] = useState(false);
   const [predForms, setPredForms]           = useState<Record<number, any>>({});
   const [submitting, setSubmitting]         = useState<number | null>(null);
@@ -410,10 +410,6 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [pushEnabled, setPushEnabled]       = useState(false);
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
-  const [leaderboardView, setLeaderboardView] = useState<'general' | 'round1'>('general');
-  const [round1Leaders, setRound1Leaders] = useState<any[]>([]);
-  const [round1LeadersLoading, setRound1LeadersLoading] = useState(false);
-  const [round1Debug, setRound1Debug] = useState<any>({ fixtureIds: [], rows: 0, users: 0, topSample: [] });
   const addProfilePoints = (total = 0, completed = false) =>
   total + (completed ? 5 : 0);
 
@@ -762,70 +758,35 @@ const userNameMap: Record<string, string> = {};
   };
 
 useEffect(() => {
-  if (!activeRound || !matches.length) return;
-
-  const roundFixtureIds = matches
-  .filter((m: any) => m.league?.round === activeRound)
-  .map((m: any) => Number(m?.fixture?.id))
-  .filter((id: any) => Number.isFinite(id));
-
-  if (!roundFixtureIds.length) {
-    setRoundLeaderboard({});
+  if (!activeRound) {
+    setRoundLeaderboardRows([]);
     return;
   }
 
   let cancelled = false;
   setRoundLeaderLoading(true);
-   (async () => {
-  try {
-    const pageSize = 1000;
-    let from = 0;
-    let allRows: any[] = [];
 
-    while (true) {
-      const { data, error } = await supabase
-        .from('predictions')
-        .select('user_id, fixture_id, points')
-        .in('fixture_id', roundFixtureIds)
-        .range(from, from + pageSize - 1);
+  (async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_round_leaderboard', { p_round: activeRound });
 
       if (cancelled) return;
+      if (error) throw error;
 
-      if (error) {
-        throw error;
-      }
-
-      const batch = data || [];
-      allRows = allRows.concat(batch);
-
-      if (batch.length < pageSize) break;
-      from += pageSize;
+      setRoundLeaderboardRows(data || []);
+      setRoundLeaderLoading(false);
+    } catch (error) {
+      if (cancelled) return;
+      console.error('round leaderboard load error', error);
+      setRoundLeaderboardRows([]);
+      setRoundLeaderLoading(false);
     }
-
-    if (cancelled) return;
-
-    const map: Record<string, number> = {};
-    allRows.forEach((row: any) => {
-      if (!row?.user_id) return;
-      if (!map[row.user_id]) map[row.user_id] = 0;
-      map[row.user_id] += row.points || 0;
-    });
-
-    setRoundLeaderboard(map);
-    setRoundLeaderLoading(false);
-  } catch (error) {
-    if (cancelled) return;
-
-    console.error('round leaderboard load error', error);
-    setRoundLeaderboard({});
-    setRoundLeaderLoading(false);
-  }
-})();
+  })();
 
   return () => {
     cancelled = true;
   };
-}, [activeRound, matches]);
+}, [activeRound]);
 
 
 
@@ -2203,46 +2164,6 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                  {(() => {
   if (!user?.id) return null;
 
-  const myRoundUserId = String(user.id);
-  const isRound1 = String(activeRound || '').trim() === 'Group Stage - 1';
-
-  if (isRound1) {
-    if (round1LeadersLoading) {
-      return (
-        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>
-          ⏳ جاري حساب ترتيب الجولة
-        </div>
-      );
-    }
-
-    const myIndex = round1Leaders.findIndex(
-      (p: any) => String(p.user_id) === myRoundUserId
-    );
-
-    const myRoundRank = myIndex >= 0 ? myIndex + 1 : null;
-
-    return myRoundRank ? (
-      <div
-        style={{
-          marginTop: 8,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '3px 10px',
-          borderRadius: 999,
-          background: 'rgba(147,197,253,.1)',
-          border: '1px solid rgba(147,197,253,.2)',
-          fontSize: 10,
-          fontWeight: 800,
-          color: '#93c5fd',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        🏅 ترتيبك في الجولة #{myRoundRank}
-      </div>
-    ) : null;
-  }
-
   if (roundLeaderLoading) {
     return (
       <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 8 }}>
@@ -2251,23 +2172,8 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
     );
   }
 
-  const leaderboardWithMe: Record<string, number> = {
-    ...roundLeaderboard,
-    [String(user.id)]: Number(myRoundPts ?? 0),
-  };
-
-  const myRoundScore = Number(leaderboardWithMe[myRoundUserId] ?? 0);
-  if (myRoundScore <= 0) return null;
-
-  const positiveRoundEntries = Object.entries(leaderboardWithMe).filter(
-    ([_, pts]) => Number(pts) > 0
-  );
-
-  const higherScoresCount = positiveRoundEntries.filter(
-    ([uid, pts]) => String(uid) !== myRoundUserId && Number(pts) > myRoundScore
-  ).length;
-
-  const myRoundRank = higherScoresCount + 1;
+  const myRoundEntry = roundLeaderboardRows.find((p: any) => String(p.user_id) === String(user.id));
+  const myRoundRank = myRoundEntry?.rank ? Number(myRoundEntry.rank) : null;
 
   return myRoundRank ? (
     <div
@@ -2899,31 +2805,26 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
         )}
 
 
-        {(activeTab === 'leaders' || activeTab === 'round1leaders') && (
+        {(activeTab === 'leaders' || activeTab === 'roundleaders') && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <button className={`round-btn ${activeTab === 'leaders' ? 'active' : ''}`} onClick={() => setActiveTab('leaders')}>الصدارة العامة</button>
-                <button className={`round-btn ${activeTab === 'round1leaders' ? 'active' : ''}`} onClick={() => setActiveTab('round1leaders')}>صدارة الجولة الأولى</button>
+                <button className={`round-btn ${activeTab === 'roundleaders' ? 'active' : ''}`} onClick={() => setActiveTab('roundleaders')}>صدارة الجولة</button>
               </div>
               {activeTab === 'leaders'
                 ? <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link>
                 : <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>نقاط التوقعات فقط</span>}
             </div>
 
-            {activeTab === 'round1leaders' && !round1LeadersLoading && (
-              <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 12, background: 'rgba(59,130,246,.08)', border: '1px solid rgba(59,130,246,.16)', fontSize: 11, color: '#93c5fd', lineHeight: 1.8 }}>
-                fixtures: {round1Debug?.fixtureIds?.length || 0} | rows: {round1Debug?.rows || 0} | users: {round1Debug?.users || 0}
-              </div>
-            )}
 
-            {activeTab === 'round1leaders' && round1LeadersLoading ? (
+            {activeTab === 'roundleaders' && roundLeaderLoading ? (
               <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
                 <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>جاري تحميل صدارة الجولة الأولى</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>جاري تحميل صدارة الجولة</div>
               </div>
             ) : (() => {
-              const rankingData = activeTab === 'round1leaders' ? round1Leaders : leaderboard;
+              const rankingData = activeTab === 'roundleaders' ? roundLeaderboardRows : leaderboard;
               if (rankingData.length === 0) {
                 return (
                   <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
@@ -2936,6 +2837,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
               return rankingData.slice(0, 20).map((player: any, i) => {
                 const isMe = player.user_id === user?.id;
                 const name = player.display_name || player.user_email?.split('@')[0];
+                const playerPredictionsCount = activeTab === 'roundleaders' ? (player.predictions_count || 0) : (player.count || 0);
                 return (
                   <div
                     key={`${activeTab}-${player.user_id}`}
@@ -2958,14 +2860,14 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                         {isMe && <span style={{ marginRight: 8, fontSize: 11, color: 'var(--gold)' }}>(أنت)</span>}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                        {activeTab === 'round1leaders'
-                          ? 'مجموع نقاط التوقعات في الجولة الأولى فقط'
-                          : `${player.count || 0} توقع`}
+                        {activeTab === 'roundleaders'
+                          ? `مجموع نقاط التوقعات في ${roundLabels[activeRound] || activeRound || 'الجولة الحالية'}`
+                          : `${playerPredictionsCount || 0} توقع`}
                       </div>
                     </div>
                     <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: 22, fontWeight: 800, color: i < 3 ? 'var(--gold)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                        {player.totalPoints || 0}
+                        {activeTab === 'roundleaders' ? (player.total_points || 0) : (player.totalPoints || 0)}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
                     </div>
