@@ -1547,15 +1547,27 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                       {currentMatchDate && <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>{currentMatchDate}</div>}
 
                       {currentPrediction ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.15fr .85fr', gap: 10 }}>
                           <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
                             <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعه الآن</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', marginBottom: 8 }}>
                               {currentPrediction.predicted_home_score} — {currentPrediction.predicted_away_score}
                             </div>
-                            {currentPrediction.predicted_first_scorer && (
-                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {currentPrediction.predicted_first_scorer}</div>
-                            )}
+
+                            <div style={{ display: 'grid', gap: 6 }}>
+                              <div style={{ fontSize: 12, color: 'var(--text)' }}>
+                                ⚽ الهداف الأول: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>{currentPrediction.predicted_first_scorer || 'لم يحدد'}</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: 'var(--text)' }}>
+                                🟥 كارت أحمر: <span style={{ color: currentPrediction.predicted_red_card ? '#fca5a5' : 'var(--muted)', fontWeight: 700 }}>{currentPrediction.predicted_red_card ? 'نعم' : 'لا'}</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: 'var(--text)' }}>
+                                ⚠️ ضربة جزاء: <span style={{ color: currentPrediction.predicted_penalty ? '#fde68a' : 'var(--muted)', fontWeight: 700 }}>{currentPrediction.predicted_penalty ? 'نعم' : 'لا'}</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: 'var(--text)' }}>
+                                🔁 الفريقان يسجلان: <span style={{ color: currentPrediction.predicted_both_teams ? '#86efac' : 'var(--muted)', fontWeight: 700 }}>{currentPrediction.predicted_both_teams ? 'نعم' : 'لا'}</span>
+                              </div>
+                            </div>
                           </div>
 
                           <div style={{ padding: '10px 12px', borderRadius: 12, background: 'rgba(59,130,246,.07)', border: '1px solid rgba(59,130,246,.20)' }}>
