@@ -1240,6 +1240,7 @@ setSelectedLeaderPredictions(normalizedPreds);
   const myRoundPts = predictions
     .filter((pr: any) => filteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
+  const myPredictionPoints = predictions.reduce((sum: number, pr: any) => sum + (pr.points || 0), 0);
 
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
@@ -1269,7 +1270,7 @@ setSelectedLeaderPredictions(normalizedPreds);
   ? Math.round((correctPreds.length / resolvedPreds.length) * 100) : 0;
 const maxPossible    = resolvedPreds.length * 19;
 const efficiencyPct  = maxPossible > 0
-  ? Math.round((myPoints / maxPossible) * 100) : 0;
+  ? Math.round((myPredictionPoints / maxPossible) * 100) : 0;
 
   const roundsWithPred = new Set(
     predictions.map((p: any) => {
@@ -2122,7 +2123,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           {[
             { label: 'توقعاتي',    value: predictions.length,                                        color: '#8ae0b3', icon: '⚽' },
             { label: 'المتسابقون', value: totalParticipants, color: '#7db1ff', icon: '👥' },
-           { label: 'دقة التوقع', value: maxPossible > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: maxPossible > 0 ? `${myPoints} من ${maxPossible} نقطة` : '' },
+           { label: 'دقة التوقع', value: maxPossible > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: maxPossible > 0 ? `${myPredictionPoints} من ${maxPossible} نقطة` : '' },
             { label: 'الجولات',    value: streakCount > 0 ? `${streakCount} 🔥` : '—',               color: '#f97316', icon: '📅' },
           ].map((s: any) => (
            
@@ -2151,7 +2152,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{animatedPoints} نقطة</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 8 }}>
   {(() => {
-    const predPoints = myRoundPts;
+    const predPoints = myPredictionPoints;
             const chips = [
       { label: '⚽ توقعات', value: predPoints, color: 'rgba(138,224,179,.15)', border: 'rgba(138,224,179,.25)', text: '#8ae0b3' },
       ...(referralPoints > 0 ? [{ label: '👥 دعوات', value: referralPoints, color: 'rgba(125,177,255,.15)', border: 'rgba(125,177,255,.25)', text: '#7db1ff' }] : []),
