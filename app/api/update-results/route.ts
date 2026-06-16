@@ -22,9 +22,23 @@ function normalizeName(s: string): string {
 }
 
 
-function tokenizeName(s: string | null | undefined): string[] {
+
+function getNameTokens(s: string | null | undefined): string[] {
   if (!s) return [];
   return normalizeName(s).split(' ').filter(Boolean);
+}
+
+function expandCompactPlayerName(s: string | null | undefined): string {
+  if (!s) return '';
+  return String(s)
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\./g, '. ')
+    .replace(/[^a-z0-9.\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function namesReferToSamePlayer(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -33,22 +47,32 @@ function namesReferToSamePlayer(a: string | null | undefined, b: string | null |
   if (!aa || !bb) return false;
   if (aa === bb) return true;
 
-  const at = tokenizeName(aa);
-  const bt = tokenizeName(bb);
+  const at = getNameTokens(expandCompactPlayerName(a));
+  const bt = getNameTokens(expandCompactPlayerName(b));
   if (!at.length || !bt.length) return false;
 
   const aLast = at[at.length - 1];
   const bLast = bt[bt.length - 1];
-  if (!aLast || !bLast || aLast !== bLast) return false;
+  if (!aLast || !bLast) return false;
+
+  const lastNamesCompatible =
+    aLast === bLast ||
+    aLast.startsWith(bLast) ||
+    bLast.startsWith(aLast);
+
+  if (!lastNamesCompatible) return false;
 
   const aFirst = at[0];
   const bFirst = bt[0];
   if (!aFirst || !bFirst) return false;
 
-  if (aFirst === bFirst) return true;
-  if (aFirst[0] === bFirst[0]) return true;
+  const firstNamesCompatible =
+    aFirst === bFirst ||
+    aFirst[0] === bFirst[0] ||
+    aFirst.startsWith(bFirst) ||
+    bFirst.startsWith(aFirst);
 
-  return false;
+  return firstNamesCompatible;
 }
 
 function chunkArray<T>(items: T[], size: number): T[][] {
