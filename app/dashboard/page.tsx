@@ -748,7 +748,7 @@ const userNameMap: Record<string, string> = {};
       })));
 
       const breakdown = normalizedUserPreds
-        .filter((p: any) => p.points !== null && p.points !== undefined)
+        .filter((p: any) => p.points !== null && p.points !== undefined && p.points >= 0)
         .sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
         .slice(0, 10);
       setPointsBreakdown(breakdown);
