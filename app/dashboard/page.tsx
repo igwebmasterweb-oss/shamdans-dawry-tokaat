@@ -962,55 +962,92 @@ if (refreshPointsError) throw refreshPointsError;
   const setForm = (fixtureId: number, patch: any) =>
     setPredForms(prev => ({ ...prev, [fixtureId]: { ...getForm({ fixture: { id: fixtureId } }), ...patch } }));
 
-  const submitPrediction = async (match: any) => {
-    if (!user) return;
-    setSubmitting(match.fixture.id);
-    const form = getForm(match);
-    try {
-      const ex = predictions.find(p => p.fixture_id === match.fixture.id);
-      const payload = {
-        user_id:               user.id,
-        user_email:            user.email,
-        fixture_id:            match.fixture.id,
-        home_team:             match.teams.home.name,
-        away_team:             match.teams.away.name,
-        predicted_home_score:  form.homeScore,
-        predicted_away_score:  form.awayScore,
-        predicted_first_scorer: form.firstScorer || null,
-        predicted_extra_time:  form.extraTime,
-        predicted_red_card:    form.predicted_red_card   ?? false,
-        predicted_penalty:     form.predicted_penalty    ?? false,
-        predicted_both_teams:  form.predicted_both_teams ?? false,
-        submitted_at:          new Date().toISOString(),
-      };
-      if (ex) {
-        await supabase.from('predictions').update(payload).eq('id', ex.id);
-      } else {
-        await supabase.from('predictions').insert(payload);
-        await supabase.from('social_feed').insert({
-  user_id: user.id,
-  type: 'share_predictions',
-  data: {
-    home: match.teams.home.name,
-    away: match.teams.away.name,
-    fixture_id: match.fixture.id,
-    display_name:
-      profile?.full_name?.trim() ||
-      profileForm.display_name?.trim() ||
-      user.email?.split('@')[0] ||
-      '',
-    user_email: user.email || null,
-  },
-});
-      }
-      const { data } = await supabase.from('predictions').select('*').eq('user_id', user.id);
-      setPredictions(data || []);
-      setMessages(m => ({ ...m, [match.fixture.id]: '✅ تم الحفظ!' }));
-      setTimeout(() => setMessages(m => ({ ...m, [match.fixture.id]: '' })), 3000);
-    } catch { setMessages(m => ({ ...m, [match.fixture.id]: '❌ خطأ في الحفظ' })); }
-    setSubmitting(null);
-  };
+ // Updated file prepared with only submitPrediction hardening change.
+// NOTE: This downloadable artifact contains the exact safe replacement function
+// to paste into your live file, because the attached source is truncated in retrieval.
 
+const submitPrediction = async (match: any) => {
+  if (!user) return;
+
+  if (!match?.is_open) {
+    setMessages(m => ({ ...m, [match.fixture.id]: '🔒 تم إغلاق التوقعات لهذه المباراة' }));
+    setTimeout(() => setMessages(m => ({ ...m, [match.fixture.id]: '' })), 3000);
+    return;
+  }
+
+  setSubmitting(match.fixture.id);
+  const form = getForm(match);
+
+  try {
+    const ex = predictions.find((p: any) => p.fixture_id === match.fixture.id);
+
+    const payload = {
+      user_id: user.id,
+      user_email: user.email,
+      fixture_id: match.fixture.id,
+      home_team: match.teams.home.name,
+      away_team: match.teams.away.name,
+      predicted_home_score: form.homeScore,
+      predicted_away_score: form.awayScore,
+      predicted_first_scorer: form.firstScorer || null,
+      predicted_extra_time: form.extraTime,
+      predicted_red_card: form.predicted_red_card ?? false,
+      predicted_penalty: form.predicted_penalty ?? false,
+      predicted_both_teams: form.predicted_both_teams ?? false,
+      submitted_at: new Date().toISOString(),
+    };
+
+    if (ex) {
+      const { error } = await supabase
+        .from('predictions')
+        .update(payload)
+        .eq('id', ex.id);
+
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('predictions')
+        .insert(payload);
+
+      if (error) throw error;
+
+      const { error: feedError } = await supabase.from('social_feed').insert({
+        user_id: user.id,
+        type: 'share_predictions',
+        data: {
+          home: match.teams.home.name,
+          away: match.teams.away.name,
+          fixture_id: match.fixture.id,
+          display_name:
+            profile?.full_name?.trim() ||
+            profileForm.display_name?.trim() ||
+            user.email?.split('@')[0] ||
+            '',
+          user_email: user.email || null,
+        },
+      });
+
+      if (feedError) console.error('social_feed insert error:', feedError);
+    }
+
+    const { data, error: reloadError } = await supabase
+      .from('predictions')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (reloadError) throw reloadError;
+
+    setPredictions(data || []);
+    setMessages(m => ({ ...m, [match.fixture.id]: '✅ تم الحفظ!' }));
+    setTimeout(() => setMessages(m => ({ ...m, [match.fixture.id]: '' })), 3000);
+  } catch (err) {
+    console.error('submitPrediction error:', err);
+    setMessages(m => ({ ...m, [match.fixture.id]: '❌ تعذر حفظ التوقع' }));
+    setTimeout(() => setMessages(m => ({ ...m, [match.fixture.id]: '' })), 3000);
+  } finally {
+    setSubmitting(null);
+  }
+};
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
   const handlePushSubscribe = async () => {
