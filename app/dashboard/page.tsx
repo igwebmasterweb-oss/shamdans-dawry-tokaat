@@ -748,7 +748,7 @@ const userNameMap: Record<string, string> = {};
       })));
 
       const breakdown = normalizedUserPreds
-        .filter((p: any) => p.points !== null && p.points !== 0)
+        .filter((p: any) => p.points !== null && p.points !== undefined)
         .sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
         .slice(0, 10);
       setPointsBreakdown(breakdown);
@@ -1566,7 +1566,14 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                         </div>
                       )}
                     </div>
-                  ) : null;
+                  ) : (
+                    <div className="rank-item" style={{ marginBottom: 14, borderStyle: 'dashed', opacity: 0.9 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginBottom: 8 }}>🟡 التوقع الحالي للماتش الجاري</div>
+                      <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
+                        لا يوجد الآن ماتش جارٍ لعرض التوقع الحالي. سيظهر هنا تلقائيًا عند بدء أي مباراة وقبل تسجيل النتيجة النهائية.
+                      </div>
+                    </div>
+                  );
                 })()}
 
                 {selectedLeaderPredictions.length === 0 ? (
