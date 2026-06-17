@@ -1457,12 +1457,14 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>إجمالي النقاط</div>
-    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
-      {addProfilePoints(
-  selectedLeaderSummary?.total_points ?? selectedLeader?.totalPoints ?? 0,
-  selectedLeaderSummary?.profile_completed ?? selectedLeader?.profile_completed ?? false
-)}
-    </div>
+<div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
+  {
+    selectedLeaderPredictions.reduce((sum: number, pred: any) => sum + (pred.points || 0), 0)
+    + (selectedLeaderSummary?.referral_points ?? 0)
+    + (selectedLeaderSummary?.profile_completed ? 5 : 0)
+    + (selectedLeaderSummary?.bonus_points ?? 0)
+  }
+</div>
   </div>
 
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
@@ -1661,7 +1663,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                         >
                           <div style={{ minWidth: 0 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                              <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', direction: 'ltr' }}>
                                 {matches.find((m: any) => m.fixture.id === (pred.fixture_id || pred.api_fixture_id))?.teams?.home?.logo && <img src={matches.find((m: any) => m.fixture.id === (pred.fixture_id || pred.api_fixture_id))?.teams?.home?.logo} alt="" width={18} height={18} style={{ objectFit: 'contain', borderRadius: 3 }} />}
                                 {pred.home_team && pred.away_team ? `${pred.home_team} × ${pred.away_team}` : `مباراة #${pred.fixture_id || pred.api_fixture_id || '—'}`}
                                 {matches.find((m: any) => m.fixture.id === (pred.fixture_id || pred.api_fixture_id))?.teams?.away?.logo && <img src={matches.find((m: any) => m.fixture.id === (pred.fixture_id || pred.api_fixture_id))?.teams?.away?.logo} alt="" width={18} height={18} style={{ objectFit: 'contain', borderRadius: 3 }} />}
@@ -2547,7 +2549,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontWeight: 800, fontSize: 20 }}>توقعاتي</h2>
-              <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '8px 16px', fontWeight: 800, color: 'var(--gold)' }}>🏅 {myPoints} نقطة</div>
+              <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '8px 16px', fontWeight: 800, color: 'var(--gold)' }}>🏅 {predictionOnlyPoints} نقطة</div>
             </div>
             {(() => {
               const topPredictionsWithZero = [...pointsBreakdown]
