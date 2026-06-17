@@ -2037,11 +2037,11 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
         {[
           { icon: '👤', text: 'كمّل بيانات ملفك الشخصي (اسمك، رقم تليفونك، واربط حساب الفيسبوك) وهتاخد', pts: '+5 نقاط', note: 'تأكد إن البيانات صحيحة عشان نتواصل معاك لو كنت من الفايزين.' },
           { icon: '👥', text: 'اعزم أصحابك — شارك رابط الدعوة بتاعك وعلى كل صاحب يسجل من خلالك هتاخد', pts: '+5 نقاط', note: 'الحد الأقصى لدعوات الأصحاب هو 50 نقطة.' },
-      {
+            {
   icon: '🏆',
   text: 'أبطال "حلمك فيها" — لو شاركت قبل كده بأكتر من 10 أكواد، ليك نقاط هدية! لازم تكون مسجل بنفس بيانات مسابقة "حلمك فيها". ولو شاركت بأكتر من 100 كود في مسابقة "حلمك فيها" هتكسب 50 نقطة.',
   pts: '',
-  notes: [
+  note: [
     '🚨 يشترط تقديم أغلفة الأكواد كلها في حال الفوز حتى يتم تأكيد النقاط.',
     '⚠️ أي محاولة كسب نقاط بطرق غير شرعية ستتسبب في عقوبة خصم نقاط من المشارك وقد تصل لإنهاء حسابه تمامًا في دوري التوقعات.'
   ]
@@ -2049,7 +2049,7 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
         ].map((item, i) => (
           <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
             <span style={{ fontSize: 18, flexShrink: 0, marginTop: 2 }}>{item.icon}</span>
-                        <div>
+                                   <div>
               <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>{item.text} </span>
               {item.pts && <span style={{ fontWeight: 800, color: '#8ae0b3', fontSize: 13 }}>{item.pts}</span>}
               {item.note && (
