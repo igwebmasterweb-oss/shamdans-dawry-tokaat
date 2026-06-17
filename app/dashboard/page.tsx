@@ -42,19 +42,32 @@ function PlayerSelect({
       return;
     }
 
-    async function load() {
-      const { data: squadData } = await supabase
-        .from('team_players')
-        .select('player_name, team_name, position')
-        .in('team_name', [homeTeam, awayTeam])
-        .order('team_name')
-        .order('player_name');
 
-      if (squadData && squadData.length > 0) {
-        setPlayers(squadData);
-        setLoaded(true);
-        return;
-      }
+      async function load() {
+  const { data: squadData } = await supabase
+    .from('team_players')
+    .select('player_name, team_name, position')
+    .in('team_name', [homeTeam, awayTeam])
+    .order('team_name')
+    .order('player_name');
+
+  const { data: lineupData } = await supabase
+    .from('fixture_players')
+    .select('player_name, team_name, position')
+    .eq('api_fixture_id', fixtureId)
+    .order('team_name')
+    .order('player_name');
+
+  const merged = [...(squadData || []), ...(lineupData || [])];
+  const unique = Array.from(
+    new Map(
+      merged.map((p: any) => [`${p.team_name}__${p.player_name}`, p])
+    ).values()
+  );
+
+  setPlayers(unique);
+  setLoaded(true);
+}
 
       const { data: lineupData } = await supabase
         .from('fixture_players')
