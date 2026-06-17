@@ -20,16 +20,26 @@ function PlayerSelect({
   fixtureId,
   homeTeam,
   awayTeam,
+  homeTeamId,
+  awayTeamId,
   value,
   onChange,
 }: {
   fixtureId: number;
   homeTeam: string;
   awayTeam: string;
+  homeTeamId?: number | null;
+  awayTeamId?: number | null;
   value: string;
   onChange: (v: string) => void;
 }) {
-  const [players, setPlayers] = useState<{ player_name: string; team_name: string; position: string | null }[]>([]);
+   const [players, setPlayers] = useState<{
+    player_name: string;
+    team_name: string;
+    team_id?: number | null;
+    team_side?: 'home' | 'away' | null;
+    position: string | null;
+  }[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
@@ -43,26 +53,51 @@ function PlayerSelect({
     }
 
     async function load() {
-      const { data: squadData } = await supabase
+           const squadQuery = supabase
         .from('team_players')
-        .select('player_name, team_name, position')
-        .in('team_name', [homeTeam, awayTeam])
+        .select('player_name, team_name, team_id, position')
         .order('team_name')
         .order('player_name');
 
-      const { data: lineupData } = await supabase
+      const { data: squadData } =
+        homeTeamId && awayTeamId
+          ? await squadQuery.in('team_id', [homeTeamId, awayTeamId])
+          : await squadQuery.in('team_name', [homeTeam, awayTeam]);
+
+            const { data: lineupData } = await supabase
         .from('fixture_players')
-        .select('player_name, team_name, position')
+        .select('player_name, team_name, team_side, position')
         .eq('api_fixture_id', fixtureId)
         .order('team_name')
         .order('player_name');
 
-      const merged = [...(squadData || []), ...(lineupData || [])];
+           const normalizedSquad = (squadData || []).map((p: any) => ({
+        player_name: p.player_name,
+        team_name: p.team_name,
+        team_id: p.team_id ?? null,
+        team_side:
+          homeTeamId && p.team_id === homeTeamId
+            ? 'home'
+            : awayTeamId && p.team_id === awayTeamId
+            ? 'away'
+            : null,
+        position: p.position ?? null,
+      }));
+
+      const normalizedLineup = (lineupData || []).map((p: any) => ({
+        player_name: p.player_name,
+        team_name: p.team_name,
+        team_id: null,
+        team_side: p.team_side ?? null,
+        position: p.position ?? null,
+      }));
+
+      const merged = [...normalizedSquad, ...normalizedLineup];
       const unique = Array.from(
         new Map(
-          merged.map((p: any) => [`${p.team_name}__${p.player_name}`, p])
+          merged.map((p: any) => [`${p.team_side || p.team_name}__${p.player_name}`, p])
         ).values()
-      ) as { player_name: string; team_name: string; position: string | null }[];
+      );
 
       setPlayers(unique);
       setLoaded(true);
@@ -96,8 +131,19 @@ function PlayerSelect({
     p.player_name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const homePlayers = filtered.filter(p => p.team_name === homeTeam);
-  const awayPlayers = filtered.filter(p => p.team_name === awayTeam);
+   const homePlayers = filtered.filter(
+    p =>
+      p.team_side === 'home' ||
+      (homeTeamId && p.team_id === homeTeamId) ||
+      p.team_name === homeTeam
+  );
+
+  const awayPlayers = filtered.filter(
+    p =>
+      p.team_side === 'away' ||
+      (awayTeamId && p.team_id === awayTeamId) ||
+      p.team_name === awayTeam
+  );
 
   return (
     <div ref={ref} style={{ flex: 1, position: 'relative' }}>
@@ -608,6 +654,8 @@ const userNameMap: Record<string, string> = {};
           both_teams_scored: sb?.both_teams_scored ?? false,
           db_home_team:      sb?.home_team_name    ?? m.teams.home.name,
           db_away_team:      sb?.away_team_name    ?? m.teams.away.name,
+          db_home_team_id:   sb?.home_team_id      ?? m.teams.home.id,
+          db_away_team_id:   sb?.away_team_id      ?? m.teams.away.id,
         };
       });
       setMatches(merged);
@@ -2522,12 +2570,14 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                             <span className="field-label">⚽ أول هدف</span>
                             <span className="points-tag" style={{ background: 'rgba(217,178,95,.1)', color: '#ffe3a6', border: '1px solid rgba(217,178,95,.2)' }}>+3</span>
                             <PlayerSelect
-                              fixtureId={match.fixture.id}
-                              homeTeam={match.db_home_team}
-                              awayTeam={match.db_away_team}
-                              value={form.firstScorer}
-                              onChange={val => setForm(match.fixture.id, { firstScorer: val })}
-                            />
+  fixtureId={match.fixture.id}
+  homeTeam={match.db_home_team}
+  awayTeam={match.db_away_team}
+  homeTeamId={match.db_home_team_id}
+  awayTeamId={match.db_away_team_id}
+  value={form.firstScorer}
+  onChange={val => setForm(match.fixture.id, { firstScorer: val })}
+/>
                           </div>
 
                           <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '14px 16px', marginBottom: 12 }}>
