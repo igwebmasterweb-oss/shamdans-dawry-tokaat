@@ -171,19 +171,27 @@ export async function GET(request: NextRequest) {
         inserted++;
 
       } else if (isFinished && !alreadySynced) {
-        await supabaseAdmin
-          .from('fixtures')
-          .update({
-            went_extra_time: wentExtraTime,
-            both_teams_scored: bothTeamsScored,
-            red_card_in_match: redCard,
-            penalty_in_match: penalty,
-            scorers_json: scorersJson,
-            ...(goalsHome !== null ? { actual_home_score: goalsHome } : {}),
-            ...(goalsAway !== null ? { actual_away_score: goalsAway } : {}),
-            ...(firstScorer ? { first_scorer: firstScorer } : {}),
-          })
-          .eq('api_fixture_id', apiId);
+       await supabaseAdmin
+  .from('fixtures')
+  .update({
+    home_team_name: match.teams.home.name,
+    away_team_name: match.teams.away.name,
+    home_team_id: match.teams.home.id,
+    away_team_id: match.teams.away.id,
+    home_team_logo: match.teams.home.logo,
+    away_team_logo: match.teams.away.logo,
+    match_date: match.fixture.date,
+    round: match.league.round,
+    went_extra_time: wentExtraTime,
+    both_teams_scored: bothTeamsScored,
+    red_card_in_match: redCard,
+    penalty_in_match: penalty,
+    scorers_json: scorersJson,
+    ...(goalsHome !== null ? { actual_home_score: goalsHome } : {}),
+    ...(goalsAway !== null ? { actual_away_score: goalsAway } : {}),
+    ...(firstScorer ? { first_scorer: firstScorer } : {}),
+  })
+  .eq('api_fixture_id', apiId);
 
         apiCalls++;
         await saveLineups(apiId, existing.id, match.teams.home.id);
