@@ -187,6 +187,7 @@ export async function GET(request: Request) {
     if (syncedFixtureIds.length > 0) {
       for (const apiId of syncedFixtureIds) {
         try {
+          await sleep(1000);
           const updateRes = await fetch(
             `${process.env.NEXT_PUBLIC_SITE_URL}/api/update-results?fixture=${apiId}`,
             {
