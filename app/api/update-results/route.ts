@@ -319,16 +319,21 @@ let lastId = 0;
 while (true) {
   totalPasses++;
 
-  const { data: predsRaw, error: predError } = await supabaseAdmin
+    let predsQuery = supabaseAdmin
     .from('predictions')
     .select(
       'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
     )
     .in('fixture_id', fixtureIds)
-    .or('points.is.null,points.eq.0')
     .gt('id', lastId)
     .order('id', { ascending: true })
     .limit(PROCESS_BATCH_SIZE);
+
+  if (!targetFixtureId) {
+    predsQuery = predsQuery.or('points.is.null,points.eq.0');
+  }
+
+  const { data: predsRaw, error: predError } = await predsQuery;
 
   if (predError) throw predError;
 
