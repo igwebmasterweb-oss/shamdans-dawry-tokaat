@@ -104,7 +104,7 @@ function PlayerSelect({
     }
 
     load();
-  }, [fixtureId, homeTeam, awayTeam]);
+    }, [fixtureId, homeTeam, awayTeam, homeTeamId, awayTeamId]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
