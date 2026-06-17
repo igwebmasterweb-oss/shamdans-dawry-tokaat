@@ -198,10 +198,18 @@ export async function GET(request: NextRequest) {
 
         updated++;
 
-      } else if (isFinished && alreadySynced) {
+          } else if (isFinished && alreadySynced) {
         await supabaseAdmin
           .from('fixtures')
           .update({
+            home_team_name: match.teams.home.name,
+            away_team_name: match.teams.away.name,
+            home_team_id: match.teams.home.id,
+            away_team_id: match.teams.away.id,
+            home_team_logo: match.teams.home.logo,
+            away_team_logo: match.teams.away.logo,
+            match_date: match.fixture.date,
+            round: match.league.round,
             went_extra_time: wentExtraTime,
             both_teams_scored: bothTeamsScored,
             scorers_json: scorersJson,
@@ -210,6 +218,20 @@ export async function GET(request: NextRequest) {
 
         skipped++;
       } else {
+        await supabaseAdmin
+          .from('fixtures')
+          .update({
+            home_team_name: match.teams.home.name,
+            away_team_name: match.teams.away.name,
+            home_team_id: match.teams.home.id,
+            away_team_id: match.teams.away.id,
+            home_team_logo: match.teams.home.logo,
+            away_team_logo: match.teams.away.logo,
+            match_date: match.fixture.date,
+            round: match.league.round,
+          })
+          .eq('api_fixture_id', apiId);
+
         skipped++;
       }
     }
