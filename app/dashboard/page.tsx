@@ -35,39 +35,20 @@ function PlayerSelect({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+   useEffect(() => {
     if (!homeTeam || !awayTeam) {
       setLoaded(false);
       setPlayers([]);
       return;
     }
 
-
-      async function load() {
-  const { data: squadData } = await supabase
-    .from('team_players')
-    .select('player_name, team_name, position')
-    .in('team_name', [homeTeam, awayTeam])
-    .order('team_name')
-    .order('player_name');
-
-  const { data: lineupData } = await supabase
-    .from('fixture_players')
-    .select('player_name, team_name, position')
-    .eq('api_fixture_id', fixtureId)
-    .order('team_name')
-    .order('player_name');
-
-  const merged = [...(squadData || []), ...(lineupData || [])];
-  const unique = Array.from(
-    new Map(
-      merged.map((p: any) => [`${p.team_name}__${p.player_name}`, p])
-    ).values()
-  );
-
-  setPlayers(unique);
-  setLoaded(true);
-}
+    async function load() {
+      const { data: squadData } = await supabase
+        .from('team_players')
+        .select('player_name, team_name, position')
+        .in('team_name', [homeTeam, awayTeam])
+        .order('team_name')
+        .order('player_name');
 
       const { data: lineupData } = await supabase
         .from('fixture_players')
@@ -76,7 +57,14 @@ function PlayerSelect({
         .order('team_name')
         .order('player_name');
 
-      setPlayers(lineupData || []);
+      const merged = [...(squadData || []), ...(lineupData || [])];
+      const unique = Array.from(
+        new Map(
+          merged.map((p: any) => [`${p.team_name}__${p.player_name}`, p])
+        ).values()
+      ) as { player_name: string; team_name: string; position: string | null }[];
+
+      setPlayers(unique);
       setLoaded(true);
     }
 
