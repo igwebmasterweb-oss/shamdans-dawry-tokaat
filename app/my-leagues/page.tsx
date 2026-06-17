@@ -1,6 +1,37 @@
 'use client';
 import { supabase } from '../../lib/supabase';
 import { useEffect, useState, useCallback } from 'react';
+
+interface MemberPrediction {
+  id?: string | number;
+  fixture_id?: number | null;
+  home_team?: string | null;
+  away_team?: string | null;
+  predicted_home_score?: number | null;
+  predicted_away_score?: number | null;
+  predicted_first_scorer?: string | null;
+  predicted_red_card?: boolean | string | number | null;
+  predicted_penalty?: boolean | string | number | null;
+  predicted_extra_time?: boolean | string | number | null;
+  points?: number | null;
+}
+
+interface FinishedFixture {
+  api_fixture_id: number;
+  home_team_name: string | null;
+  away_team_name: string | null;
+  home_team_logo?: string | null;
+  away_team_logo?: string | null;
+  actual_home_score: number | null;
+  actual_away_score: number | null;
+  first_scorer?: string | null;
+  red_card_in_match?: boolean | null;
+  penalty_in_match?: boolean | null;
+  went_extra_time?: boolean | null;
+  match_date?: string | null;
+  round?: string | null;
+}
+
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useNotifications, sendNotification, getNotificationText } from '../../lib/useNotifications';
@@ -19,13 +50,86 @@ export default function MyLeaguesPage() {
   const [msgType, setMsgType] = useState<'success' | 'error'>('success');
   const [copyFeedback, setCopyFeedback] = useState('');
   const [shareLeague, setShareLeague] = useState<any>(null);
+  const [selectedLeagueMember, setSelectedLeagueMember] = useState<any>(null);
+  const [selectedLeaguePredictions, setSelectedLeaguePredictions] = useState<(MemberPrediction & { fixture?: FinishedFixture | null })[]>([]);
+  const [memberModalLoading, setMemberModalLoading] = useState(false);
+  const [memberModalError, setMemberModalError] = useState('');
   const router = useRouter();
   const { notifications, unreadCount, markRead } = useNotifications();
+
+  const toBool = (v: any) => v === true || v === 'true' || v === 1;
+
+  const formatMatchDate = (dateStr?: string | null) => {
+    if (!dateStr) return '—';
+    try {
+      return new Date(dateStr).toLocaleString('ar-EG', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
 
   const showMsg = (msg: string, type: 'success' | 'error' = 'success') => {
     setMessage(msg);
     setMsgType(type);
     setTimeout(() => setMessage(''), 4000);
+  };
+
+  const closeMemberModal = () => {
+    setSelectedLeagueMember(null);
+    setSelectedLeaguePredictions([]);
+    setMemberModalError('');
+    setMemberModalLoading(false);
+  };
+
+  const loadLeagueMemberDetails = async (member: any) => {
+    setSelectedLeagueMember(member);
+    setSelectedLeaguePredictions([]);
+    setMemberModalError('');
+    setMemberModalLoading(true);
+
+    try {
+      const [{ data: predictionsData, error: predictionsError }, { data: fixturesData, error: fixturesError }] = await Promise.all([
+        supabase
+          .from('predictions')
+          .select('id, fixture_id, home_team, away_team, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_red_card, predicted_penalty, predicted_extra_time, points')
+          .eq('user_id', member.user_id),
+        supabase
+          .from('fixtures')
+          .select('api_fixture_id, home_team_name, away_team_name, home_team_logo, away_team_logo, actual_home_score, actual_away_score, first_scorer, red_card_in_match, penalty_in_match, went_extra_time, match_date, round')
+          .not('actual_home_score', 'is', null)
+          .not('actual_away_score', 'is', null)
+      ]);
+
+      if (predictionsError) throw predictionsError;
+      if (fixturesError) throw fixturesError;
+
+      const fixturesMap = new Map<number, FinishedFixture>((fixturesData || []).map((f: any) => [Number(f.api_fixture_id), f]));
+
+      const merged = (predictionsData || [])
+        .map((pred: any) => ({
+          ...pred,
+          fixture: fixturesMap.get(Number(pred.fixture_id)) || null,
+        }))
+        .filter((item: any) => item.fixture)
+        .sort((a: any, b: any) => {
+          const ad = new Date(a.fixture?.match_date || 0).getTime();
+          const bd = new Date(b.fixture?.match_date || 0).getTime();
+          return bd - ad;
+        });
+
+      setSelectedLeaguePredictions(merged);
+    } catch (err: any) {
+      console.error('loadLeagueMemberDetails error:', err);
+      setMemberModalError(err?.message || 'تعذّر تحميل تفاصيل العضو');
+    } finally {
+      setMemberModalLoading(false);
+    }
   };
 
   const loadData = useCallback(async (uid: string) => {
@@ -380,12 +484,12 @@ export default function MyLeaguesPage() {
                   <div style={{ background: 'var(--surface-3)', borderRadius: 12, padding: '10px 14px', marginBottom: 12, border: '1px solid var(--line)' }}>
                     <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>الترتيب داخل الليج</div>
                     {lg.members.map((m: any, i: number) => (
-                      <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,.04)', fontSize: 13 }}>
+                      <button type="button" key={m.user_id} onClick={() => loadLeagueMemberDetails(m)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,.04)', fontSize: 13, background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', textAlign: 'right' }}>
                         <span style={{ fontWeight: 800, width: 28, textAlign: 'center', flexShrink: 0 }}>{i < 3 ? medals[i] : `#${m.rank}`}</span>
                         <span style={{ flex: 1, fontWeight: 700 }}>{m.name}</span>
                         {m.user_id === user?.id && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 999, background: 'rgba(217,178,95,.1)', color: '#ffe3a6', fontWeight: 700 }}>أنت</span>}
                         <span style={{ fontWeight: 800, color: 'var(--gold)', fontSize: 12, flexShrink: 0 }}>{m.pts}</span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -417,6 +521,110 @@ export default function MyLeaguesPage() {
           </div>
         )}
       </main>
+
+      {selectedLeagueMember && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.74)', backdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', zIndex: 1000, padding: 20 }} onClick={closeMemberModal}>
+          <div style={{ background: 'var(--surface)', border: '1px solid rgba(217,178,95,.18)', borderRadius: 24, padding: 20, width: '100%', maxWidth: 920, maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,.45)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>{selectedLeagueMember.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>تفاصيل توقعات العضو للمباريات المنتهية فقط</div>
+              </div>
+              <button onClick={closeMemberModal} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 38, height: 38, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center', flexShrink: 0 }}>✕</button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10, marginBottom: 16 }}>
+              <div style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 14, padding: '14px 16px' }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>اسم العضو</div>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>{selectedLeagueMember.name}</div>
+              </div>
+              <div style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 14, padding: '14px 16px' }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>ترتيبه في الليج</div>
+                <div style={{ fontWeight: 900, fontSize: 24, color: 'var(--gold)' }}>#{selectedLeagueMember.rank}</div>
+              </div>
+              <div style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 14, padding: '14px 16px' }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>نقاطه</div>
+                <div style={{ fontWeight: 900, fontSize: 24, color: 'var(--gold)' }}>{selectedLeagueMember.pts || 0}</div>
+              </div>
+            </div>
+
+            {memberModalLoading && (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {[1,2,3].map(i => <div key={i} style={{ height: 140, borderRadius: 18, background: 'linear-gradient(90deg,var(--surface-3),rgba(255,255,255,.06),var(--surface-3))', backgroundSize: '200% 100%', animation: 'shimmer 1.4s linear infinite' }} />)}
+              </div>
+            )}
+
+            {!memberModalLoading && memberModalError && (
+              <div style={{ background: 'rgba(201,58,47,.08)', border: '1px solid rgba(201,58,47,.2)', borderRadius: 16, padding: '14px 16px', color: '#ffb4b4', fontSize: 13, fontWeight: 700 }}>
+                {memberModalError}
+              </div>
+            )}
+
+            {!memberModalLoading && !memberModalError && selectedLeaguePredictions.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '46px 20px', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 34, marginBottom: 8 }}>🗂️</div>
+                <div style={{ fontWeight: 800, fontSize: 14 }}>لا توجد توقعات منتهية لهذا العضو حاليًا</div>
+              </div>
+            )}
+
+            {!memberModalLoading && !memberModalError && selectedLeaguePredictions.length > 0 && (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {selectedLeaguePredictions.map((pred, idx) => {
+                  const fixture = pred.fixture;
+                  const predictionPoints = pred.points || 0;
+                  const positivePoints = predictionPoints >= 0;
+                  return (
+                    <div key={`${pred.id || idx}-${pred.fixture_id || idx}`} style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01))', border: `1px solid ${positivePoints ? 'var(--line)' : 'rgba(201,58,47,.22)'}`, borderRadius: 20, padding: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontWeight: 900, fontSize: 18, marginBottom: 6 }}>
+                            {fixture?.home_team_logo && <img src={fixture.home_team_logo} alt="" width={22} height={22} style={{ objectFit: 'contain', borderRadius: 4 }} />}
+                            <span>{fixture?.home_team_name || pred.home_team || 'صاحب الأرض'}</span>
+                            <span style={{ color: 'var(--muted)', fontSize: 15 }}>×</span>
+                            <span>{fixture?.away_team_name || pred.away_team || 'الضيف'}</span>
+                            {fixture?.away_team_logo && <img src={fixture.away_team_logo} alt="" width={22} height={22} style={{ objectFit: 'contain', borderRadius: 4 }} />}
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>
+                            {fixture?.round || '—'} • {formatMatchDate(fixture?.match_date)}
+                          </div>
+                        </div>
+                        <div style={{ minWidth: 110, textAlign: 'center', padding: '10px 14px', borderRadius: 14, background: positivePoints ? 'rgba(39,176,110,.08)' : 'rgba(201,58,47,.08)', border: `1px solid ${positivePoints ? 'rgba(39,176,110,.18)' : 'rgba(201,58,47,.22)'}` }}>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>نقاط التوقع</div>
+                          <div style={{ fontWeight: 900, fontSize: 24, color: positivePoints ? '#8ff0bb' : '#ffb4b4' }}>{predictionPoints}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12 }}>
+                        <div style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px 16px' }}>
+                          <div style={{ fontSize: 12, color: '#9fc1ff', fontWeight: 800, marginBottom: 10 }}>توقعه</div>
+                          <div style={{ fontWeight: 900, fontSize: 30, marginBottom: 8 }}>{pred.predicted_home_score ?? '—'} — {pred.predicted_away_score ?? '—'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.9 }}>
+                            ⚽ الهداف المتوقع: {pred.predicted_first_scorer || '—'}<br />
+                            🟥 كارت أحمر: {toBool(pred.predicted_red_card) ? 'نعم' : 'لا'}<br />
+                            ⚽ ضربة جزاء: {toBool(pred.predicted_penalty) ? 'نعم' : 'لا'}<br />
+                            ⏱ وقت إضافي: {toBool(pred.predicted_extra_time) ? 'نعم' : 'لا'}
+                          </div>
+                        </div>
+
+                        <div style={{ background: 'rgba(39,176,110,.08)', border: '1px solid rgba(39,176,110,.16)', borderRadius: 16, padding: '14px 16px' }}>
+                          <div style={{ fontSize: 12, color: '#8ff0bb', fontWeight: 800, marginBottom: 10 }}>النتيجة الفعلية</div>
+                          <div style={{ fontWeight: 900, fontSize: 30, marginBottom: 8 }}>{fixture?.actual_home_score ?? '—'} — {fixture?.actual_away_score ?? '—'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.9 }}>
+                            ⚽ أول هداف: {fixture?.first_scorer || '—'}<br />
+                            🟥 كارت أحمر: {fixture?.red_card_in_match ? 'نعم' : 'لا'}<br />
+                            ⚽ ضربة جزاء: {fixture?.penalty_in_match ? 'نعم' : 'لا'}<br />
+                            ⏱ وقت إضافي: {fixture?.went_extra_time ? 'نعم' : 'لا'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ══ SHARE MODAL ══ */}
       {shareLeague && (
