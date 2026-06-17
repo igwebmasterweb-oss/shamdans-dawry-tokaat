@@ -17,7 +17,7 @@ interface Player {
 interface MemberPrediction {
   id?: string | number;
   fixture_id?: number | null;
-  api_fixture_id?: number | null;
+  
   home_team?: string | null;
   away_team?: string | null;
   predicted_home_score?: number | null;
@@ -217,7 +217,7 @@ export default function LeaderboardPage() {
       const [{ data: predictionsData, error: predictionsError }, { data: fixturesData, error: fixturesError }] = await Promise.all([
         supabase
           .from('predictions')
-          .select('id, fixture_id, api_fixture_id, home_team, away_team, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_red_card, predicted_penalty, predicted_extra_time, points')
+         .select('id, fixture_id, home_team, away_team, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_red_card, predicted_penalty, predicted_extra_time, points')
           .eq('user_id', player.user_id),
         supabase
           .from('fixtures')
@@ -233,7 +233,7 @@ export default function LeaderboardPage() {
 
       const merged = (predictionsData || [])
         .map((pred: any) => {
-          const fixtureKey = Number(pred.api_fixture_id || pred.fixture_id);
+         const fixtureKey = Number(pred.fixture_id);
           const fixture = fixturesMap.get(fixtureKey);
           return {
             ...pred,
@@ -763,7 +763,7 @@ export default function LeaderboardPage() {
                   const predictionPoints = pred.points || 0;
                   const positivePoints = predictionPoints >= 0;
                   return (
-                    <div key={`${pred.id || idx}-${fixture?.api_fixture_id || idx}`} style={{background:'linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01))',border:`1px solid ${positivePoints ? 'var(--line)' : 'rgba(201,58,47,.22)'}`,borderRadius:20,padding:16}}>
+                    <div key={`${pred.id || idx}-${pred.fixture_id || idx}`} style={{background:'linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01))',border:`1px solid ${positivePoints ? 'var(--line)' : 'rgba(201,58,47,.22)'}`,borderRadius:20,padding:16}}>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,marginBottom:14,flexWrap:'wrap'}}>
                         <div>
                           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',fontWeight:900,fontSize:18,marginBottom:6}}>
