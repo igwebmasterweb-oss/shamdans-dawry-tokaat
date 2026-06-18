@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
           away_team_logo: match.teams.away.logo,
           match_date: match.fixture.date,
           round: match.league.round,
-          is_open: false,
+          is_open: !isFinished,
           went_extra_time: wentExtraTime,
           both_teams_scored: bothTeamsScored,
           scorers_json: scorersJson,
