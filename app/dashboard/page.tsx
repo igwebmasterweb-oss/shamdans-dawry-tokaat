@@ -516,14 +516,16 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const loadData = async (userId: string) => {
     setLoadError(false);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const hasSessionEmail = !!session?.user?.email?.trim();
       const pendingRef = typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingRef') : null;
-      if (pendingRef) {
-        if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingRef');
+      if (pendingRef && hasSessionEmail) {
         const { error: refErr } = await supabase.rpc('process_referral', {
           p_referred_id: userId,
           p_referral_code: pendingRef,
         });
         if (!refErr) {
+          if (typeof window !== 'undefined') window.sessionStorage.removeItem('pendingRef');
           await supabase.from('social_feed').insert({
   user_id: userId,
   type: 'invite_friend',
@@ -2418,6 +2420,53 @@ const myFilteredPredictionsSorted = [...predictions]
             <button key={id} className={`tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)} style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{label}</button>
           ))}
         </div>
+
+        {profileIncomplete && (
+          <div
+            style={{
+              marginTop: -10,
+              marginBottom: 18,
+              padding: '12px 14px',
+              borderRadius: 14,
+              border: '1px solid rgba(245,158,11,.26)',
+              background: 'linear-gradient(180deg,rgba(245,158,11,.10),rgba(217,119,6,.08))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#ffe3a6', marginBottom: 2 }}>
+                  أكمل بيانات بروفايلك لتفعيل المميزات بالكامل
+                </div>
+                <div style={{ fontSize: 12, color: '#f6ddb0', lineHeight: 1.8 }}>
+                  كمّل الاسم ورقم الموبايل ورابط الفيسبوك والبريد الإلكتروني من نافذة البروفايل، وسيختفي هذا التنبيه تلقائيًا بعد الإكمال.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowProfileModal(true)}
+              style={{
+                padding: '10px 14px',
+                borderRadius: 12,
+                border: '1px solid rgba(245,158,11,.32)',
+                background: 'rgba(245,158,11,.14)',
+                color: '#ffe3a6',
+                fontFamily: 'Cairo, sans-serif',
+                fontSize: 13,
+                fontWeight: 800,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              أكمل البروفايل
+            </button>
+          </div>
+        )}
 
         {activeTab === 'predict' && (
           <div>
