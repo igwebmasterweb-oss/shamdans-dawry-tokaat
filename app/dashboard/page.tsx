@@ -3091,7 +3091,7 @@ const myFilteredPredictionsSorted = [...predictions]
                   <div style={{ fontSize: 16, fontWeight: 700 }}>جاري تحميل صدارة {roundLabels[effectiveRound] || effectiveRound}</div>
                 </div>
               ) : (() => {
-                const isGeneralView = effectiveRound === activeRound;
+                const isGeneralView = !leaderRoundFilter;
                 const rankingData = isGeneralView ? leaderboard : roundLeaderboardRows;
                 if (rankingData.length === 0) {
                   return (
