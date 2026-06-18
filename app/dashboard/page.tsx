@@ -1659,9 +1659,9 @@ const myFilteredPredictionsSorted = [...predictions]
                         <div style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>بدأت المباراة</div>
                       </div>
 
-                      <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', marginBottom: 6, whiteSpace: 'nowrap', overflowX: 'auto', paddingBottom: 2 }}>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6, textAlign: 'center', lineHeight: 1.7 }}>
                         {currentMatch?.teams?.home?.logo && <img src={currentMatch.teams.home.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
-                        <span>{currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}</span>
+                        <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}</span>
                         {currentMatch?.teams?.away?.logo && <img src={currentMatch.teams.away.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
                       </div>
 
