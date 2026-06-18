@@ -458,6 +458,8 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
   const [myRoundFilter, setMyRoundFilter]     = useState('');
+  const [leaderRoundFilter, setLeaderRoundFilter] = useState('');
+  const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
   const addProfilePoints = (total = 0, completed = false) =>
   total + (completed ? 5 : 0);
 
@@ -490,6 +492,10 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   useEffect(() => {
     if (!myRoundFilter && activeRound) setMyRoundFilter(activeRound);
   }, [activeRound, myRoundFilter]);
+
+  useEffect(() => {
+    if (!leaderRoundFilter && activeRound) setLeaderRoundFilter(activeRound);
+  }, [activeRound, leaderRoundFilter]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -812,7 +818,8 @@ const userNameMap: Record<string, string> = {};
   };
 
 useEffect(() => {
-  if (!activeRound) {
+  const roundToLoad = leaderRoundFilter || activeRound;
+  if (!roundToLoad) {
     setRoundLeaderboardRows([]);
     return;
   }
@@ -822,7 +829,7 @@ useEffect(() => {
 
   (async () => {
     try {
-      const { data, error } = await supabase.rpc('get_round_leaderboard', { p_round: activeRound });
+      const { data, error } = await supabase.rpc('get_round_leaderboard', { p_round: roundToLoad });
 
       if (cancelled) return;
       if (error) throw error;
@@ -840,7 +847,7 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [activeRound]);
+}, [activeRound, leaderRoundFilter]);
 
 
 
@@ -1197,6 +1204,7 @@ const submitPrediction = async (match: any) => {
       setLeaderDetailsLoading(true);
       setSelectedLeaderSummary(null);
       setSelectedLeaderPredictions([]);
+      setLeaderModalRoundFilter('');
 
       const { data: summaryData } = await supabase
         .from('user_points')
@@ -1588,7 +1596,33 @@ const myFilteredPredictionsSorted = [...predictions]
   </div>
 </div>
 
-                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>📋 توقعات العضو</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>📋 توقعات العضو</div>
+                  {rounds.length > 0 && (
+                    <select
+                      value={leaderModalRoundFilter}
+                      onChange={e => setLeaderModalRoundFilter(e.target.value)}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 10,
+                        border: '1px solid var(--line)',
+                        background: leaderModalRoundFilter ? 'rgba(217,178,95,.12)' : 'var(--surface-3)',
+                        color: leaderModalRoundFilter ? 'var(--gold)' : 'var(--text)',
+                        fontFamily: 'Cairo, sans-serif',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        direction: 'rtl',
+                        outline: 'none',
+                      }}
+                    >
+                      <option value="">كل الجولات</option>
+                      {rounds.map(r => (
+                        <option key={r} value={r}>{roundLabels[r] || r}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
 
                 {(() => {
                   const now = new Date();
@@ -1691,7 +1725,12 @@ const myFilteredPredictionsSorted = [...predictions]
                         const matchInfo = matches.find((m: any) => Number(m.fixture.id) === Number(pred.fixture_id || pred.api_fixture_id));
                         const started = matchInfo?.fixture?.date ? new Date(matchInfo.fixture.date) <= new Date() : false;
                         const hasResult = pred.actual_home_score !== null && pred.actual_home_score !== undefined;
-                        return hasResult || !started;
+                        if (!(hasResult || !started)) return false;
+                        if (leaderModalRoundFilter) {
+                          const predRound = pred.round || matchInfo?.league?.round;
+                          return predRound === leaderModalRoundFilter;
+                        }
+                        return true;
                       })
                       .map((pred: any, idx: number) => {
                       const hasResult = pred.actual_home_score !== null && pred.actual_home_score !== undefined;
@@ -2924,78 +2963,117 @@ const myFilteredPredictionsSorted = [...predictions]
           </div>
         )}
 
-        {(activeTab === 'leaders' || activeTab === 'roundleaders') && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                <button className={`round-btn ${activeTab === 'leaders' ? 'active' : ''}`} onClick={() => setActiveTab('leaders')}>الصدارة العامة</button>
-                <button className={`round-btn ${activeTab === 'roundleaders' ? 'active' : ''}`} onClick={() => setActiveTab('roundleaders')}>صدارة الجولة</button>
+        {(activeTab === 'leaders' || activeTab === 'roundleaders') && (() => {
+          // Compute finished rounds: all matches in round have actual results
+          const finishedRounds = rounds.filter(r => {
+            const roundMatches = matches.filter((m: any) => m.league?.round === r);
+            return roundMatches.length > 0 && roundMatches.every((m: any) => m.actual_home_score !== null && m.actual_home_score !== undefined);
+          });
+          const selectableRounds = [activeRound, ...finishedRounds.filter(r => r !== activeRound)].filter(Boolean);
+          const isRoundMode = !!leaderRoundFilter;
+          const effectiveRound = leaderRoundFilter || activeRound;
+
+          return (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    className="round-btn active"
+                    style={{ pointerEvents: 'none' }}
+                  >الصدارة العامة</button>
+
+                  {selectableRounds.length > 0 && (
+                    <select
+                      value={leaderRoundFilter}
+                      onChange={e => setLeaderRoundFilter(e.target.value)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 10,
+                        border: '1px solid var(--line)',
+                        background: leaderRoundFilter ? 'rgba(217,178,95,.12)' : 'var(--surface-3)',
+                        color: leaderRoundFilter ? 'var(--gold)' : 'var(--text)',
+                        fontFamily: 'Cairo, sans-serif',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        direction: 'rtl',
+                        outline: 'none',
+                      }}
+                    >
+                      <option value="">📊 صدارة الجولات</option>
+                      {selectableRounds.map(r => (
+                        <option key={r} value={r}>
+                          {roundLabels[r] || r}{r === activeRound ? ' (الحالية)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                {!leaderRoundFilter
+                  ? <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link>
+                  : <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>نقاط التوقعات فقط</span>}
               </div>
-              {activeTab === 'leaders'
-                ? <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link>
-                : <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>نقاط التوقعات فقط</span>}
+
+              {leaderRoundFilter && roundLeaderLoading ? (
+                <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>جاري تحميل صدارة {roundLabels[effectiveRound] || effectiveRound}</div>
+                </div>
+              ) : (() => {
+                const rankingData = leaderRoundFilter ? roundLeaderboardRows : leaderboard;
+                if (rankingData.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
+                      <div style={{ fontSize: 48, marginBottom: 12 }}>🏆</div>
+                      <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد نتائج بعد</div>
+                    </div>
+                  );
+                }
+
+                return rankingData.slice(0, 20).map((player: any, i) => {
+                  const isMe = player.user_id === user?.id;
+                  const name = player.display_name || player.user_email?.split('@')[0];
+                  const playerPredictionsCount = leaderRoundFilter ? (player.predictions_count || 0) : (player.count || 0);
+                  return (
+                    <div
+                      key={`leader-${leaderRoundFilter || 'general'}-${player.user_id}`}
+                      className={`rank-item${isMe ? ' me' : ''}`}
+                      onClick={() => openLeaderDetails(player)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openLeaderDetails(player);
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}</div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>
+                          {name}
+                          {isMe && <span style={{ marginRight: 8, fontSize: 11, color: 'var(--gold)' }}>(أنت)</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                          {leaderRoundFilter
+                            ? `نقاط التوقعات في ${roundLabels[effectiveRound] || effectiveRound}`
+                            : `${playerPredictionsCount || 0} توقع`}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: i < 3 ? 'var(--gold)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                          {leaderRoundFilter ? (player.total_points || 0) : (player.totalPoints || 0)}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
-
-
-            {activeTab === 'roundleaders' && roundLeaderLoading ? (
-              <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>جاري تحميل صدارة الجولة</div>
-              </div>
-            ) : (() => {
-              const rankingData = activeTab === 'roundleaders' ? roundLeaderboardRows : leaderboard;
-              if (rankingData.length === 0) {
-                return (
-                  <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
-                    <div style={{ fontSize: 48, marginBottom: 12 }}>🏆</div>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>لا توجد نتائج بعد</div>
-                  </div>
-                );
-              }
-
-              return rankingData.slice(0, 20).map((player: any, i) => {
-                const isMe = player.user_id === user?.id;
-                const name = player.display_name || player.user_email?.split('@')[0];
-                const playerPredictionsCount = activeTab === 'roundleaders' ? (player.predictions_count || 0) : (player.count || 0);
-                return (
-                  <div
-                    key={`${activeTab}-${player.user_id}`}
-                    className={`rank-item${isMe ? ' me' : ''}`}
-                    onClick={() => openLeaderDetails(player)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        openLeaderDetails(player);
-                      }
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}</div>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>
-                        {name}
-                        {isMe && <span style={{ marginRight: 8, fontSize: 11, color: 'var(--gold)' }}>(أنت)</span>}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                        {activeTab === 'roundleaders'
-                          ? `مجموع نقاط التوقعات في ${roundLabels[activeRound] || activeRound || 'الجولة الحالية'}`
-                          : `${playerPredictionsCount || 0} توقع`}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: i < 3 ? 'var(--gold)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                        {activeTab === 'roundleaders' ? (player.total_points || 0) : (player.totalPoints || 0)}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
-                    </div>
-                  </div>
-                );
-              });
-            })()}
-          </div>
-        )}
+          );
+        })()}
 
         {activeTab === 'history' && (
           <div>
