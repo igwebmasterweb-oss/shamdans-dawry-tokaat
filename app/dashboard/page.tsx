@@ -2605,6 +2605,43 @@ const myFilteredPredictionsSorted = [...predictions]
                           </div>
                         </div>
                       )}
+                      {existing && (() => {
+                        const extraPredictions = [
+                          existing.predicted_extra_time ? { label: '⏱ وقت إضافي', predicted: !!existing.predicted_extra_time, actual: !!match.went_extra_time } : null,
+                          existing.predicted_red_card ? { label: '🟥 كرت أحمر', predicted: !!existing.predicted_red_card, actual: !!match.red_card_in_match } : null,
+                          existing.predicted_penalty ? { label: '⚽ ضربة جزاء', predicted: !!existing.predicted_penalty, actual: !!match.penalty_in_match } : null,
+                          existing.predicted_both_teams ? { label: '🥅 الفريقان يسجلان', predicted: !!existing.predicted_both_teams, actual: !!match.both_teams_scored } : null,
+                        ].filter(Boolean) as any[];
+
+                        return extraPredictions.length > 0 ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                            {extraPredictions.map((ex, idx) => {
+                              const hit = hasResult && ex.predicted === ex.actual;
+                              return (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    padding: '7px 10px',
+                                    borderRadius: 999,
+                                    border: '1px solid var(--line)',
+                                    background: hit ? 'rgba(39,176,110,.10)' : 'rgba(255,255,255,.04)',
+                                    color: hit ? '#94f0c0' : 'var(--muted)',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  <span>{ex.label}</span>
+                                  <span>{ex.predicted ? 'نعم' : 'لا'}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null;
+                      })()}
+
                       {existing && hasResult && (
                         <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 10,
                           background: (existing.points || 0) < 0 ? 'rgba(201,58,47,.1)' : (existing.points || 0) >= 10 ? 'rgba(217,178,95,.08)' : 'rgba(39,176,110,.08)',
