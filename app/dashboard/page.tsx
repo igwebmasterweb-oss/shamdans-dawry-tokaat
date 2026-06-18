@@ -2610,7 +2610,6 @@ const myFilteredPredictionsSorted = [...predictions]
                           existing.predicted_extra_time ? { label: '⏱ وقت إضافي', predicted: !!existing.predicted_extra_time, actual: !!match.went_extra_time } : null,
                           existing.predicted_red_card ? { label: '🟥 كرت أحمر', predicted: !!existing.predicted_red_card, actual: !!match.red_card_in_match } : null,
                           existing.predicted_penalty ? { label: '⚽ ضربة جزاء', predicted: !!existing.predicted_penalty, actual: !!match.penalty_in_match } : null,
-                          existing.predicted_both_teams ? { label: '🥅 الفريقان يسجلان', predicted: !!existing.predicted_both_teams, actual: !!match.both_teams_scored } : null,
                         ].filter(Boolean) as any[];
 
                         return extraPredictions.length > 0 ? (
@@ -2840,13 +2839,6 @@ const myFilteredPredictionsSorted = [...predictions]
                       actual: !!matchInfo?.penalty_in_match,
                     }]
                   : []),
-                ...(p.predicted_both_teams
-                  ? [{
-                      label: '🥅 الفريقان يسجلان',
-                      predicted: !!p.predicted_both_teams,
-                      actual: !!matchInfo?.both_teams_scored,
-                    }]
-                  : []),
               ];
               return (
   <div
@@ -2942,7 +2934,7 @@ const myFilteredPredictionsSorted = [...predictions]
       </div>
 
       {extraPredictions.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
           {extraPredictions.map((ex, idx) => {
             const hit = hasResult && ex.predicted === ex.actual;
             return (
