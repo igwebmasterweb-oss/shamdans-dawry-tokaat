@@ -1051,10 +1051,19 @@ const submitPrediction = async (match: any) => {
       submitted_at: new Date().toISOString(),
     };
 
-    if (ex) {
+   if (ex) {
       const { error } = await supabase
         .from('predictions')
-        .update(payload)
+        .update({
+          predicted_home_score:   form.homeScore,
+          predicted_away_score:   form.awayScore,
+          predicted_first_scorer: form.firstScorer || null,
+          predicted_extra_time:   form.extraTime,
+          predicted_red_card:     form.predicted_red_card ?? false,
+          predicted_penalty:      form.predicted_penalty ?? false,
+          predicted_both_teams:   form.predicted_both_teams ?? false,
+          submitted_at:           new Date().toISOString(),
+        })
         .eq('id', ex.id);
 
       if (error) throw error;
