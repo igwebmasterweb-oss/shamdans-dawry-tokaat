@@ -18,17 +18,17 @@ export default function HomePage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [usersRes, predictionsRes] = await Promise.all([
+        const [usersRes, predictionsRpcRes] = await Promise.all([
           supabase.from('user_points').select('*', { count: 'exact', head: true }),
-          supabase.from('predictions').select('*', { count: 'exact', head: true }),
+          supabase.rpc('get_home_predictions_count'),
         ]);
 
         if (usersRes.error) console.error('home users count error:', usersRes.error);
-        if (predictionsRes.error) console.error('home predictions count error:', predictionsRes.error);
+        if (predictionsRpcRes.error) console.error('home predictions count rpc error:', predictionsRpcRes.error);
 
         setStats({
           users: usersRes.count || 0,
-          predictions: predictionsRes.count || 0,
+          predictions: Number(predictionsRpcRes.data || 0),
         });
       } catch (error) {
         console.error('home stats load error:', error);
@@ -270,7 +270,7 @@ export default function HomePage() {
 
         @media (max-width:900px){
           .host-spotlight{grid-template-columns:1fr !important;text-align:center}
-          .host-spotlight-copy{ text-align:center !important }
+          .host-spotlight-copy{text-align:center !important}
         }
 
         @media (max-width:760px){
