@@ -503,7 +503,7 @@ export default function HomePage() {
                   }}
                 >
                   <img
-                    src="/DSC00061.JPG"
+                    src="/hika2.png"
                     alt="Hika"
                     style={{
                       width: '100%',
