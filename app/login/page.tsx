@@ -82,6 +82,7 @@ function LoginContent() {
       if (!existingProfile) { persistPendingParams(); setProfileSynced(true); return; }
 
       const hasName = !!metaName;
+      const hasEmail = !!user.email?.trim();
       const alreadyCompleted = existingProfile.profile_completed === true;
       const alreadyHasPoints = existingProfile.bonus_points_awarded === true;
       const alreadyHasReferral = !!(existingProfile.referral_code && existingProfile.referral_code.trim());
@@ -91,18 +92,18 @@ function LoginContent() {
         update.full_name = hasName ? metaName : user.email?.split('@')[0] || '';
       if ((!existingProfile.avatar_url || existingProfile.avatar_url.trim() === '') && metaAvatar)
         update.avatar_url = metaAvatar;
-      if (!alreadyCompleted && hasName) update.profile_completed = true;
-      if (hasName && !alreadyHasPoints) {update.bonus_points_awarded = true;}
+      if (!alreadyCompleted && hasName && hasEmail) update.profile_completed = true;
+      if (hasName && hasEmail && !alreadyHasPoints) {update.bonus_points_awarded = true;}
       if (!alreadyHasReferral) update.referral_code = generateReferralCode();
 
       if (provider === 'facebook') {
         if (!existingProfile.facebook_id && providerUserId) update.facebook_id = providerUserId;
         if (!existingProfile.facebook_url && facebookUrl) update.facebook_url = facebookUrl;
-        if (!existingProfile.facebook_bonus_awarded && hasName && !alreadyHasPoints) update.facebook_bonus_awarded = true;
+        if (!existingProfile.facebook_bonus_awarded && hasName && hasEmail && !alreadyHasPoints) update.facebook_bonus_awarded = true;
       }
       if (provider === 'google') {
         if (!existingProfile.google_id && providerUserId) update.google_id = providerUserId;
-        if (!existingProfile.google_bonus_awarded && hasName && !alreadyHasPoints) update.google_bonus_awarded = true;
+        if (!existingProfile.google_bonus_awarded && hasName && hasEmail && !alreadyHasPoints) update.google_bonus_awarded = true;
       }
 
       if (Object.keys(update).length > 0) {
