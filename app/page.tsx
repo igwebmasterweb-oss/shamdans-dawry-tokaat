@@ -17,13 +17,25 @@ export default function HomePage() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const [{ count: users }, { count: predictions }] = await Promise.all([
-        supabase.from('user_points').select('*', { count: 'exact', head: true }),
-        supabase.from('predictions').select('*', { count: 'exact', head: true }),
-      ]);
+      try {
+        const [usersRes, predictionsRes] = await Promise.all([
+          supabase.from('user_points').select('*', { count: 'exact', head: true }),
+          supabase.from('predictions').select('*', { count: 'exact', head: true }),
+        ]);
 
-      setStats({ users: users || 0, predictions: predictions || 0 });
-      setStatsLoaded(true);
+        if (usersRes.error) console.error('home users count error:', usersRes.error);
+        if (predictionsRes.error) console.error('home predictions count error:', predictionsRes.error);
+
+        setStats({
+          users: usersRes.count || 0,
+          predictions: predictionsRes.count || 0,
+        });
+      } catch (error) {
+        console.error('home stats load error:', error);
+        setStats({ users: 0, predictions: 0 });
+      } finally {
+        setStatsLoaded(true);
+      }
     };
 
     fetchStats();
@@ -491,7 +503,7 @@ export default function HomePage() {
                   }}
                 >
                   <img
-                    src="/DSC00061.jpg"
+                    src="/DSC00061.JPG"
                     alt="Hika"
                     style={{
                       width: '100%',
