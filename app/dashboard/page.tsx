@@ -2964,23 +2964,18 @@ const myFilteredPredictionsSorted = [...predictions]
         )}
 
         {(activeTab === 'leaders' || activeTab === 'roundleaders') && (() => {
-          // Compute finished rounds: all matches in round have actual results
           const finishedRounds = rounds.filter(r => {
             const roundMatches = matches.filter((m: any) => m.league?.round === r);
             return roundMatches.length > 0 && roundMatches.every((m: any) => m.actual_home_score !== null && m.actual_home_score !== undefined);
           });
-          const selectableRounds = [activeRound, ...finishedRounds.filter(r => r !== activeRound)].filter(Boolean);
-          const isRoundMode = !!leaderRoundFilter;
+          const selectableRounds = [activeRound, ...rounds.filter(r => r !== activeRound)].filter(Boolean);
           const effectiveRound = leaderRoundFilter || activeRound;
 
           return (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button
-                    className="round-btn active"
-                    style={{ pointerEvents: 'none' }}
-                  >الصدارة العامة</button>
+                  <button className="round-btn active" style={{ pointerEvents: 'none' }}>الصدارة العامة</button>
 
                   {selectableRounds.length > 0 && (
                     <select
@@ -2990,8 +2985,8 @@ const myFilteredPredictionsSorted = [...predictions]
                         padding: '6px 12px',
                         borderRadius: 10,
                         border: '1px solid var(--line)',
-                        background: leaderRoundFilter ? 'rgba(217,178,95,.12)' : 'var(--surface-3)',
-                        color: leaderRoundFilter ? 'var(--gold)' : 'var(--text)',
+                        background: 'var(--surface-3)',
+                        color: 'var(--text)',
                         fontFamily: 'Cairo, sans-serif',
                         fontSize: 13,
                         fontWeight: 700,
@@ -3000,7 +2995,6 @@ const myFilteredPredictionsSorted = [...predictions]
                         outline: 'none',
                       }}
                     >
-                      <option value="">📊 صدارة الجولات</option>
                       {selectableRounds.map(r => (
                         <option key={r} value={r}>
                           {roundLabels[r] || r}{r === activeRound ? ' (الحالية)' : ''}
@@ -3009,18 +3003,18 @@ const myFilteredPredictionsSorted = [...predictions]
                     </select>
                   )}
                 </div>
-                {!leaderRoundFilter
-                  ? <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link>
-                  : <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700 }}>نقاط التوقعات فقط</span>}
+
+                <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link>
               </div>
 
-              {leaderRoundFilter && roundLeaderLoading ? (
+              {roundLeaderLoading ? (
                 <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
                   <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
                   <div style={{ fontSize: 16, fontWeight: 700 }}>جاري تحميل صدارة {roundLabels[effectiveRound] || effectiveRound}</div>
                 </div>
               ) : (() => {
-                const rankingData = leaderRoundFilter ? roundLeaderboardRows : leaderboard;
+                const isGeneralView = effectiveRound === activeRound;
+                const rankingData = isGeneralView ? leaderboard : roundLeaderboardRows;
                 if (rankingData.length === 0) {
                   return (
                     <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
@@ -3033,10 +3027,11 @@ const myFilteredPredictionsSorted = [...predictions]
                 return rankingData.slice(0, 20).map((player: any, i) => {
                   const isMe = player.user_id === user?.id;
                   const name = player.display_name || player.user_email?.split('@')[0];
-                  const playerPredictionsCount = leaderRoundFilter ? (player.predictions_count || 0) : (player.count || 0);
+                  const playerPredictionsCount = isGeneralView ? (player.count || 0) : (player.predictions_count || 0);
+                  const playerPoints = isGeneralView ? (player.totalPoints || 0) : (player.total_points || 0);
                   return (
                     <div
-                      key={`leader-${leaderRoundFilter || 'general'}-${player.user_id}`}
+                      key={`leader-${isGeneralView ? 'general' : effectiveRound}-${player.user_id}`}
                       className={`rank-item${isMe ? ' me' : ''}`}
                       onClick={() => openLeaderDetails(player)}
                       role="button"
@@ -3056,14 +3051,14 @@ const myFilteredPredictionsSorted = [...predictions]
                           {isMe && <span style={{ marginRight: 8, fontSize: 11, color: 'var(--gold)' }}>(أنت)</span>}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                          {leaderRoundFilter
-                            ? `نقاط التوقعات في ${roundLabels[effectiveRound] || effectiveRound}`
-                            : `${playerPredictionsCount || 0} توقع`}
+                          {isGeneralView
+                            ? `${playerPredictionsCount || 0} توقع`
+                            : `مجموع نقاط التوقعات في ${roundLabels[effectiveRound] || effectiveRound}`}
                         </div>
                       </div>
                       <div style={{ textAlign: 'left' }}>
                         <div style={{ fontSize: 22, fontWeight: 800, color: i < 3 ? 'var(--gold)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                          {leaderRoundFilter ? (player.total_points || 0) : (player.totalPoints || 0)}
+                          {playerPoints}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--muted)' }}>نقطة</div>
                       </div>
