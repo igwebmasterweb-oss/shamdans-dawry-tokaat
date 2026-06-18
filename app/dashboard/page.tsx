@@ -1291,10 +1291,15 @@ setSelectedLeaderPredictions(normalizedPreds);
  const myPoints = addProfilePoints(myTotalPoints, profileCompleted);
   const myRank      = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
+  const mySelectedRound = myRoundFilter || activeRound;
+  const myFilteredMatches = matches.filter((m: any) => m.league?.round === mySelectedRound);
   const predictionOnlyPoints = predictions
     .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
   const myRoundPts = predictions
     .filter((pr: any) => filteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
+    .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
+  const myFilteredRoundPts = predictions
+    .filter((pr: any) => myFilteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
 
   const getMatchCollapsed = (fixtureId: number) =>
@@ -2658,16 +2663,14 @@ const myFilteredPredictionsSorted = [...predictions]
               <div style={{ minWidth: 0 }}>
                 <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>توقعاتي</h2>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '8px 16px', fontWeight: 800, color: 'var(--gold)' }}>🏅 {myFilteredRoundPts} نقطة</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>
-                    تعرض هذه القائمة توقعات {roundLabels[myRoundFilter] || myRoundFilter || roundLabels[activeRound] || activeRound || 'الجولة الحالية'}
-                  </div>
+                  <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '8px 16px', fontWeight: 800, color: 'var(--gold)' }}>🏅 إجمالي التوقعات: {predictionOnlyPoints} نقطة</div>
+                  <div style={{ background: 'rgba(255,255,255,.04)', border: '1px solid var(--line)', borderRadius: 12, padding: '8px 16px', fontWeight: 800, color: 'var(--text)' }}>📍 {roundLabels[mySelectedRound] || mySelectedRound || roundLabels[activeRound] || activeRound || 'الجولة الحالية'}: {myFilteredRoundPts} نقطة</div>
                 </div>
               </div>
               <div style={{ minWidth: 220, width: '100%', maxWidth: 280 }}>
                 <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>اختر الجولة</div>
                 <select
-                  value={myRoundFilter || activeRound}
+                  value={mySelectedRound}
                   onChange={(e) => setMyRoundFilter(e.target.value)}
                   style={{
                     width: '100%',
