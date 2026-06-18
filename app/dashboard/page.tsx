@@ -1659,13 +1659,19 @@ const myFilteredPredictionsSorted = [...predictions]
                         <div style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>بدأت المباراة</div>
                       </div>
 
-                      <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6, textAlign: 'center', lineHeight: 1.7 }}>
-                        {currentMatch?.teams?.home?.logo && <img src={currentMatch.teams.home.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
-                        <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}</span>
-                        {currentMatch?.teams?.away?.logo && <img src={currentMatch.teams.away.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
-                      </div>
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', textAlign: 'center', lineHeight: 1.8, marginBottom: currentMatchDate ? 6 : 0 }}>
+                          {currentMatch?.teams?.home?.logo && <img src={currentMatch.teams.home.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
+                          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}</span>
+                          {currentMatch?.teams?.away?.logo && <img src={currentMatch.teams.away.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
+                        </div>
 
-                      {currentMatchDate && <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10, whiteSpace: 'nowrap', overflowX: 'auto' }}>{currentMatchDate}</div>}
+                        {currentMatchDate && (
+                          <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.7 }}>
+                            {currentMatchDate}
+                          </div>
+                        )}
+                      </div>
 
                       {currentPrediction ? (
                         <div style={{ display: 'grid', gap: 8 }}>
