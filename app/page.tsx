@@ -256,6 +256,11 @@ export default function HomePage() {
 
         .ghost-space{width:160px}
 
+        @media (max-width:900px){
+          .host-spotlight{grid-template-columns:1fr !important;text-align:center}
+          .host-spotlight-copy{ text-align:center !important }
+        }
+
         @media (max-width:760px){
           .topbar-inner{
             display:flex;
@@ -438,6 +443,161 @@ export default function HomePage() {
                   <div style={{ color: 'var(--muted)', fontSize: 14 }}>{s.label}</div>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section style={{ padding: '10px 20px 18px' }}>
+          <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+            <div
+              className="callout-card fade-up-d2 host-spotlight"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(220px,320px) 1fr',
+                gap: 24,
+                alignItems: 'center',
+                padding: '24px',
+                background: 'linear-gradient(135deg, rgba(217,178,95,.10), rgba(255,255,255,.02) 35%, rgba(255,255,255,.01) 100%)',
+                border: '1px solid rgba(217,178,95,.18)',
+                boxShadow: '0 18px 40px rgba(0,0,0,.22)',
+              }}
+            >
+              <div
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  maxWidth: 300,
+                  margin: '0 auto',
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: '-10px',
+                    borderRadius: 28,
+                    background: 'radial-gradient(circle at 50% 20%, rgba(217,178,95,.24), transparent 58%)',
+                    filter: 'blur(12px)',
+                    opacity: .95,
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'relative',
+                    borderRadius: 28,
+                    overflow: 'hidden',
+                    border: '1px solid rgba(217,178,95,.24)',
+                    background: 'linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02))',
+                    padding: 10,
+                  }}
+                >
+                  <img
+                    src="/DSC00061.jpg"
+                    alt="Hika"
+                    style={{
+                      width: '100%',
+                      aspectRatio: '4 / 5',
+                      objectFit: 'cover',
+                      objectPosition: 'center top',
+                      borderRadius: 20,
+                      display: 'block',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="host-spotlight-copy" style={{ textAlign: 'right' }}>
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '7px 12px',
+                    borderRadius: 999,
+                    background: 'rgba(217,178,95,.10)',
+                    border: '1px solid rgba(217,178,95,.18)',
+                    color: 'var(--gold)',
+                    fontSize: 13,
+                    fontWeight: 800,
+                    marginBottom: 16,
+                  }}
+                >
+                  🎙️ مستضيف البطولة
+                </div>
+
+                <h2
+                  style={{
+                    fontSize: 'clamp(28px,4vw,42px)',
+                    lineHeight: 1.2,
+                    marginBottom: 12,
+                    fontWeight: 900,
+                  }}
+                >
+                  شكر خاص لـ <span style={{ color: 'var(--gold)' }}>Hika</span>
+                </h2>
+
+                <p
+                  style={{
+                    color: 'var(--muted)',
+                    lineHeight: 1.95,
+                    fontSize: 'clamp(14px,1.8vw,17px)',
+                    marginBottom: 16,
+                    maxWidth: 700,
+                  }}
+                >
+                  بكل التقدير، نتوجه بالشكر إلى Hika على استضافة البطولة ومساهمته في تقديم تجربة أكثر حماسًا وقربًا من الجمهور،
+                  بالشكل الذي يليق بروح المنافسة وأجواء كأس العالم.
+                </p>
+
+                <div
+                  style={{
+                    borderRight: '3px solid rgba(217,178,95,.45)',
+                    padding: '6px 14px 6px 0',
+                    color: '#f5deb0',
+                    fontWeight: 800,
+                    fontSize: 'clamp(15px,2vw,19px)',
+                    lineHeight: 1.9,
+                    marginBottom: 18,
+                  }}
+                >
+                  وجوده أضاف للبطولة روحًا خاصة، وجعل التجربة أقرب للناس وأكثر تميزًا.
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                    alignItems: 'center',
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 14,
+                      background: 'rgba(255,255,255,.03)',
+                      border: '1px solid var(--line)',
+                      color: 'var(--text)',
+                      fontSize: 13,
+                      fontWeight: 700,
+                    }}
+                  >
+                    🤍 كلمة تقدير خاصة من الشمعدان
+                  </div>
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 14,
+                      background: 'rgba(39,176,110,.08)',
+                      border: '1px solid rgba(39,176,110,.18)',
+                      color: '#94f0c0',
+                      fontSize: 13,
+                      fontWeight: 700,
+                    }}
+                  >
+                    ⚽ شريك في روح البطولة
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
