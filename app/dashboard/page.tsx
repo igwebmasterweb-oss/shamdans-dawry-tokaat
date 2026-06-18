@@ -493,9 +493,6 @@ const [profileCompleted, setProfileCompleted] = useState(false);
     if (!myRoundFilter && activeRound) setMyRoundFilter(activeRound);
   }, [activeRound, myRoundFilter]);
 
-  useEffect(() => {
-    if (!leaderRoundFilter && activeRound) setLeaderRoundFilter(activeRound);
-  }, [activeRound, leaderRoundFilter]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -3057,7 +3054,7 @@ const myFilteredPredictionsSorted = [...predictions]
 
                   {selectableRounds.length > 0 && (
                     <select
-                      value={leaderRoundFilter}
+                      value={leaderRoundFilter || activeRound}
                       onChange={e => setLeaderRoundFilter(e.target.value)}
                       style={{
                         padding: '6px 12px',
