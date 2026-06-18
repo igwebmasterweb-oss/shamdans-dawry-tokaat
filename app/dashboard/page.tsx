@@ -457,6 +457,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [pushEnabled, setPushEnabled]       = useState(false);
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
+  const [myRoundFilter, setMyRoundFilter]     = useState('');
   const addProfilePoints = (total = 0, completed = false) =>
   total + (completed ? 5 : 0);
 
@@ -485,6 +486,10 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   };
 
   const rounds = [...new Set(matches.map((m: any) => m.league?.round).filter(Boolean))] as string[];
+
+  useEffect(() => {
+    if (!myRoundFilter && activeRound) setMyRoundFilter(activeRound);
+  }, [activeRound, myRoundFilter]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -1358,6 +1363,22 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
   if (aFinished && bFinished) return dateA - dateB;
   return dateA - dateB;
 });
+const myFilteredPredictionsSorted = [...predictions]
+  .filter((p: any) => myFilteredMatches.some((m: any) => m.fixture.id === p.fixture_id))
+  .sort((a: any, b: any) => {
+    const aFinished = a.actual_home_score !== null && a.actual_home_score !== undefined;
+    const bFinished = b.actual_home_score !== null && b.actual_home_score !== undefined;
+
+    if (aFinished !== bFinished) return aFinished ? -1 : 1;
+
+    const matchA = matches.find((m: any) => m.fixture.id === a.fixture_id);
+    const matchB = matches.find((m: any) => m.fixture.id === b.fixture_id);
+
+    const dateA = matchA?.fixture?.date ? new Date(matchA.fixture.date).getTime() : 0;
+    const dateB = matchB?.fixture?.date ? new Date(matchB.fixture.date).getTime() : 0;
+
+    return dateA - dateB;
+  });
   return (
     <>
       <style>{`
@@ -2633,19 +2654,50 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
 
         {activeTab === 'my' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontWeight: 800, fontSize: 20 }}>توقعاتي</h2>
-              <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '8px 16px', fontWeight: 800, color: 'var(--gold)' }}>🏅 {predictionOnlyPoints} نقطة</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>توقعاتي</h2>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ background: 'rgba(217,178,95,.1)', border: '1px solid rgba(217,178,95,.2)', borderRadius: 12, padding: '8px 16px', fontWeight: 800, color: 'var(--gold)' }}>🏅 {myFilteredRoundPts} نقطة</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>
+                    تعرض هذه القائمة توقعات {roundLabels[myRoundFilter] || myRoundFilter || roundLabels[activeRound] || activeRound || 'الجولة الحالية'}
+                  </div>
+                </div>
+              </div>
+              <div style={{ minWidth: 220, width: '100%', maxWidth: 280 }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 8 }}>اختر الجولة</div>
+                <select
+                  value={myRoundFilter || activeRound}
+                  onChange={(e) => setMyRoundFilter(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 14,
+                    padding: '12px 14px',
+                    color: 'var(--text)',
+                    fontFamily: 'Cairo, sans-serif',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    outline: 'none'
+                  }}
+                >
+                  {rounds.map((round: string) => (
+                    <option key={round} value={round}>{roundLabels[round] || round}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             {(() => {
               const topPredictionsWithZero = [...pointsBreakdown]
-                .sort((a: any, b: any) => Number(b.points ?? 0) - Number(a.points ?? 0));
+                .sort((a: any, b: any) => Number(b.points ?? 0) - Number(a.points ?? 0))
+                .slice(0, 15);
 
               return topPredictionsWithZero.length > 0 ? (
               <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: '16px 20px', marginBottom: 20 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 12 }}>🔝 أفضل توقعاتك بالنقاط</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 12 }}>🔝 أفضل 15 توقع بالنقاط</div>
                 {topPredictionsWithZero.map((p: any, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < pointsBreakdown.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < topPredictionsWithZero.length - 1 ? '1px solid var(--line)' : 'none' }}>
                     <span style={{ fontSize: 14, fontWeight: 700 }}>{p.home_team} × {p.away_team}</span>
                     <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums',
                       color: (p.points || 0) < 0 ? '#ffb4b4' : (p.points || 0) === 0 ? 'var(--muted)' : (p.points || 0) >= 10 ? 'var(--gold)' : '#94f0c0'
@@ -2660,65 +2712,55 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
                 <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
                 <div style={{ fontSize: 16, fontWeight: 700 }}>لم تقدم أي توقعات بعد</div>
               </div>
-            ) : myPredictionsSorted.map((p, i) => {
+            ) : myFilteredPredictionsSorted.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 44, color: 'var(--muted)', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20 }}>
+                <div style={{ fontSize: 34, marginBottom: 10 }}>🗂️</div>
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>لا توجد توقعات في هذه الجولة</div>
+                <div style={{ fontSize: 12 }}>اختر جولة أخرى من القائمة لعرض توقعاتها</div>
+              </div>
+            ) : myFilteredPredictionsSorted.map((p, i) => {
               const hasResult = p.actual_home_score !== null;
-            const matchInfo = matches.find((m: any) => m.fixture.id === p.fixture_id);
-const matchDate = matchInfo?.fixture?.date
-  ? new Date(matchInfo.fixture.date).toLocaleDateString('ar-EG', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  : '';
-const extraPredictions = [
-  ...(p.predicted_extra_time
-    ? [{
-        label: '🕒 وقت إضافي',
-        predicted: !!p.predicted_extra_time,
-        actual: !!matchInfo?.went_extra_time,
-      }]
-    : []),
-  ...(p.predicted_red_card
-    ? [{
-        label: '🟥 كارت أحمر',
-        predicted: !!p.predicted_red_card,
-        actual: !!matchInfo?.red_card_in_match,
-      }]
-    : []),
-  ...(p.predicted_penalty
-    ? [{
-        label: '⚽ ضربة جزاء',
-        predicted: !!p.predicted_penalty,
-        actual: !!matchInfo?.penalty_in_match,
-      }]
-    : []),
-  ...(p.predicted_both_teams
-    ? [{
-        label: '🥅 الفريقان يسجلان',
-        predicted: !!p.predicted_both_teams,
-        actual: !!matchInfo?.both_teams_scored,
-      }]
-    : []),
-];
-            // ✅ ترتيب توقعاتي من الأقدم إلى الأحدث حسب تاريخ المباراة
-const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
-  const aFinished = a.actual_home_score !== null && a.actual_home_score !== undefined;
-  const bFinished = b.actual_home_score !== null && b.actual_home_score !== undefined;
-
-  if (aFinished !== bFinished) return aFinished ? -1 : 1;
-
-  const matchA = matches.find((m: any) => m.fixture.id === a.fixture_id);
-  const matchB = matches.find((m: any) => m.fixture.id === b.fixture_id);
-
-  const dateA = matchA?.fixture?.date ? new Date(matchA.fixture.date).getTime() : 0;
-  const dateB = matchB?.fixture?.date ? new Date(matchB.fixture.date).getTime() : 0;
-
-  if (aFinished && bFinished) return dateA - dateB;
-  return dateA - dateB;
-});
-         return (
+              const matchInfo = matches.find((m: any) => m.fixture.id === p.fixture_id);
+              const matchDate = matchInfo?.fixture?.date
+                ? new Date(matchInfo.fixture.date).toLocaleDateString('ar-EG', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : '';
+              const extraPredictions = [
+                ...(p.predicted_extra_time
+                  ? [{
+                      label: '🕒 وقت إضافي',
+                      predicted: !!p.predicted_extra_time,
+                      actual: !!matchInfo?.went_extra_time,
+                    }]
+                  : []),
+                ...(p.predicted_red_card
+                  ? [{
+                      label: '🟥 كارت أحمر',
+                      predicted: !!p.predicted_red_card,
+                      actual: !!matchInfo?.red_card_in_match,
+                    }]
+                  : []),
+                ...(p.predicted_penalty
+                  ? [{
+                      label: '⚽ ضربة جزاء',
+                      predicted: !!p.predicted_penalty,
+                      actual: !!matchInfo?.penalty_in_match,
+                    }]
+                  : []),
+                ...(p.predicted_both_teams
+                  ? [{
+                      label: '🥅 الفريقان يسجلان',
+                      predicted: !!p.predicted_both_teams,
+                      actual: !!matchInfo?.both_teams_scored,
+                    }]
+                  : []),
+              ];
+              return (
   <div
     key={i}
     className="rank-item"
@@ -2776,7 +2818,6 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
         </div>
       )}
 
-      {/* N4: 50/50 grid - توقعي | الفعلي */}
       <div
         style={{
           display: 'grid',
@@ -2785,145 +2826,91 @@ const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
           marginBottom: 12,
         }}
       >
-        {/* Left: توقعي */}
         <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
           <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعي</div>
           <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
             {p.predicted_home_score} — {p.predicted_away_score}
           </div>
           {p.predicted_first_scorer && (
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {p.predicted_first_scorer}</div>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span>⚽</span>
+              <span>{p.predicted_first_scorer}</span>
+            </div>
           )}
         </div>
 
-        {/* Right: الفعلي */}
-        <div style={{ padding: '10px 12px', borderRadius: 12, background: hasResult ? 'rgba(39,176,110,.07)' : 'var(--surface-3)', border: hasResult ? '1px solid rgba(39,176,110,.2)' : '1px solid var(--line)' }}>
+        <div style={{ padding: '10px 12px', borderRadius: 12, background: hasResult ? 'rgba(39,176,110,.07)' : 'var(--surface-3)', border: '1px solid var(--line)' }}>
           <div style={{ color: hasResult ? '#94f0c0' : 'var(--muted)', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>الفعلي</div>
-          {hasResult ? (
-            <>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
-                {p.actual_home_score} — {p.actual_away_score}
-              </div>
-              {(() => {
-                const scorers = extractScorersList(matchInfo?.scorers_json, matchInfo?.first_scorer || p.first_scorer_actual);
-                return scorers.length > 0 ? (
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}><div style={{ color: 'var(--muted)', opacity: 0.8, marginBottom: 2 }}>الهدافون ({scorers.length})</div>
-                    {scorers.map((s, si) => <div key={si} style={{ display: 'block' }}>⚽ {s}</div>)}
-                  </div>
-                ) : null;
-              })()}
-            </>
-          ) : (
-            <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+            {hasResult ? `${p.actual_home_score} — ${p.actual_away_score}` : '—'}
+          </div>
+          {hasResult && p.first_scorer && (
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span>⚽</span>
+              <span>{p.first_scorer}</span>
+            </div>
           )}
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-       {extraPredictions.length > 0 ? (
-  extraPredictions.map((item, idx) => {
-            const isCorrect = hasResult && item.predicted === item.actual;
-
+      {extraPredictions.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {extraPredictions.map((ex, idx) => {
+            const hit = hasResult && ex.predicted === ex.actual;
             return (
-              <span
+              <div
                 key={idx}
                 style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  padding: '6px 10px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 10px',
                   borderRadius: 999,
-                  border: hasResult
-                    ? isCorrect
-                      ? '1px solid rgba(39,176,110,.24)'
-                      : '1px solid rgba(201,58,47,.24)'
-                    : '1px solid var(--line)',
-                  background: hasResult
-                    ? isCorrect
-                      ? 'rgba(39,176,110,.12)'
-                      : 'rgba(201,58,47,.12)'
-                    : 'rgba(255,255,255,.04)',
-                  color: hasResult
-                    ? isCorrect
-                      ? '#94f0c0'
-                      : '#ffb4b4'
-                    : 'var(--text)',
+                  border: '1px solid var(--line)',
+                  background: hit ? 'rgba(39,176,110,.10)' : 'rgba(255,255,255,.04)',
+                  color: hit ? '#94f0c0' : 'var(--muted)',
+                  fontSize: 11,
+                  fontWeight: 700,
                 }}
               >
-                {item.label} {hasResult ? (isCorrect ? '✓' : '✕') : ''}
-              </span>
+                <span>{ex.label}</span>
+                <span>{ex.predicted ? 'نعم' : 'لا'}</span>
+              </div>
             );
-          })
-        ) : (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              padding: '6px 10px',
-              borderRadius: 999,
-              background: 'rgba(255,255,255,.03)',
-              border: '1px dashed var(--line)',
-              color: 'var(--muted)',
-            }}
-          >
-            لا توجد اختيارات إضافية
-          </span>
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </div>
 
-    {/* N8: Points box with negative/zero/positive visual treatment */}
     <div
       style={{
-        padding: '10px 14px',
-        borderRadius: 14,
-        background: !hasResult
-          ? 'var(--surface-3)'
+        minWidth: 90,
+        borderRadius: 16,
+        background: (p.points || 0) >= 10
+          ? 'linear-gradient(180deg,rgba(217,178,95,.16),rgba(217,178,95,.05))'
+          : (p.points || 0) > 0
+          ? 'rgba(39,176,110,.10)'
           : (p.points || 0) < 0
-          ? 'rgba(201,58,47,.13)'
-          : (p.points || 0) === 0
-          ? 'var(--surface-3)'
-          : (p.points || 0) >= 10
-          ? 'rgba(217,178,95,.12)'
-          : 'rgba(39,176,110,.12)',
-        border: !hasResult
-          ? '1px solid var(--line)'
-          : (p.points || 0) < 0
-          ? '1px solid rgba(201,58,47,.3)'
-          : '1px solid var(--line)',
-        color: !hasResult
-          ? 'var(--muted)'
-          : (p.points || 0) < 0
-          ? '#ffb4b4'
-          : (p.points || 0) === 0
-          ? 'var(--muted)'
-          : (p.points || 0) >= 10
-          ? '#ffe3a6'
-          : '#94f0c0',
-        textAlign: 'center',
-        minWidth: 74,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
+          ? 'rgba(201,58,47,.10)'
+          : 'rgba(255,255,255,.04)',
+        border: '1px solid var(--line)',
+        display: 'grid',
+        placeItems: 'center',
+        padding: '12px 10px',
       }}
     >
-      <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-        {hasResult
-          ? (p.points || 0) < 0
-            ? <>⚠ {p.points}</>
-            : (p.points || 0)
-          : '⏳'}
-      </div>
-      <div style={{ fontSize: 11, marginTop: 4, color: hasResult ? 'inherit' : 'var(--muted)' }}>
-        {hasResult ? 'نقطة' : 'بانتظار'}
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 28, fontWeight: 900, color: (p.points || 0) >= 10 ? 'var(--gold)' : (p.points || 0) > 0 ? '#94f0c0' : (p.points || 0) < 0 ? '#ffb4b4' : 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+          {p.points || 0}
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700 }}>نقطة</div>
       </div>
     </div>
   </div>
-);
+              );
             })}
           </div>
         )}
-
 
         {(activeTab === 'leaders' || activeTab === 'roundleaders') && (
           <div>
