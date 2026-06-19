@@ -585,7 +585,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
 
       const [
         profileRes, profilesRes, sessionRes, fixturesApiRes, sbFixturesRes,
-        userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes, participantsCountRes, penaltyNoticesRes,
+        userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes, participantsCountRes, penaltyNoticesRes, reviewNoticeRes,
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
         supabase.from('profiles').select('id, full_name'),
@@ -601,6 +601,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
         supabase.from('user_points').select('*', { count: 'exact', head: true }),
         supabase.from('user_penalty_notices').select('user_id, penalty_points').eq('is_active', true),
+        supabase.from('user_penalty_notices').select('message, status, penalty_points').eq('user_id', userId).eq('is_active', true).maybeSingle(),
       ]);
 
       const profileData    = profileRes.data;
@@ -617,7 +618,9 @@ const [profileCompleted, setProfileCompleted] = useState(false);
       const participantsCount  = participantsCountRes.count ?? 0;
       const penaltyRows = penaltyNoticesRes.data || [];
       const nextPenaltyMap = Object.fromEntries((penaltyRows || []).map((row: any) => [row.user_id, Number(row.penalty_points || 0)]));
+      const penaltyFor = (targetUserId?: string | null) => targetUserId ? Number(nextPenaltyMap[targetUserId] || 0) : 0;
       setPenaltyMap(nextPenaltyMap);
+      setReviewNotice(reviewNoticeRes.data || null);
       setTotalParticipants(participantsCount);
 
 const userNameMap: Record<string, string> = {};
@@ -814,7 +817,7 @@ const userNameMap: Record<string, string> = {};
         user_email:        row.user_email,
         display_name:      row.full_name || null,
         profile_completed: row.profile_completed || false,
-        totalPoints:       getAdjustedTotal(row.total_points || 0, !!row.profile_completed, row.user_id),
+        totalPoints:       addProfilePoints(row.total_points || 0, !!row.profile_completed) - penaltyFor(row.user_id),
         count:             row.predictions_count || 0,
       })).sort((a: any, b: any) => (b.totalPoints || 0) - (a.totalPoints || 0)));
 
@@ -1266,7 +1269,7 @@ const submitPrediction = async (match: any) => {
   return dateA - dateB;
 });
 
-setSelectedLeaderSummary(summaryData || null);
+setSelectedLeaderSummary(summaryData ? { ...summaryData, penalty_points: getPenaltyPoints(player.user_id) } : null);
 setSelectedLeaderPredictions(normalizedPreds);
     } catch (err) {
       console.error('openLeaderDetails error:', err);
