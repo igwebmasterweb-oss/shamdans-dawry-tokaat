@@ -13,6 +13,8 @@ interface Player {
   referral_points?: number;
   bonus_points?: number;
   round_points?: number;
+  penalty_points?: number;
+  raw_total_points?: number;
 }
 
 interface MemberPrediction {
@@ -88,17 +90,21 @@ export default function LeaderboardPage() {
   const [memberModalLoading, setMemberModalLoading] = useState(false);
   const [memberModalError, setMemberModalError] = useState('');
   const [rounds, setRounds] = useState<string[]>([]);
-  const [selectedRound, setSelectedRound] = useState<string>('');
+  const [selectedRound, setSelectedRound] = useState('');
+  const [roundRows, setRoundRows] = useState<Player[]>([]);
   const [roundLoading, setRoundLoading] = useState(false);
+  const [penaltyMap, setPenaltyMap] = useState<Record<string, number>>({});
   const maxPoints = useRef(1);
   const listRef = useRef<HTMLDivElement>(null);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const isSearching = searchQuery.trim().length > 0;
   const isRoundMode = selectedRound.trim().length > 0;
+  const penaltyFor = (userId?: string | null) => (userId ? (penaltyMap[userId] || 0) : 0);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUser(data.user || null));
+    loadPenaltyMap();
     loadMyRank();
     loadPage(1);
     loadRounds();
@@ -106,93 +112,102 @@ export default function LeaderboardPage() {
   }, []);
 
   useEffect(() => {
-    if (isRoundMode) loadRoundLeaderboard(selectedRound);
-    else if (isSearching) loadAllForSearch();
+    if (isSearching) loadAllForSearch();
     else loadPage(currentPage);
-  }, [isSearching, isRoundMode, selectedRound]);
+  }, [isSearching]);
+
+
+  const loadPenaltyMap = async () => {
+    try {
+      const { data } = await supabase
+        .from('user_penalty_notices')
+        .select('user_id, penalty_points')
+        .eq('is_active', true);
+
+      const nextMap: Record<string, number> = {};
+      (data || []).forEach((row: any) => {
+        if (row?.user_id) nextMap[row.user_id] = Number(row?.penalty_points || 0);
+      });
+      setPenaltyMap(nextMap);
+    } catch (err) {
+      console.error('loadPenaltyMap:', err);
+      setPenaltyMap({});
+    }
+  };
 
   const loadRounds = async () => {
     try {
       const { data } = await supabase
         .from('fixtures')
-        .select('round')
+        .select('round, match_date')
         .not('round', 'is', null)
         .order('match_date', { ascending: true });
 
-      const nextRounds = Array.from(new Set((data || []).map((row: any) => row?.round).filter(Boolean))) as string[];
-      setRounds(nextRounds);
+      const uniqueRounds = Array.from(new Set((data || []).map((row: any) => row?.round).filter(Boolean))) as string[];
+      setRounds(uniqueRounds);
     } catch (err) {
       console.error('loadRounds:', err);
     }
   };
 
-  const loadRoundLeaderboard = async (round: string) => {
+  const loadRoundRows = async (round: string) => {
     if (!round) return;
     setRoundLoading(true);
+    setLoading(false);
     setPageLoading(false);
+
     try {
-      const { data: predictionRows } = await supabase
-        .from('predictions')
-        .select('user_id, fixture_id, points');
+      const [{ data: predictionRows }, { data: fixtureRows }, { data: userPointsRows }] = await Promise.all([
+        supabase.from('predictions').select('user_id, fixture_id, points'),
+        supabase.from('fixtures').select('api_fixture_id').eq('round', round),
+        supabase.from('user_points').select('user_id, user_email, full_name, profile_completed, referral_points, bonus_points'),
+      ]);
 
-      const { data: fixtureRows } = await supabase
-        .from('fixtures')
-        .select('api_fixture_id, round')
-        .eq('round', round);
-
-      const { data: userPointsRows } = await supabase
-        .from('user_points')
-        .select('*');
-
-      const fixtureIds = new Set((fixtureRows || []).map((f: any) => Number(f.api_fixture_id)));
-      const grouped = new Map<string, { round_points: number; predictions_count: number }>();
+      const fixtureIds = new Set((fixtureRows || []).map((row: any) => Number(row.api_fixture_id)).filter(Boolean));
+      const userMeta = new Map((userPointsRows || []).map((row: any) => [row.user_id, row]));
+      const grouped = new Map<string, { total_points: number; predictions_count: number }>();
 
       (predictionRows || []).forEach((row: any) => {
         const fixtureId = Number(row?.fixture_id || 0);
         if (!fixtureIds.has(fixtureId)) return;
         const userId = row?.user_id;
         if (!userId) return;
-        const prev = grouped.get(userId) || { round_points: 0, predictions_count: 0 };
+        const prev = grouped.get(userId) || { total_points: 0, predictions_count: 0 };
         grouped.set(userId, {
-          round_points: prev.round_points + Number(row?.points || 0),
+          total_points: prev.total_points + Number(row?.points || 0),
           predictions_count: prev.predictions_count + 1,
         });
       });
 
-      const profileMap = new Map((userPointsRows || []).map((row: any) => [row.user_id, row]));
-      const merged = Array.from(grouped.entries())
+      const nextRows: Player[] = Array.from(grouped.entries())
         .map(([user_id, agg]) => {
-          const base = profileMap.get(user_id);
+          const meta = userMeta.get(user_id);
           return {
             user_id,
-            user_email: base?.user_email || '',
-            display_name: base?.full_name || null,
-            total_points: agg.round_points,
-            round_points: agg.round_points,
+            user_email: meta?.user_email || '',
+            display_name: meta?.full_name || null,
+            total_points: agg.total_points,
+            raw_total_points: agg.total_points,
+            round_points: agg.total_points,
+            penalty_points: 0,
             predictions_count: agg.predictions_count,
-            profile_completed: base?.profile_completed || false,
-            referral_points: base?.referral_points || 0,
-            bonus_points: base?.bonus_points || 0,
-          } as Player;
+            profile_completed: meta?.profile_completed || false,
+            referral_points: meta?.referral_points || 0,
+            bonus_points: meta?.bonus_points || 0,
+          };
         })
         .sort((a, b) => {
           if ((b.total_points || 0) !== (a.total_points || 0)) return (b.total_points || 0) - (a.total_points || 0);
           return (b.predictions_count || 0) - (a.predictions_count || 0);
         });
 
-      setPlayers(merged);
-      setAllPlayers(merged);
-      setTotalCount(merged.length);
-      setCurrentPage(1);
-
-      const meIndex = merged.findIndex((p) => p.user_id === currentUser?.id);
-      setMyRank(meIndex >= 0 ? meIndex + 1 : 0);
-      setMyPoints(meIndex >= 0 ? merged[meIndex].total_points || 0 : 0);
-      if (merged.length > 0) maxPoints.current = merged[0].total_points || 1;
+      setRoundRows(nextRows);
+      if (nextRows.length > 0) maxPoints.current = nextRows[0].total_points || 1;
     } catch (err) {
-      console.error('loadRoundLeaderboard:', err);
+      console.error('loadRoundRows:', err);
+      setRoundRows([]);
     }
-    setLoading(false);
+
     setRoundLoading(false);
     setAnimated(false);
     setTimeout(() => setAnimated(true), 80);
@@ -216,37 +231,56 @@ export default function LeaderboardPage() {
   const loadMyRank = async () => {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData?.user) return;
-    const { data: myData } = await supabase
-      .from('user_points').select('total_points').eq('user_id', authData.user.id).single();
+
+    const [{ data: myData }, { data: allRows }] = await Promise.all([
+      supabase.from('user_points').select('*').eq('user_id', authData.user.id).single(),
+      supabase.from('user_points').select('*')
+    ]);
+
     if (!myData) return;
-    setMyPoints(myData.total_points || 0);
-    const { count } = await supabase
-      .from('user_points').select('*', { count: 'exact', head: true })
-      .gt('total_points', myData.total_points);
-    setMyRank((count || 0) + 1);
+
+    const adjustedRows = (allRows || [])
+      .map((row: any) => ({
+        user_id: row.user_id,
+        adjusted_total: Number(row?.total_points || 0) - penaltyFor(row?.user_id),
+      }))
+      .sort((a: any, b: any) => (b.adjusted_total || 0) - (a.adjusted_total || 0));
+
+    const myAdjustedPoints = Number(myData?.total_points || 0) - penaltyFor(authData.user.id);
+    setMyPoints(myAdjustedPoints);
+    setMyRank(adjustedRows.findIndex((row: any) => row.user_id === authData.user.id) + 1);
   };
 
   const loadPage = async (page: number) => {
     if (page !== 1) setPageLoading(true);
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-    const { data, count } = await supabase
-      .from('user_points').select('*', { count: 'exact' })
-      .order('total_points', { ascending: false }).range(from, to);
-    if (data) {
-      if (page === 1 && data.length > 0) maxPoints.current = data[0].total_points || 1;
-      setPlayers(data.map((row: any) => ({
-        user_id: row.user_id, user_email: row.user_email,
+
+    const { data: allData } = await supabase
+      .from('user_points').select('*');
+
+    const adjustedData = (allData || [])
+      .map((row: any) => ({
+        user_id: row.user_id,
+        user_email: row.user_email,
         display_name: row.full_name || null,
-        total_points: row.total_points || 0,
+        total_points: Number(row?.total_points || 0) - penaltyFor(row?.user_id),
+        raw_total_points: Number(row?.total_points || 0),
+        penalty_points: penaltyFor(row?.user_id),
         predictions_count: row.predictions_count || 0,
         profile_completed: row.profile_completed || false,
         referral_points: row.referral_points || 0,
         bonus_points: row.bonus_points || 0,
-      })));
-      if (count !== null) setTotalCount(count);
-    }
-    setLoading(false); setPageLoading(false);
+      }))
+      .sort((a: any, b: any) => (b.total_points || 0) - (a.total_points || 0));
+
+    const from = (page - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE;
+    const pageRows = adjustedData.slice(from, to);
+
+    if (page === 1 && pageRows.length > 0) maxPoints.current = pageRows[0].total_points || 1;
+    setPlayers(pageRows);
+    setTotalCount(adjustedData.length);
+    setLoading(false);
+    setPageLoading(false);
     setAnimated(false);
     setTimeout(() => setAnimated(true), 80);
   };
@@ -255,22 +289,25 @@ export default function LeaderboardPage() {
   const loadAllForSearch = async () => {
   const { data } = await supabase
     .from('user_points')
-    .select('*')
-    .order('total_points', { ascending: false });
+    .select('*');
 
   if (data) {
-    setAllPlayers(
-      data.map((row: any) => ({
+    const adjusted = data
+      .map((row: any) => ({
         user_id: row.user_id,
         user_email: row.user_email,
         display_name: row.full_name || null,
-        total_points: row.total_points || 0,
+        total_points: Number(row?.total_points || 0) - penaltyFor(row?.user_id),
+        raw_total_points: Number(row?.total_points || 0),
+        penalty_points: penaltyFor(row?.user_id),
         predictions_count: row.predictions_count || 0,
         profile_completed: row.profile_completed || false,
         referral_points: row.referral_points || 0,
         bonus_points: row.bonus_points || 0,
       }))
-    );
+      .sort((a: any, b: any) => (b.total_points || 0) - (a.total_points || 0));
+
+    setAllPlayers(adjusted);
   }
 };
 
@@ -356,24 +393,23 @@ export default function LeaderboardPage() {
     setMemberModalLoading(false);
   };
 
-  const sourceList = isSearching ? allPlayers : players;
+  const displayedPlayers = isRoundMode ? roundRows : players;
+  const displayedAllPlayers = isRoundMode ? roundRows : allPlayers;
+  const displayedTotalCount = isRoundMode ? roundRows.length : totalCount;
+  const displayedTotalPages = isRoundMode ? 1 : totalPages;
+  const displayedCurrentPage = isRoundMode ? 1 : currentPage;
+  const displayedMyRank = isRoundMode
+    ? roundRows.findIndex((p) => p.user_id === currentUser?.id) + 1
+    : myRank;
+  const displayedMyPoints = isRoundMode
+    ? (roundRows.find((p) => p.user_id === currentUser?.id)?.total_points || 0)
+    : myPoints;
   const filteredPlayers = isSearching
-    ? sourceList.filter(p =>
+    ? displayedAllPlayers.filter(p =>
         getName(p).toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.user_email?.toLowerCase().includes(searchQuery.toLowerCase()))
-    : sourceList;
-
-  const getPageNumbers = () => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const pages: (number | '...')[] = [1];
-    if (currentPage > 3) pages.push('...');
-    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
-    if (currentPage < totalPages - 2) pages.push('...');
-    pages.push(totalPages);
-    return pages;
-  };
-
-  const top3 = players.slice(0, 3);
+    : displayedPlayers;
+  const top3 = displayedPlayers.slice(0, 3);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -464,7 +500,7 @@ export default function LeaderboardPage() {
         <div style={{flex:1}}>
           <div style={{fontWeight:900,fontSize:15,color:'var(--gold)'}}>الشمعدان × كأس العالم 2026</div>
           <div style={{fontSize:11,color:'var(--muted)',fontWeight:700}}>
-            {loading ? 'جاري التحميل...' : `${totalCount} متسابق · صفحة ${currentPage} من ${totalPages}`}
+            {loading ? 'جاري التحميل...' : `${displayedTotalCount} متسابق · صفحة ${displayedCurrentPage} من ${displayedTotalPages}`}
           </div>
         </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -483,12 +519,12 @@ export default function LeaderboardPage() {
         <div style={{fontSize:11,color:'var(--gold)',fontWeight:700,letterSpacing:4,marginBottom:10}}>WORLD CUP 2026</div>
         <h1 style={{fontSize:'clamp(22px,5vw,36px)',fontWeight:900,marginBottom:8}}>🏆 صدارة المتسابقين</h1>
         <p style={{color:'var(--muted)',fontSize:13,fontWeight:700}}>
-          {loading ? '⏳ جاري التحميل...' : `${totalCount} متسابق`}
+          {loading ? '⏳ جاري التحميل...' : `${displayedTotalCount} متسابق`}
         </p>
       </div>
 
       {/* ══ PODIUM ══ */}
-      {!loading && currentPage === 1 && !isSearching && top3.length >= 3 && (
+      {!loading && !roundLoading && displayedCurrentPage === 1 && !isSearching && top3.length >= 3 && (
         <div style={{display:'flex',justifyContent:'center',alignItems:'flex-end',gap:12,padding:'0 20px 40px',maxWidth:500,margin:'0 auto'}}>
           {[1,0,2].map((rank) => {
             const p = top3[rank];
@@ -651,80 +687,57 @@ export default function LeaderboardPage() {
       <div ref={listRef} style={{maxWidth:700,margin:'0 auto',padding:'0 16px 80px',scrollMarginTop:80}}>
 
         {/* MY RANK BANNER */}
-        {!loading && currentUser && myRank > 0 && (
+        {!loading && !roundLoading && currentUser && displayedMyRank > 0 && (
           <div style={{animation:'slideDown 0.5s cubic-bezier(0.16,1,0.3,1) forwards',background:'linear-gradient(135deg,rgba(217,178,95,.12),rgba(217,178,95,.04))',border:'1px solid rgba(217,178,95,.25)',borderRadius:18,padding:'14px 20px',marginBottom:20,display:'flex',alignItems:'center',gap:16}}>
-            <div style={{fontSize:28,flexShrink:0}}>{myRank<=3?medals[myRank-1]:`#${myRank}`}</div>
+            <div style={{fontSize:28,flexShrink:0}}>{displayedMyRank<=3?medals[displayedMyRank-1]:`#${displayedMyRank}`}</div>
             <div style={{flex:1}}>
               <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>{isRoundMode ? `ترتيبك في ${selectedRound}` : 'ترتيبك الحالي'}</div>
-              <div style={{fontWeight:900,fontSize:15}}>المركز #{myRank}</div>
+              <div style={{fontWeight:900,fontSize:15}}>المركز #{displayedMyRank}</div>
             </div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
-              {!isSearching && myRank > PAGE_SIZE && (
-                <button className="nav-pill" onClick={() => goToPage(Math.ceil(myRank / PAGE_SIZE))} style={{padding:'6px 14px',fontSize:12}}>
+              {!isSearching && !isRoundMode && displayedMyRank > PAGE_SIZE && (
+                <button className="nav-pill" onClick={() => goToPage(Math.ceil(displayedMyRank / PAGE_SIZE))} style={{padding:'6px 14px',fontSize:12}}>
                   اعرض ترتيبي
                 </button>
               )}
               <div style={{textAlign:'center'}}>
-                <div style={{fontWeight:900,fontSize:22,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{myPoints}</div>
+                <div style={{fontWeight:900,fontSize:22,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{displayedMyPoints}</div>
                 <div style={{fontSize:11,color:'var(--muted)',fontWeight:700}}>نقطة</div>
               </div>
             </div>
           </div>
         )}
 
-        {/* ROUND MENU */}
+        {/* ROUND TABS */}
         {!loading && rounds.length > 0 && (
-          <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:16}}>
+          <div style={{display:'flex',justifyContent:'center',gap:10,flexWrap:'wrap',marginBottom:18}}>
             <button
               className="nav-pill"
-              onClick={() => {
-                setSelectedRound('');
-                setSearchQuery('');
-                loadMyRank();
-                loadPage(1);
-              }}
-              style={{
-                padding:'8px 14px',
-                fontSize:12,
-                background: !isRoundMode ? 'linear-gradient(135deg,rgba(217,178,95,.22),rgba(217,178,95,.08))' : 'var(--surface)',
-                border: !isRoundMode ? '1px solid rgba(217,178,95,.35)' : '1px solid var(--line)',
-                color: !isRoundMode ? 'var(--gold)' : 'var(--text)'
-              }}
+              onClick={() => { setSelectedRound(''); setSearchQuery(''); setRoundRows([]); loadMyRank(); loadPage(1); }}
+              style={{background:!isRoundMode?'linear-gradient(135deg,rgba(217,178,95,.14),rgba(217,178,95,.05))':'',border:!isRoundMode?'1px solid rgba(217,178,95,.35)':'',color:!isRoundMode?'var(--gold)':''}}
             >
               🌍 الترتيب العام
             </button>
-
-            <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-              {rounds.map((round) => {
-                const active = selectedRound === round;
-                return (
-                  <button
-                    key={round}
-                    className="nav-pill"
-                    onClick={() => {
-                      setSearchQuery('');
-                      setSelectedRound(round);
-                    }}
-                    style={{
-                      padding:'8px 14px',
-                      fontSize:12,
-                      background: active ? 'linear-gradient(135deg,rgba(59,130,246,.18),rgba(59,130,246,.06))' : 'var(--surface)',
-                      border: active ? '1px solid rgba(59,130,246,.3)' : '1px solid var(--line)',
-                      color: active ? '#93c5fd' : 'var(--text)'
-                    }}
-                  >
-                    🏁 {round}
-                  </button>
-                );
-              })}
-            </div>
+            {rounds.map((round) => {
+              const active = selectedRound === round;
+              return (
+                <button
+                  key={round}
+                  className="nav-pill"
+                  onClick={() => setSelectedRound(round)}
+                  style={{background:active?'linear-gradient(135deg,rgba(59,130,246,.16),rgba(59,130,246,.06))':'',border:active?'1px solid rgba(59,130,246,.45)':'',color:active?'#93c5fd':''}}
+                >
+                  🏁 {round}
+                </button>
+              );
+            })}
           </div>
         )}
 
         {/* SEARCH */}
-        {!loading && totalCount > 5 && (
+        {!loading && displayedTotalCount > 5 && (
           <div style={{position:'relative',marginBottom:16}}>
-            <input type="text" value={searchQuery} onChange={e=>{const value=e.target.value; setSearchQuery(value); if(value && !isRoundMode) loadAllForSearch();}} placeholder="🔍 ابحث عن لاعب..." className="search-box" />
+            <input type="text" value={searchQuery} onChange={e=>{const value=e.target.value;setSearchQuery(value);if(value && !isRoundMode) loadAllForSearch();}} placeholder="🔍 ابحث عن لاعب..." className="search-box" />
             {searchQuery && (
               <button onClick={()=>setSearchQuery('')} style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:16,padding:4}}>✕</button>
             )}
@@ -736,9 +749,7 @@ export default function LeaderboardPage() {
           <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>
             {isSearching
               ? `نتائج البحث (${filteredPlayers.length})`
-              : isRoundMode
-                ? `ترتيب ${selectedRound} — ${totalCount} لاعب`
-                : `عرض ${(currentPage-1)*PAGE_SIZE+1}–${Math.min(currentPage*PAGE_SIZE,totalCount)} من ${totalCount}`
+              : isRoundMode ? `ترتيب ${selectedRound} — ${displayedTotalCount} لاعب` : `عرض ${(currentPage-1)*PAGE_SIZE+1}–${Math.min(currentPage*PAGE_SIZE,totalCount)} من ${totalCount}`
             }
           </div>
           {!isSearching && !isRoundMode && totalPages > 1 && (
@@ -755,7 +766,7 @@ export default function LeaderboardPage() {
         {!loading && !pageLoading && filteredPlayers.length === 0 && (
           <div style={{textAlign:'center',padding:'60px 20px'}}>
             <div style={{fontSize:42,marginBottom:12}}>{isSearching ? '🔍' : '🏆'}</div>
-            <div style={{fontWeight:800,fontSize:15,marginBottom:8}}>{isSearching ? `لا توجد نتائج لـ "${searchQuery}"` : isRoundMode ? `لا توجد نتائج متاحة في ${selectedRound}` : 'لم يبدأ السباق بعد!'}</div>
+            <div style={{fontWeight:800,fontSize:15,marginBottom:8}}>{isSearching ? `لا توجد نتائج لـ "${searchQuery}"` : isRoundMode ? `لا توجد نتائج في ${selectedRound}` : 'لم يبدأ السباق بعد!'}</div>
             {!isSearching && <Link href="/login" className="nav-pill primary" style={{marginTop:16}}>🔑 كن الأول</Link>}
           </div>
         )}
@@ -764,7 +775,7 @@ export default function LeaderboardPage() {
         {!loading && !pageLoading && filteredPlayers.map((player, index) => {
           const isMe = player.user_id === currentUser?.id;
           const globalRank = (isSearching || isRoundMode)
-            ? allPlayers.findIndex(p => p.user_id === player.user_id) + 1
+            ? displayedPlayers.findIndex(p => p.user_id === player.user_id) + 1
             : (currentPage - 1) * PAGE_SIZE + index + 1;
           const pct = maxPoints.current > 0 ? (player.total_points / maxPoints.current) * 100 : 0;
           const delay = `${Math.min(index, 10) * 0.04}s`;
