@@ -456,6 +456,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [upcomingAlert, setUpcomingAlert]   = useState<any | null>(null);
   const [pushEnabled, setPushEnabled]       = useState(false);
   const [penaltyMap, setPenaltyMap]         = useState<Record<string, number>>({});
+  const [myPenaltyPoints, setMyPenaltyPoints] = useState(0);
   const [reviewNotice, setReviewNotice]     = useState<any | null>(null);
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
@@ -482,7 +483,8 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   }, []);
 
   const router = useRouter();
-  const animatedPoints = useCountUp(myTotalPoints);
+  const [myAdjustedPoints, setMyAdjustedPoints] = useState(0);
+  const animatedPoints = useCountUp(myAdjustedPoints);
   const countdown = useCountdown(upcomingAlert?.fixture?.date ?? null);
 
   const roundLabels: Record<string, string> = {
@@ -621,6 +623,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
       const nextPenaltyMap = Object.fromEntries((penaltyRows || []).map((row: any) => [row.user_id, Number(row.penalty_points || 0)]));
       const penaltyFor = (targetUserId?: string | null) => targetUserId ? Number(nextPenaltyMap[targetUserId] || 0) : 0;
       setPenaltyMap(nextPenaltyMap);
+      setMyPenaltyPoints(penaltyFor(userId));
       setReviewNotice(reviewNoticeRes.data || null);
       setTotalParticipants(participantsCount);
 
@@ -740,6 +743,22 @@ const userNameMap: Record<string, string> = {};
   setReferralPoints(myRow?.referral_points || 0);
   setBonusPoints(myRow?.bonus_points || 0);
   setProfileCompleted(myRow?.profile_completed || false);
+      }
+      // ✅ حساب النقاط المعدّلة (بعد الخصم) مباشرة من nextPenaltyMap المحلي
+      {
+        const rawMyPoints = (() => {
+          if (myPointsRow) {
+            const base = myPointsRow.total_points || 0;
+            const profBonus = myPointsRow.profile_completed ? 5 : 0;
+            return base + profBonus;
+          }
+          const myRow2 = (userPointsData || []).find((r: any) => r.user_id === userId);
+          const base = myRow2?.total_points || 0;
+          const profBonus = myRow2?.profile_completed ? 5 : 0;
+          return base + profBonus;
+        })();
+        const adjustedMyPoints = rawMyPoints - penaltyFor(userId);
+        setMyAdjustedPoints(adjustedMyPoints);
       }
 
      setSocialFeed((feedData || []).map((item: any) => {
@@ -1615,6 +1634,18 @@ const myFilteredPredictionsSorted = [...predictions]
       شارك في مسابقة حلمك فيها
     </a>
   </div>
+
+  {(selectedLeaderSummary?.penalty_points ?? 0) > 0 && (
+    <div className="stat-card" style={{ padding: 14, borderRadius: 18, border: '1px solid rgba(239,68,68,.22)', background: 'rgba(239,68,68,.08)' }}>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>الخصم الإداري</div>
+      <div style={{ fontSize: 24, fontWeight: 800, color: '#fca5a5', fontVariantNumeric: 'tabular-nums' }}>
+        -{selectedLeaderSummary?.penalty_points ?? 0}
+      </div>
+      <div style={{ fontSize: 11, color: '#ffd6d6', marginTop: 6 }}>
+        مخصوم من الإجمالي العام فقط
+      </div>
+    </div>
+  )}
 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
@@ -2346,6 +2377,7 @@ const myFilteredPredictionsSorted = [...predictions]
       ...(referralPoints > 0 ? [{ label: '👥 دعوات', value: referralPoints, color: 'rgba(125,177,255,.15)', border: 'rgba(125,177,255,.25)', text: '#7db1ff' }] : []),
       ...(bonusPoints > 0 ? [{ label: '🎁 بونص', value: bonusPoints, color: 'rgba(192,132,252,.15)', border: 'rgba(192,132,252,.25)', text: '#c084fc' }] : []),
       ...(profileCompleted ? [{ label: '👤 بروفايل', value: 5, color: 'rgba(249,115,22,.15)', border: 'rgba(249,115,22,.25)', text: '#fb923c' }] : []),
+      ...(myPenaltyPoints > 0 ? [{ label: '⛔ خصم', value: -myPenaltyPoints, color: 'rgba(239,68,68,.15)', border: 'rgba(239,68,68,.3)', text: '#fca5a5' }] : []),
     ];
     return chips.map((chip, i) => (
       <div key={i} style={{
