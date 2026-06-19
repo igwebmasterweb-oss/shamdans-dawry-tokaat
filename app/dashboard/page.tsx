@@ -483,8 +483,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   }, []);
 
   const router = useRouter();
-  const [myAdjustedPoints, setMyAdjustedPoints] = useState(0);
-  const animatedPoints = useCountUp(myAdjustedPoints);
+  const animatedPoints = useCountUp(myDisplayedTotal);
   const countdown = useCountdown(upcomingAlert?.fixture?.date ?? null);
 
   const roundLabels: Record<string, string> = {
@@ -761,25 +760,6 @@ const userNameMap: Record<string, string> = {};
   setProfileCompleted(myRow?.profile_completed || false);
       }
 
-      {
-        const rawMyPoints = (() => {
-          if (myPointsRow) {
-            const base = myPointsRow.total_points || 0;
-            const referral = myPointsRow.referral_points || 0;
-            const bonus = myPointsRow.bonus_points || 0;
-            const profBonus = myPointsRow.profile_completed ? 5 : 0;
-            return base + referral + bonus + profBonus;
-          }
-          const myRow2 = (userPointsData || []).find((r: any) => r.user_id === userId);
-          const base = myRow2?.total_points || 0;
-          const referral = myRow2?.referral_points || 0;
-          const bonus = myRow2?.bonus_points || 0;
-          const profBonus = myRow2?.profile_completed ? 5 : 0;
-          return base + referral + bonus + profBonus;
-        })();
-        const adjustedMyPoints = rawMyPoints - myPenaltyFromNotices;
-        setMyAdjustedPoints(adjustedMyPoints);
-      }
 
      setSocialFeed((feedData || []).map((item: any) => {
   const fallbackName =
@@ -1372,6 +1352,7 @@ setSelectedLeaderPredictions(normalizedPreds);
   const myFilteredRoundPts = predictions
     .filter((pr: any) => myFilteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
+  const myDisplayedTotal = predictionOnlyPoints + referralPoints + bonusPoints + (profileCompleted ? 5 : 0) - myPenaltyPoints;
 
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
