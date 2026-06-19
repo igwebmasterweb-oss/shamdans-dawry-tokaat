@@ -456,6 +456,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [upcomingAlert, setUpcomingAlert]   = useState<any | null>(null);
   const [pushEnabled, setPushEnabled]       = useState(false);
   const [penaltyMap, setPenaltyMap]         = useState<Record<string, number>>({});
+  const [reviewNotice, setReviewNotice]     = useState<any | null>(null);
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
   const [myRoundFilter, setMyRoundFilter]     = useState('');
