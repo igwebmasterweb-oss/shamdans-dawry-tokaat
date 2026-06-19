@@ -263,65 +263,71 @@ export default function LeaderboardPage() {
     }
   };
 
- const loadRoundPlayers = async (round: string) => {
-  if (!round) return;
-  setPageLoading(true);
-  setSearchQuery('');
-  try {
-    const [{ data: fixtures }, { data: predictions }, { data: users }] = await Promise.all([
-      supabase.from('fixtures').select('api_fixture_id').eq('round', round),
-      supabase.from('predictions').select('user_id, fixture_id, points'),
-      supabase.from('user_points').select('user_id, user_email, full_name, profile_completed, referral_points, bonus_points'),
-    ]);
+  const loadRoundPlayers = async (round: string) => {
+    if (!round) return;
+    setPageLoading(true);
+    setSearchQuery('');
 
-    const fixtureIds = new Set((fixtures || []).map((f: any) => Number(f.api_fixture_id)));
-    const userMap = new Map((users || []).map((u: any) => [u.user_id, u]));
+    try {
+      const [{ data: fixtures }, { data: predictions }, { data: users }, { data: profiles }] = await Promise.all([
+        supabase.from('fixtures').select('api_fixture_id').eq('round', round),
+        supabase.from('predictions').select('user_id, fixture_id, points'),
+        supabase.from('user_points').select('*'),
+        supabase.from('profiles').select('id, full_name'),
+      ]);
 
-    const grouped = new Map<string, { total_points: number; predictions_count: number }>();
-    (predictions || []).forEach((row: any) => {
-      const fixtureId = Number(row.fixture_id || 0);
-      if (!fixtureIds.has(fixtureId)) return;
-      const userId = row.user_id;
-      if (!userId) return;
-      const prev = grouped.get(userId) || { total_points: 0, predictions_count: 0 };
-      grouped.set(userId, {
-        total_points: prev.total_points + Number(row.points || 0),
-        predictions_count: prev.predictions_count + 1,
-      });
-    });
+      const fixtureIds = new Set((fixtures || []).map((f: any) => Number(f.api_fixture_id)));
+      const userMap = new Map((users || []).map((u: any) => [String(u.user_id), u]));
+      const profileById = new Map((profiles || []).map((p: any) => [String(p.id), p]));
+      const grouped = new Map<string, { total_points: number; predictions_count: number }>();
 
-    const rows: Player[] = Array.from(grouped.entries())
-      .map(([userId, agg]) => {
-        const user = userMap.get(userId);
-        return {
-          user_id: userId,
-          user_email: user?.user_email || '',
-          display_name: user?.full_name || null,   // ← من user_points مباشرة
-          total_points: agg.total_points,
-          raw_total_points: agg.total_points,
-          penalty_points: 0,
-          predictions_count: agg.predictions_count,
-          profile_completed: user?.profile_completed || false,
-          referral_points: user?.referral_points || 0,
-          bonus_points: user?.bonus_points || 0,
-        };
-      })
-      .sort((a, b) => {
-        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
-        return b.predictions_count - a.predictions_count;
+      (predictions || []).forEach((row: any) => {
+        const fixtureId = Number(row.fixture_id || 0);
+        if (!fixtureIds.has(fixtureId)) return;
+        const userId = row.user_id;
+        if (!userId) return;
+
+        const prev = grouped.get(userId) || { total_points: 0, predictions_count: 0 };
+        grouped.set(userId, {
+          total_points: prev.total_points + Number(row.points || 0),
+          predictions_count: prev.predictions_count + 1,
+        });
       });
 
-    setRoundPlayers(rows);
-    maxPoints.current = rows[0]?.total_points || 1;
-  } catch (err) {
-    console.error('loadRoundPlayers:', err);
-    setRoundPlayers([]);
-  }
-  setLoading(false);
-  setPageLoading(false);
-  setAnimated(false);
-  setTimeout(() => setAnimated(true), 80);
-};//
+      const rows: Player[] = Array.from(grouped.entries())
+        .map(([userId, agg]) => {
+          const userKey = String(userId);
+          const user = userMap.get(userKey) || {};
+          const profile = profileById.get(userKey) || {};
+          const resolvedName = user.full_name || profile.full_name || null;
+          const resolvedEmail = user.user_email || userKey;
+          return {
+            user_id: userId,
+            user_email: resolvedEmail,
+            display_name: resolvedName,
+            total_points: agg.total_points,
+            raw_total_points: agg.total_points,
+            penalty_points: 0,
+            predictions_count: agg.predictions_count,
+            profile_completed: user.profile_completed || false,
+            referral_points: user.referral_points || 0,
+            bonus_points: user.bonus_points || 0,
+          };
+        })
+        .sort((a, b) => b.total_points - a.total_points);
+
+      setRoundPlayers(rows);
+      maxPoints.current = rows[0]?.total_points || 1;
+    } catch (err) {
+      console.error('loadRoundPlayers:', err);
+      setRoundPlayers([]);
+    }
+
+    setLoading(false);
+    setPageLoading(false);
+    setAnimated(false);
+    setTimeout(() => setAnimated(true), 80);
+  };
 
   const goToPage = (page: number) => {
     if (page < 1 || page > totalPages) return;
