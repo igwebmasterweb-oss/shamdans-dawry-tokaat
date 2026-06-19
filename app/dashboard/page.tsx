@@ -464,6 +464,12 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const addProfilePoints = (total = 0, completed = false) =>
   total + (completed ? 5 : 0);
 
+  const getPenaltyPoints = (userId?: string | null) =>
+    userId ? Number(penaltyMap[userId] || 0) : 0;
+
+  const getAdjustedTotal = (total = 0, completed = false, userId?: string | null) =>
+    addProfilePoints(total, completed) - getPenaltyPoints(userId);
+
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     navigator.serviceWorker.ready.then(reg => {
@@ -807,9 +813,9 @@ const userNameMap: Record<string, string> = {};
         user_email:        row.user_email,
         display_name:      row.full_name || null,
         profile_completed: row.profile_completed || false,
-        totalPoints: addProfilePoints(row.total_points || 0, !!row.profile_completed),
+        totalPoints:       getAdjustedTotal(row.total_points || 0, !!row.profile_completed, row.user_id),
         count:             row.predictions_count || 0,
-      })));
+      })).sort((a: any, b: any) => (b.totalPoints || 0) - (a.totalPoints || 0)));
 
       const breakdown = normalizedUserPreds
         .filter((p: any) => p.points !== null && p.points !== undefined && p.points >= 0)
@@ -1309,7 +1315,7 @@ setSelectedLeaderPredictions(normalizedPreds);
     </div>
   );
 
- const myPoints = addProfilePoints(myTotalPoints, profileCompleted);
+ const myPoints = getAdjustedTotal(myTotalPoints, profileCompleted, user?.id);
   const myRank      = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
   const mySelectedRound = myRoundFilter || activeRound;
@@ -1507,7 +1513,12 @@ const myFilteredPredictionsSorted = [...predictions]
         </div>
       )}
 
-      {profileIncomplete ? (
+      {reviewNotice ? (
+        <div style={{ background: 'linear-gradient(90deg,rgba(239,68,68,.10),rgba(217,178,95,.06))', borderBottom: '1px solid rgba(239,68,68,.18)', padding: '12px 20px', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#ffd6d6', lineHeight: 1.9 }}>
+          <strong style={{ color: '#fff1f1' }}>⚠️ الحساب قيد المراجعة</strong>
+          <span style={{ marginRight: 8 }}>{reviewNotice.message}</span>
+        </div>
+      ) : profileIncomplete ? (
         <div onClick={() => setShowProfileModal(true)} style={{ background: 'linear-gradient(90deg,rgba(217,178,95,.1),rgba(217,178,95,.04))', borderBottom: '1px solid rgba(217,178,95,.18)', padding: '10px 20px', cursor: 'pointer', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#f2d79e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           🎁 أكمل ملفك الشخصي (اسم + تليفون) واحصل على 5 نقاط مجاناً! <strong>اضغط هنا</strong>
         </div>
@@ -3062,11 +3073,11 @@ const myFilteredPredictionsSorted = [...predictions]
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button className="round-btn active" style={{ pointerEvents: 'none' }}>الصدارة العامة</button>
+                  <button className="round-btn active" onClick={() => setLeaderRoundFilter('')}>الصدارة العامة</button>
 
                   {selectableRounds.length > 0 && (
                     <select
-                      value={leaderRoundFilter || activeRound}
+                      value={leaderRoundFilter}
                       onChange={e => setLeaderRoundFilter(e.target.value)}
                       style={{
                         padding: '6px 12px',
