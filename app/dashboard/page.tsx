@@ -483,8 +483,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   }, []);
 
   const router = useRouter();
-  const myDisplayedTotal = predictionOnlyPoints + referralPoints + bonusPoints + (profileCompleted ? 5 : 0) - myPenaltyPoints;
-  const animatedPoints = useCountUp(myDisplayedTotal);
+  const animatedPoints = useCountUp(0);
   const countdown = useCountdown(upcomingAlert?.fixture?.date ?? null);
 
   const roundLabels: Record<string, string> = {
@@ -1353,6 +1352,7 @@ setSelectedLeaderPredictions(normalizedPreds);
   const myFilteredRoundPts = predictions
     .filter((pr: any) => myFilteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
+  const myDisplayedTotal = predictionOnlyPoints + referralPoints + bonusPoints + (profileCompleted ? 5 : 0) - myPenaltyPoints;
 
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
@@ -2369,7 +2369,7 @@ const myFilteredPredictionsSorted = [...predictions]
                 <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>الترتيب الإجمالي</div>
                 <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>#{myRank}</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>من {totalParticipants || leaderboard.length} متسابق</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{animatedPoints} نقطة</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{myDisplayedTotal} نقطة</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 8 }}>
   {(() => {
     const predPoints = predictionOnlyPoints;
