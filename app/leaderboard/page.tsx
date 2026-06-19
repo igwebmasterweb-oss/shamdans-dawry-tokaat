@@ -269,14 +269,16 @@ export default function LeaderboardPage() {
     setSearchQuery('');
 
     try {
-      const [{ data: fixtures }, { data: predictions }, { data: users }] = await Promise.all([
+      const [{ data: fixtures }, { data: predictions }, { data: users }, { data: profiles }] = await Promise.all([
         supabase.from('fixtures').select('api_fixture_id').eq('round', round),
         supabase.from('predictions').select('user_id, fixture_id, points'),
         supabase.from('user_points').select('*'),
+        supabase.from('profiles').select('id, full_name'),
       ]);
 
       const fixtureIds = new Set((fixtures || []).map((f: any) => Number(f.api_fixture_id)));
       const userMap = new Map((users || []).map((u: any) => [u.user_id, u]));
+      const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
       const grouped = new Map<string, { total_points: number; predictions_count: number }>();
 
       (predictions || []).forEach((row: any) => {
@@ -295,10 +297,11 @@ export default function LeaderboardPage() {
       const rows: Player[] = Array.from(grouped.entries())
         .map(([userId, agg]) => {
           const user = userMap.get(userId) || {};
+          const profile = profileMap.get(userId) || {};
           return {
             user_id: userId,
             user_email: user.user_email || '',
-            display_name: user.full_name || null,
+            display_name: user.full_name || profile.full_name || null,
             total_points: agg.total_points,
             raw_total_points: agg.total_points,
             penalty_points: 0,
