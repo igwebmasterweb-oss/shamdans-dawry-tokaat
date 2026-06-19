@@ -12,6 +12,7 @@ interface Player {
   profile_completed: boolean;
   referral_points?: number;
   bonus_points?: number;
+  round_points?: number;
 }
 
 interface MemberPrediction {
@@ -86,23 +87,116 @@ export default function LeaderboardPage() {
   const [selectedPredictions, setSelectedPredictions] = useState<(MemberPrediction & { fixture?: FinishedFixture | null })[]>([]);
   const [memberModalLoading, setMemberModalLoading] = useState(false);
   const [memberModalError, setMemberModalError] = useState('');
+  const [rounds, setRounds] = useState<string[]>([]);
+  const [selectedRound, setSelectedRound] = useState<string>('');
+  const [roundLoading, setRoundLoading] = useState(false);
   const maxPoints = useRef(1);
   const listRef = useRef<HTMLDivElement>(null);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const isSearching = searchQuery.trim().length > 0;
+  const isRoundMode = selectedRound.trim().length > 0;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setCurrentUser(data.user || null));
     loadMyRank();
     loadPage(1);
+    loadRounds();
     loadPrizes();
   }, []);
 
   useEffect(() => {
-    if (isSearching) loadAllForSearch();
+    if (isRoundMode) loadRoundLeaderboard(selectedRound);
+    else if (isSearching) loadAllForSearch();
     else loadPage(currentPage);
-  }, [isSearching]);
+  }, [isSearching, isRoundMode, selectedRound]);
+
+  const loadRounds = async () => {
+    try {
+      const { data } = await supabase
+        .from('fixtures')
+        .select('round')
+        .not('round', 'is', null)
+        .order('match_date', { ascending: true });
+
+      const nextRounds = Array.from(new Set((data || []).map((row: any) => row?.round).filter(Boolean))) as string[];
+      setRounds(nextRounds);
+    } catch (err) {
+      console.error('loadRounds:', err);
+    }
+  };
+
+  const loadRoundLeaderboard = async (round: string) => {
+    if (!round) return;
+    setRoundLoading(true);
+    setPageLoading(false);
+    try {
+      const { data: predictionRows } = await supabase
+        .from('predictions')
+        .select('user_id, fixture_id, points');
+
+      const { data: fixtureRows } = await supabase
+        .from('fixtures')
+        .select('api_fixture_id, round')
+        .eq('round', round);
+
+      const { data: userPointsRows } = await supabase
+        .from('user_points')
+        .select('*');
+
+      const fixtureIds = new Set((fixtureRows || []).map((f: any) => Number(f.api_fixture_id)));
+      const grouped = new Map<string, { round_points: number; predictions_count: number }>();
+
+      (predictionRows || []).forEach((row: any) => {
+        const fixtureId = Number(row?.fixture_id || 0);
+        if (!fixtureIds.has(fixtureId)) return;
+        const userId = row?.user_id;
+        if (!userId) return;
+        const prev = grouped.get(userId) || { round_points: 0, predictions_count: 0 };
+        grouped.set(userId, {
+          round_points: prev.round_points + Number(row?.points || 0),
+          predictions_count: prev.predictions_count + 1,
+        });
+      });
+
+      const profileMap = new Map((userPointsRows || []).map((row: any) => [row.user_id, row]));
+      const merged = Array.from(grouped.entries())
+        .map(([user_id, agg]) => {
+          const base = profileMap.get(user_id);
+          return {
+            user_id,
+            user_email: base?.user_email || '',
+            display_name: base?.full_name || null,
+            total_points: agg.round_points,
+            round_points: agg.round_points,
+            predictions_count: agg.predictions_count,
+            profile_completed: base?.profile_completed || false,
+            referral_points: base?.referral_points || 0,
+            bonus_points: base?.bonus_points || 0,
+          } as Player;
+        })
+        .sort((a, b) => {
+          if ((b.total_points || 0) !== (a.total_points || 0)) return (b.total_points || 0) - (a.total_points || 0);
+          return (b.predictions_count || 0) - (a.predictions_count || 0);
+        });
+
+      setPlayers(merged);
+      setAllPlayers(merged);
+      setTotalCount(merged.length);
+      setCurrentPage(1);
+
+      const meIndex = merged.findIndex((p) => p.user_id === currentUser?.id);
+      setMyRank(meIndex >= 0 ? meIndex + 1 : 0);
+      setMyPoints(meIndex >= 0 ? merged[meIndex].total_points || 0 : 0);
+      if (merged.length > 0) maxPoints.current = merged[0].total_points || 1;
+    } catch (err) {
+      console.error('loadRoundLeaderboard:', err);
+    }
+    setLoading(false);
+    setRoundLoading(false);
+    setAnimated(false);
+    setTimeout(() => setAnimated(true), 80);
+  };
 
   const loadPrizes = async () => {
     setPrizesLoading(true);
@@ -561,7 +655,7 @@ export default function LeaderboardPage() {
           <div style={{animation:'slideDown 0.5s cubic-bezier(0.16,1,0.3,1) forwards',background:'linear-gradient(135deg,rgba(217,178,95,.12),rgba(217,178,95,.04))',border:'1px solid rgba(217,178,95,.25)',borderRadius:18,padding:'14px 20px',marginBottom:20,display:'flex',alignItems:'center',gap:16}}>
             <div style={{fontSize:28,flexShrink:0}}>{myRank<=3?medals[myRank-1]:`#${myRank}`}</div>
             <div style={{flex:1}}>
-              <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>ترتيبك الحالي</div>
+              <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>{isRoundMode ? `ترتيبك في ${selectedRound}` : 'ترتيبك الحالي'}</div>
               <div style={{fontWeight:900,fontSize:15}}>المركز #{myRank}</div>
             </div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
@@ -578,10 +672,59 @@ export default function LeaderboardPage() {
           </div>
         )}
 
+        {/* ROUND MENU */}
+        {!loading && rounds.length > 0 && (
+          <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:16}}>
+            <button
+              className="nav-pill"
+              onClick={() => {
+                setSelectedRound('');
+                setSearchQuery('');
+                loadMyRank();
+                loadPage(1);
+              }}
+              style={{
+                padding:'8px 14px',
+                fontSize:12,
+                background: !isRoundMode ? 'linear-gradient(135deg,rgba(217,178,95,.22),rgba(217,178,95,.08))' : 'var(--surface)',
+                border: !isRoundMode ? '1px solid rgba(217,178,95,.35)' : '1px solid var(--line)',
+                color: !isRoundMode ? 'var(--gold)' : 'var(--text)'
+              }}
+            >
+              🌍 الترتيب العام
+            </button>
+
+            <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+              {rounds.map((round) => {
+                const active = selectedRound === round;
+                return (
+                  <button
+                    key={round}
+                    className="nav-pill"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedRound(round);
+                    }}
+                    style={{
+                      padding:'8px 14px',
+                      fontSize:12,
+                      background: active ? 'linear-gradient(135deg,rgba(59,130,246,.18),rgba(59,130,246,.06))' : 'var(--surface)',
+                      border: active ? '1px solid rgba(59,130,246,.3)' : '1px solid var(--line)',
+                      color: active ? '#93c5fd' : 'var(--text)'
+                    }}
+                  >
+                    🏁 {round}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* SEARCH */}
         {!loading && totalCount > 5 && (
           <div style={{position:'relative',marginBottom:16}}>
-            <input type="text" value={searchQuery} onChange={e=>{setSearchQuery(e.target.value);if(e.target.value) loadAllForSearch();}} placeholder="🔍 ابحث عن لاعب..." className="search-box" />
+            <input type="text" value={searchQuery} onChange={e=>{const value=e.target.value; setSearchQuery(value); if(value && !isRoundMode) loadAllForSearch();}} placeholder="🔍 ابحث عن لاعب..." className="search-box" />
             {searchQuery && (
               <button onClick={()=>setSearchQuery('')} style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:16,padding:4}}>✕</button>
             )}
@@ -593,16 +736,18 @@ export default function LeaderboardPage() {
           <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>
             {isSearching
               ? `نتائج البحث (${filteredPlayers.length})`
-              : `عرض ${(currentPage-1)*PAGE_SIZE+1}–${Math.min(currentPage*PAGE_SIZE,totalCount)} من ${totalCount}`
+              : isRoundMode
+                ? `ترتيب ${selectedRound} — ${totalCount} لاعب`
+                : `عرض ${(currentPage-1)*PAGE_SIZE+1}–${Math.min(currentPage*PAGE_SIZE,totalCount)} من ${totalCount}`
             }
           </div>
-          {!isSearching && totalPages > 1 && (
+          {!isSearching && !isRoundMode && totalPages > 1 && (
             <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>صفحة {currentPage} / {totalPages}</div>
           )}
         </div>
 
         {/* SKELETONS */}
-        {(loading || pageLoading) && [1,2,3,4,5].map(i => (
+        {(loading || pageLoading || roundLoading) && [1,2,3,4,5].map(i => (
           <div key={i} className="skeleton" style={{height:72,marginBottom:8}} />
         ))}
 
@@ -610,7 +755,7 @@ export default function LeaderboardPage() {
         {!loading && !pageLoading && filteredPlayers.length === 0 && (
           <div style={{textAlign:'center',padding:'60px 20px'}}>
             <div style={{fontSize:42,marginBottom:12}}>{isSearching ? '🔍' : '🏆'}</div>
-            <div style={{fontWeight:800,fontSize:15,marginBottom:8}}>{isSearching ? `لا توجد نتائج لـ "${searchQuery}"` : 'لم يبدأ السباق بعد!'}</div>
+            <div style={{fontWeight:800,fontSize:15,marginBottom:8}}>{isSearching ? `لا توجد نتائج لـ "${searchQuery}"` : isRoundMode ? `لا توجد نتائج متاحة في ${selectedRound}` : 'لم يبدأ السباق بعد!'}</div>
             {!isSearching && <Link href="/login" className="nav-pill primary" style={{marginTop:16}}>🔑 كن الأول</Link>}
           </div>
         )}
@@ -618,7 +763,7 @@ export default function LeaderboardPage() {
         {/* ROWS */}
         {!loading && !pageLoading && filteredPlayers.map((player, index) => {
           const isMe = player.user_id === currentUser?.id;
-          const globalRank = isSearching
+          const globalRank = (isSearching || isRoundMode)
             ? allPlayers.findIndex(p => p.user_id === player.user_id) + 1
             : (currentPage - 1) * PAGE_SIZE + index + 1;
           const pct = maxPoints.current > 0 ? (player.total_points / maxPoints.current) * 100 : 0;
