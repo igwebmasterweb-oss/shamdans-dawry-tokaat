@@ -765,13 +765,17 @@ const userNameMap: Record<string, string> = {};
         const rawMyPoints = (() => {
           if (myPointsRow) {
             const base = myPointsRow.total_points || 0;
+            const referral = myPointsRow.referral_points || 0;
+            const bonus = myPointsRow.bonus_points || 0;
             const profBonus = myPointsRow.profile_completed ? 5 : 0;
-            return base + profBonus;
+            return base + referral + bonus + profBonus;
           }
           const myRow2 = (userPointsData || []).find((r: any) => r.user_id === userId);
           const base = myRow2?.total_points || 0;
+          const referral = myRow2?.referral_points || 0;
+          const bonus = myRow2?.bonus_points || 0;
           const profBonus = myRow2?.profile_completed ? 5 : 0;
-          return base + profBonus;
+          return base + referral + bonus + profBonus;
         })();
         const adjustedMyPoints = rawMyPoints - myPenaltyFromNotices;
         setMyAdjustedPoints(adjustedMyPoints);
@@ -1651,7 +1655,7 @@ const myFilteredPredictionsSorted = [...predictions]
     </a>
   </div>
 
-  {(selectedLeaderSummary?.penalty_points ?? 0) > 0 && (
+  {selectedLeader?.user_id === user?.id && (selectedLeaderSummary?.penalty_points ?? 0) > 0 && (
     <div className="stat-card" style={{ padding: 14, borderRadius: 18, border: '1px solid rgba(239,68,68,.22)', background: 'rgba(239,68,68,.08)' }}>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>الخصم الإداري</div>
       <div style={{ fontSize: 24, fontWeight: 800, color: '#fca5a5', fontVariantNumeric: 'tabular-nums' }}>
