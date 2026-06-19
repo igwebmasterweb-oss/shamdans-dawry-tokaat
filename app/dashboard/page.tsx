@@ -577,7 +577,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
 
       const [
         profileRes, profilesRes, sessionRes, fixturesApiRes, sbFixturesRes,
-        userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes, participantsCountRes,
+        userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes, participantsCountRes, penaltyNoticesRes,
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
         supabase.from('profiles').select('id, full_name'),
@@ -592,6 +592,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
         supabase.from('historical_rankings').select('*').order('week_start', { ascending: false }).order('total_points', { ascending: false }),
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
         supabase.from('user_points').select('*', { count: 'exact', head: true }),
+        supabase.from('user_penalty_notices').select('user_id, penalty_points').eq('is_active', true),
       ]);
 
       const profileData    = profileRes.data;
@@ -606,6 +607,9 @@ const [profileCompleted, setProfileCompleted] = useState(false);
       const histData       = histDataRes.data;
       const userPointsData    = userPointsDataRes.data;
       const participantsCount  = participantsCountRes.count ?? 0;
+      const penaltyRows = penaltyNoticesRes.data || [];
+      const nextPenaltyMap = Object.fromEntries((penaltyRows || []).map((row: any) => [row.user_id, Number(row.penalty_points || 0)]));
+      setPenaltyMap(nextPenaltyMap);
       setTotalParticipants(participantsCount);
 
 const userNameMap: Record<string, string> = {};
@@ -1554,6 +1558,7 @@ const myFilteredPredictionsSorted = [...predictions]
     + (selectedLeaderSummary?.referral_points ?? 0)
     + (selectedLeaderSummary?.profile_completed ? 5 : 0)
     + (selectedLeaderSummary?.bonus_points ?? 0)
+    - (selectedLeaderSummary?.penalty_points ?? 0)
   }
 </div>
   </div>
