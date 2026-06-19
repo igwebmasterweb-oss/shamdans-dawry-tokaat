@@ -455,6 +455,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [leagueQuickMsg, setLeagueQuickMsg] = useState('');
   const [upcomingAlert, setUpcomingAlert]   = useState<any | null>(null);
   const [pushEnabled, setPushEnabled]       = useState(false);
+  const [penaltyMap, setPenaltyMap]         = useState<Record<string, number>>({});
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
   const [myRoundFilter, setMyRoundFilter]     = useState('');
