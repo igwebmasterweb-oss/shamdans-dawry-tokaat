@@ -483,6 +483,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   }, []);
 
   const router = useRouter();
+  const myDisplayedTotal = predictionOnlyPoints + referralPoints + bonusPoints + (profileCompleted ? 5 : 0) - myPenaltyPoints;
   const animatedPoints = useCountUp(myDisplayedTotal);
   const countdown = useCountdown(upcomingAlert?.fixture?.date ?? null);
 
@@ -1352,7 +1353,6 @@ setSelectedLeaderPredictions(normalizedPreds);
   const myFilteredRoundPts = predictions
     .filter((pr: any) => myFilteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
-  const myDisplayedTotal = predictionOnlyPoints + referralPoints + bonusPoints + (profileCompleted ? 5 : 0) - myPenaltyPoints;
 
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
