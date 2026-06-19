@@ -588,7 +588,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
 
       const [
         profileRes, profilesRes, sessionRes, fixturesApiRes, sbFixturesRes,
-        userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes, participantsCountRes, penaltyNoticesRes, reviewNoticeRes,
+        userPredsRes, myPointsRowRes, feedDataRes, histDataRes, userPointsDataRes, participantsCountRes,
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
         supabase.from('profiles').select('id, full_name'),
@@ -603,8 +603,11 @@ const [profileCompleted, setProfileCompleted] = useState(false);
         supabase.from('historical_rankings').select('*').order('week_start', { ascending: false }).order('total_points', { ascending: false }),
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
         supabase.from('user_points').select('*', { count: 'exact', head: true }),
+      ]);
+
+      const [penaltyRowsResult, reviewNoticeResult] = await Promise.allSettled([
         supabase.from('user_penalty_notices').select('user_id, penalty_points').eq('is_active', true),
-        supabase.from('user_penalty_notices').select('message, status, penalty_points').eq('user_id', userId).eq('is_active', true).maybeSingle(),
+        supabase.from('user_penalty_notices').select('id, user_id, message, status, penalty_points').eq('user_id', userId).eq('is_active', true).maybeSingle(),
       ]);
 
       const profileData    = profileRes.data;
@@ -619,12 +622,25 @@ const [profileCompleted, setProfileCompleted] = useState(false);
       const histData       = histDataRes.data;
       const userPointsData    = userPointsDataRes.data;
       const participantsCount  = participantsCountRes.count ?? 0;
-      const penaltyRows = penaltyNoticesRes.data || [];
+
+      const penaltyRows =
+        penaltyRowsResult.status === 'fulfilled' && !(penaltyRowsResult.value as any)?.error
+          ? ((penaltyRowsResult.value as any)?.data || [])
+          : [];
+
+      const reviewNoticeData =
+        reviewNoticeResult.status === 'fulfilled' && !(reviewNoticeResult.value as any)?.error
+          ? ((reviewNoticeResult.value as any)?.data || null)
+          : null;
+
       const nextPenaltyMap = Object.fromEntries((penaltyRows || []).map((row: any) => [row.user_id, Number(row.penalty_points || 0)]));
       const penaltyFor = (targetUserId?: string | null) => targetUserId ? Number(nextPenaltyMap[targetUserId] || 0) : 0;
+      const myPenaltyFromNotices = reviewNoticeData?.user_id === userId
+        ? Number(reviewNoticeData?.penalty_points || 0)
+        : penaltyFor(userId);
       setPenaltyMap(nextPenaltyMap);
-      setMyPenaltyPoints(penaltyFor(userId));
-      setReviewNotice(reviewNoticeRes.data || null);
+      setMyPenaltyPoints(myPenaltyFromNotices);
+      setReviewNotice(reviewNoticeData);
       setTotalParticipants(participantsCount);
 
 const userNameMap: Record<string, string> = {};
@@ -744,7 +760,7 @@ const userNameMap: Record<string, string> = {};
   setBonusPoints(myRow?.bonus_points || 0);
   setProfileCompleted(myRow?.profile_completed || false);
       }
-      // ✅ حساب النقاط المعدّلة (بعد الخصم) مباشرة من nextPenaltyMap المحلي
+
       {
         const rawMyPoints = (() => {
           if (myPointsRow) {
@@ -757,7 +773,7 @@ const userNameMap: Record<string, string> = {};
           const profBonus = myRow2?.profile_completed ? 5 : 0;
           return base + profBonus;
         })();
-        const adjustedMyPoints = rawMyPoints - penaltyFor(userId);
+        const adjustedMyPoints = rawMyPoints - myPenaltyFromNotices;
         setMyAdjustedPoints(adjustedMyPoints);
       }
 
