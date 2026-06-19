@@ -471,6 +471,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const getAdjustedTotal = (total = 0, completed = false, userId?: string | null) =>
     addProfilePoints(total, completed) - getPenaltyPoints(userId);
 
+
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     navigator.serviceWorker.ready.then(reg => {
