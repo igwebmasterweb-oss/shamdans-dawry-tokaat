@@ -264,97 +264,42 @@ export default function LeaderboardPage() {
   };
 
   const loadRoundPlayers = async (round: string) => {
-    if (!round) return;
     setPageLoading(true);
-    setSearchQuery('');
-
     try {
-      const [{ data: fixtures }, { data: predictions }, { data: users }, { data: profiles }] = await Promise.all([
-        supabase.from('fixtures').select('api_fixture_id').eq('round', round),
-        supabase.from('predictions').select('user_id, fixture_id, points'),
-        supabase.from('user_points').select('user_id, user_email, full_name, profile_completed, referral_points, bonus_points'),
-        supabase.from('profiles').select('id, full_name'),
-      ]);
+      const { data, error } = await supabase
+        .from('leaderboard_rounds_v1')
+        .select('*')
+        .eq('round', round)
+        .order('total_points', { ascending: false })
+        .order('predictions_count', { ascending: false });
 
-      const fixtureIds = new Set((fixtures || []).map((f: any) => Number(f.api_fixture_id)));
-      const userMap = new Map((users || []).map((u: any) => [String(u.user_id), u]));
-      const profileById = new Map((profiles || []).map((p: any) => [String(p.id), p]));
-      const grouped = new Map<string, { total_points: number; predictions_count: number }>();
+      if (error) throw error;
 
-      (predictions || []).forEach((row: any) => {
-        const fixtureId = Number(row.fixture_id || 0);
-        if (!fixtureIds.has(fixtureId)) return;
-        const userId = row.user_id;
-        if (!userId) return;
+      const rows = (data || []).map((row: any) => ({
+        user_id: row.user_id,
+        user_email: row.user_email || '',
+        display_name: row.display_name || null,
+        total_points: row.total_points || 0,
+        raw_total_points: row.total_points || 0,
+        penalty_points: 0,
+        predictions_count: row.predictions_count || 0,
+        profile_completed: row.profile_completed || false,
+        referral_points: row.referral_points || 0,
+        bonus_points: row.bonus_points || 0,
+      }));
 
-        const prev = grouped.get(userId) || { total_points: 0, predictions_count: 0 };
-        grouped.set(userId, {
-          total_points: prev.total_points + Number(row.points || 0),
-          predictions_count: prev.predictions_count + 1,
-        });
-      });
-
-      const rows: Player[] = Array.from(grouped.entries())
-        .map(([userId, agg]) => {
-          const userKey = String(userId);
-          const user = userMap.get(userKey) || null;
-          const profile = profileById.get(userKey) || null;
-          const resolvedName = (user?.full_name && String(user.full_name).trim()) || (profile?.full_name && String(profile.full_name).trim()) || null;
-          const resolvedEmail = (user?.user_email && String(user.user_email).trim()) || '';
-          return {
-            user_id: userKey,
-            user_email: resolvedEmail,
-            display_name: resolvedName,
-            total_points: agg.total_points,
-            raw_total_points: agg.total_points,
-            penalty_points: 0,
-            predictions_count: agg.predictions_count,
-            profile_completed: Boolean(user?.profile_completed),
-            referral_points: Number(user?.referral_points || 0),
-            bonus_points: Number(user?.bonus_points || 0),
-          };
-        })
-        .sort((a, b) => b.total_points - a.total_points);
-
-      setRoundPlayers(rows);
       maxPoints.current = rows[0]?.total_points || 1;
+      setPlayers(rows);
+      setTotalCount(rows.length);
+      setLoading(false);
     } catch (err) {
       console.error('loadRoundPlayers:', err);
-      setRoundPlayers([]);
+      setPlayers([]);
+      setTotalCount(0);
     }
-
-    setLoading(false);
     setPageLoading(false);
     setAnimated(false);
     setTimeout(() => setAnimated(true), 80);
-  };
-
-  const goToPage = (page: number) => {
-    if (page < 1 || page > totalPages) return;
-    setCurrentPage(page);
-    loadPage(page);
-    listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  const getName = (p: Player) => p.display_name || p.user_email?.split('@')[0] || 'مجهول';
-  const getInitials = (p: Player) => getName(p).slice(0, 2);
-  const medals = ['🥇', '🥈', '🥉'];
-
-  const toBool = (v: any) => v === true || v === 'true' || v === 1;
-
-  const formatMatchDate = (dateStr?: string | null) => {
-    if (!dateStr) return '—';
-    try {
-      return new Date(dateStr).toLocaleString('ar-EG', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-    } catch {
-      return dateStr;
-    }
   };
 
   const loadMemberDetails = async (player: Player) => {
