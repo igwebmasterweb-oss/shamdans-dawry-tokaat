@@ -730,7 +730,6 @@ const userNameMap: Record<string, string> = {};
           away_team: p.away_team || matchNames?.away_team || '',
           predicted_red_card: p.predicted_red_card === true || p.predicted_red_card === 'true' || p.predicted_red_card === 1,
           predicted_penalty: p.predicted_penalty === true || p.predicted_penalty === 'true' || p.predicted_penalty === 1,
-          predicted_both_teams: p.predicted_both_teams === true || p.predicted_both_teams === 'true' || p.predicted_both_teams === 1,
         };
       });
 
@@ -832,14 +831,21 @@ const userNameMap: Record<string, string> = {};
         setHistoryRankings([]);
       }
 
-      setLeaderboard((userPointsData || []).map((row: any) => ({
-        user_id:           row.user_id,
-        user_email:        row.user_email,
-        display_name:      row.full_name || null,
+      // Load general leaderboard from leaderboard_general_v1
+      const { data: generalLbData } = await supabase
+        .from('leaderboard_general_v1')
+        .select('user_id, full_name, user_email, final_points, predictions_count, profile_completed, penalty_points')
+        .order('final_points', { ascending: false });
+
+      setLeaderboard((generalLbData || []).map((row: any) => ({
+        user_id: row.user_id,
+        user_email: row.user_email,
+        display_name: row.full_name || null,
         profile_completed: row.profile_completed || false,
-        totalPoints:       addProfilePoints(row.total_points || 0, !!row.profile_completed) - penaltyFor(row.user_id),
-        count:             row.predictions_count || 0,
-      })).sort((a: any, b: any) => (b.totalPoints || 0) - (a.totalPoints || 0)));
+        totalPoints: row.final_points || 0,
+        count: row.predictions_count || 0,
+        penalty_points: row.penalty_points || 0,
+      })));
 
       const breakdown = normalizedUserPreds
         .filter((p: any) => p.points !== null && p.points !== undefined && p.points >= 0)
@@ -852,8 +858,7 @@ const userNameMap: Record<string, string> = {};
   };
 
 useEffect(() => {
-  const roundToLoad = leaderRoundFilter || activeRound;
-  if (!roundToLoad) {
+  if (!leaderRoundFilter) {
     setRoundLeaderboardRows([]);
     return;
   }
@@ -863,7 +868,7 @@ useEffect(() => {
 
   (async () => {
     try {
-      const { data, error } = await supabase.rpc('get_round_leaderboard', { p_round: roundToLoad });
+      const { data, error } = await supabase.rpc('get_round_leaderboard', { p_round: leaderRoundFilter });
 
       if (cancelled) return;
       if (error) throw error;
@@ -881,7 +886,7 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [activeRound, leaderRoundFilter]);
+}, [leaderRoundFilter]);
 
 
 
@@ -1050,7 +1055,6 @@ if (refreshPointsError) throw refreshPointsError;
       extraTime:            ex?.predicted_extra_time  ?? false,
       predicted_red_card:   ex?.predicted_red_card    ?? false,
       predicted_penalty:    ex?.predicted_penalty     ?? false,
-      predicted_both_teams: ex?.predicted_both_teams  ?? false,
     };
   };
 
@@ -1088,7 +1092,6 @@ const submitPrediction = async (match: any) => {
       predicted_extra_time: form.extraTime,
       predicted_red_card: form.predicted_red_card ?? false,
       predicted_penalty: form.predicted_penalty ?? false,
-      predicted_both_teams: form.predicted_both_teams ?? false,
       submitted_at: new Date().toISOString(),
     };
 
@@ -1102,7 +1105,6 @@ const submitPrediction = async (match: any) => {
           predicted_extra_time:   form.extraTime,
           predicted_red_card:     form.predicted_red_card ?? false,
           predicted_penalty:      form.predicted_penalty ?? false,
-          predicted_both_teams:   form.predicted_both_teams ?? false,
           submitted_at:           new Date().toISOString(),
         })
         .eq('id', ex.id);
@@ -1823,7 +1825,6 @@ const myFilteredPredictionsSorted = [...predictions]
                         pred.predicted_extra_time ? { label: '⏱ وقت إضافي', predicted: !!pred.predicted_extra_time, actual: !!pred.went_extra_time } : null,
                         pred.predicted_red_card ? { label: '🟥 كرت أحمر', predicted: !!pred.predicted_red_card, actual: !!pred.red_card_in_match } : null,
                         pred.predicted_penalty ? { label: '⚽ ضربة جزاء', predicted: !!pred.predicted_penalty, actual: !!pred.penalty_in_match } : null,
-                        pred.predicted_both_teams ? { label: '🥅 الفريقان يسجلان', predicted: !!pred.predicted_both_teams, actual: !!pred.both_teams_scored } : null,
                       ].filter(Boolean) as any[];
 
                       return (
@@ -2924,29 +2925,7 @@ const myFilteredPredictionsSorted = [...predictions]
                     minute: '2-digit',
                   })
                 : '';
-              const extraPredictions = [
-                ...(p.predicted_extra_time
-                  ? [{
-                      label: '🕒 وقت إضافي',
-                      predicted: !!p.predicted_extra_time,
-                      actual: !!matchInfo?.went_extra_time,
-                    }]
-                  : []),
-                ...(p.predicted_red_card
-                  ? [{
-                      label: '🟥 كارت أحمر',
-                      predicted: !!p.predicted_red_card,
-                      actual: !!matchInfo?.red_card_in_match,
-                    }]
-                  : []),
-                ...(p.predicted_penalty
-                  ? [{
-                      label: '⚽ ضربة جزاء',
-                      predicted: !!p.predicted_penalty,
-                      actual: !!matchInfo?.penalty_in_match,
-                    }]
-                  : []),
-              ];
+
               return (
   <div
     key={i}
@@ -3031,37 +3010,42 @@ const myFilteredPredictionsSorted = [...predictions]
           <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
             {hasResult ? `${p.actual_home_score} — ${p.actual_away_score}` : '—'}
           </div>
-          {hasResult && p.first_scorer && (
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span>⚽</span>
-              <span>{p.first_scorer}</span>
-            </div>
-          )}
+          {hasResult && (() => {
+            const scorers = extractScorersList(matchInfo?.scorers_json, matchInfo?.first_scorer || p.first_scorer_actual || p.first_scorer);
+            return scorers.length > 0 ? (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>الهدافون ({scorers.length})</div>
+                {scorers.map((s, si) => (
+                  <div key={si} style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>⚽</span><span>{s}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null;
+          })()}
         </div>
       </div>
 
-      {extraPredictions.length > 0 && (
+      {hasResult && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          {extraPredictions.map((ex, idx) => {
-            const hit = hasResult && ex.predicted === ex.actual;
+          <div style={{ width: '100%', fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 2 }}>خيارات العضو</div>
+          {[
+            { label: '🟥 كارت أحمر', value: !!p.predicted_red_card, actual: !!matchInfo?.red_card_in_match },
+            { label: '⚽ ضربة جزاء', value: !!p.predicted_penalty, actual: !!matchInfo?.penalty_in_match },
+            { label: '⏱ وقت إضافي', value: !!p.predicted_extra_time, actual: !!matchInfo?.went_extra_time },
+          ].map((opt, idx) => {
+            const isCorrect = opt.value === opt.actual;
             return (
-              <div
-                key={idx}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 10px',
-                  borderRadius: 999,
-                  border: '1px solid var(--line)',
-                  background: hit ? 'rgba(39,176,110,.10)' : 'rgba(255,255,255,.04)',
-                  color: hit ? '#94f0c0' : 'var(--muted)',
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                <span>{ex.label}</span>
-                <span>{ex.predicted ? 'نعم' : 'لا'}</span>
+              <div key={idx} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '5px 10px', borderRadius: 999,
+                border: '1px solid var(--line)',
+                background: isCorrect ? 'rgba(39,176,110,.10)' : 'rgba(255,255,255,.04)',
+                color: isCorrect ? '#94f0c0' : 'var(--muted)',
+                fontSize: 11, fontWeight: 700,
+              }}>
+                <span>{opt.label}</span>
+                <span>{opt.value ? '✅' : '❌'}</span>
               </div>
             );
           })}
