@@ -1609,15 +1609,9 @@ const myFilteredPredictionsSorted = [...predictions]
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>إجمالي النقاط</div>
-<div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
-  {
-    selectedLeaderPredictions.reduce((sum: number, pred: any) => sum + (pred.points || 0), 0)
-    + (selectedLeaderSummary?.referral_points ?? 0)
-    + (selectedLeaderSummary?.profile_completed ? 5 : 0)
-    + (selectedLeaderSummary?.bonus_points ?? 0)
-    - (selectedLeaderSummary?.penalty_points ?? 0)
-  }
-</div>
+    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
+      {selectedLeaderSummary?.totalPoints ?? 0}
+    </div>
   </div>
 
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
@@ -1630,21 +1624,21 @@ const myFilteredPredictionsSorted = [...predictions]
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط الدعوات</div>
     <div style={{ fontSize: 24, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
-      {selectedLeaderSummary?.referral_points ?? 0}
+      {(selectedLeaderSummary?.penalty_points ?? 0) > 0 ? 0 : (selectedLeaderSummary?.referral_points ?? 0)}
     </div>
   </div>
 
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط إكمال البروفايل</div>
     <div style={{ fontSize: 24, fontWeight: 800, color: '#7db1ff', fontVariantNumeric: 'tabular-nums' }}>
-      {selectedLeaderSummary?.profile_completed ? 5 : 0}
+      {(selectedLeaderSummary?.penalty_points ?? 0) > 0 ? 0 : (selectedLeaderSummary?.profile_completed ? 5 : 0)}
     </div>
   </div>
 
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط بونص مسابقة حلمك فيها</div>
     <div style={{ fontSize: 24, fontWeight: 800, color: '#5effa8', fontVariantNumeric: 'tabular-nums' }}>
-      {selectedLeaderSummary?.bonus_points ?? 0}
+      {(selectedLeaderSummary?.penalty_points ?? 0) > 0 ? 0 : (selectedLeaderSummary?.bonus_points ?? 0)}
     </div>
     <a
       href="https://forms.gle/1pftaR7rV9SAJ2VL6"
@@ -1663,7 +1657,7 @@ const myFilteredPredictionsSorted = [...predictions]
         -{selectedLeaderSummary?.penalty_points ?? 0}
       </div>
       <div style={{ fontSize: 11, color: '#ffd6d6', marginTop: 6 }}>
-        مخصوم من الإجمالي العام فقط
+        تم إخفاء نقاط الدعوات والبروفايل والبونص لهذا العضو أثناء سريان الجزاء
       </div>
     </div>
   )}
@@ -1728,20 +1722,20 @@ const myFilteredPredictionsSorted = [...predictions]
 
                   return currentMatch ? (
                     <div className="rank-item" style={{ marginBottom: 14, borderColor: 'rgba(59,130,246,.24)', background: 'linear-gradient(90deg,rgba(59,130,246,.10),rgba(255,255,255,.02))', padding: '14px 16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>🔵 التوقع الحالي للماتش الجاري</div>
-                        <div style={{ padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>بدأت المباراة</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, marginBottom: 10 }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#93c5fd', textAlign: 'right', lineHeight: 1.7 }}>🔵 التوقع الحالي للماتش الجاري</div>
+                        <div style={{ alignSelf: 'flex-start', padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 11, fontWeight: 800, lineHeight: 1.6 }}>بدأت المباراة</div>
                       </div>
 
-                      <div style={{ marginBottom: 10 }}>
-                        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', textAlign: 'center', lineHeight: 1.8, marginBottom: currentMatchDate ? 6 : 0 }}>
+                      <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', textAlign: 'center', lineHeight: 1.9 }}>
                           {currentMatch?.teams?.home?.logo && <img src={currentMatch.teams.home.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
                           <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}</span>
                           {currentMatch?.teams?.away?.logo && <img src={currentMatch.teams.away.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
                         </div>
 
                         {currentMatchDate && (
-                          <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.7 }}>
+                          <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.8 }}>
                             {currentMatchDate}
                           </div>
                         )}
