@@ -2480,6 +2480,24 @@ const myFilteredPredictionsSorted = [...predictions]
           ))}
         </div>
 
+        <div
+          style={{
+            marginBottom: 18,
+            padding: '12px 14px',
+            borderRadius: 16,
+            border: '1px solid rgba(217,178,95,.18)',
+            background: 'linear-gradient(180deg,rgba(217,178,95,.10),rgba(255,255,255,.03))',
+            boxShadow: '0 10px 24px rgba(0,0,0,.16)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <span style={{ fontSize: 18, lineHeight: 1, color: '#ffe3a6', marginTop: 1 }}>✨</span>
+            <div style={{ fontSize: 13, lineHeight: 1.9, color: '#f3ead8', fontWeight: 700 }}>
+              نعمل على تحديث النظام يوميًا لتحسين الأداء ودقة البيانات وتقديم تجربة أفضل باستمرار. ولضمان ظهور آخر التحديثات بشكل صحيح، يُفضّل تنظيف كاش المتصفح من وقت لآخر.
+            </div>
+          </div>
+        </div>
+
         {profileIncomplete && (
           <div
             style={{
@@ -3089,39 +3107,37 @@ const myFilteredPredictionsSorted = [...predictions]
             return roundMatches.length > 0 && roundMatches.every((m: any) => m.actual_home_score !== null && m.actual_home_score !== undefined);
           });
           const selectableRounds = [activeRound, ...rounds.filter(r => r !== activeRound)].filter(Boolean);
-          const effectiveRound = leaderRoundFilter || activeRound;
+          const effectiveRound = leaderRoundFilter;
 
           return (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <button className="round-btn active" onClick={() => setLeaderRoundFilter('')}>الصدارة العامة</button>
-
-                  {selectableRounds.length > 0 && (
-                    <select
-                      value={leaderRoundFilter}
-                      onChange={e => setLeaderRoundFilter(e.target.value)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 10,
-                        border: '1px solid var(--line)',
-                        background: 'var(--surface-3)',
-                        color: 'var(--text)',
-                        fontFamily: 'Cairo, sans-serif',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        direction: 'rtl',
-                        outline: 'none',
-                      }}
-                    >
-                      {selectableRounds.map(r => (
-                        <option key={r} value={r}>
-                          {roundLabels[r] || r}{r === activeRound ? ' (الحالية)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                  <select
+                    value={leaderRoundFilter}
+                    onChange={e => setLeaderRoundFilter(e.target.value)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 10,
+                      border: '1px solid var(--line)',
+                      background: 'var(--surface-3)',
+                      color: 'var(--text)',
+                      fontFamily: 'Cairo, sans-serif',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      direction: 'rtl',
+                      outline: 'none',
+                      minWidth: 190,
+                    }}
+                  >
+                    <option value="">🏆 الصدارة العامة</option>
+                    {selectableRounds.map(r => (
+                      <option key={r} value={r}>
+                        {roundLabels[r] || r}{r === activeRound ? ' (الحالية)' : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <Link href="/leaderboard" style={{ fontSize: 13, color: 'var(--gold)', textDecoration: 'none', fontWeight: 700 }}>عرض الكامل ←</Link>
