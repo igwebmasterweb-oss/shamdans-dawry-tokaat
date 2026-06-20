@@ -1531,6 +1531,24 @@ const myFilteredPredictionsSorted = [...predictions]
   📜 الشروط والأحكام
 </button>
           </div>
+
+        <div
+          style={{
+            marginTop: 14,
+            padding: '12px 14px',
+            borderRadius: 16,
+            border: '1px solid rgba(217,178,95,.18)',
+            background: 'linear-gradient(180deg,rgba(217,178,95,.10),rgba(255,255,255,.03))',
+            boxShadow: '0 10px 24px rgba(0,0,0,.16)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <span style={{ fontSize: 18, lineHeight: 1, color: '#ffe3a6', marginTop: 1 }}>✨</span>
+            <div style={{ fontSize: 13, lineHeight: 1.9, color: '#f3ead8', fontWeight: 700 }}>
+              نعمل على تحديث النظام يوميًا لتحسين الأداء ودقة البيانات وتقديم تجربة أفضل باستمرار. ولضمان ظهور آخر التحديثات بشكل صحيح، يُفضّل تنظيف كاش المتصفح من وقت لآخر.
+            </div>
+          </div>
+        </div>
         </div>
       </div>
 
@@ -2480,24 +2498,6 @@ const myFilteredPredictionsSorted = [...predictions]
           ))}
         </div>
 
-        <div
-          style={{
-            marginBottom: 18,
-            padding: '12px 14px',
-            borderRadius: 16,
-            border: '1px solid rgba(217,178,95,.18)',
-            background: 'linear-gradient(180deg,rgba(217,178,95,.10),rgba(255,255,255,.03))',
-            boxShadow: '0 10px 24px rgba(0,0,0,.16)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <span style={{ fontSize: 18, lineHeight: 1, color: '#ffe3a6', marginTop: 1 }}>✨</span>
-            <div style={{ fontSize: 13, lineHeight: 1.9, color: '#f3ead8', fontWeight: 700 }}>
-              نعمل على تحديث النظام يوميًا لتحسين الأداء ودقة البيانات وتقديم تجربة أفضل باستمرار. ولضمان ظهور آخر التحديثات بشكل صحيح، يُفضّل تنظيف كاش المتصفح من وقت لآخر.
-            </div>
-          </div>
-        </div>
-
         {profileIncomplete && (
           <div
             style={{
@@ -3269,8 +3269,32 @@ const myFilteredPredictionsSorted = [...predictions]
                   {item.type === 'invite_friend' ? '🎉' : item.type === 'completed_profile' ? '✅' : item.type === 'joined_league' ? '🏆' : item.type === 'share_league' ? '🔗' : '⚽'}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {item.user_name || 'لاعب'}
+                  <div style={{ fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => openLeaderDetails({
+                        user_id: item.user_id,
+                        display_name: item.user_name || item.data?.display_name || item.data?.full_name || null,
+                        user_email: item.user_email || item.data?.user_email || null,
+                        totalPoints: 0,
+                        count: 0,
+                        profile_completed: false,
+                      })}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        padding: 0,
+                        margin: 0,
+                        color: 'var(--gold)',
+                        cursor: 'pointer',
+                        fontFamily: 'Cairo, sans-serif',
+                        fontSize: 14,
+                        fontWeight: 800,
+                        textDecoration: 'underline',
+                        textUnderlineOffset: '3px',
+                      }}
+                    >
+                      {item.user_name || 'لاعب'}
+                    </button>
                     {item.user_id === user?.id && <span style={{ fontSize: 11, background: 'rgba(217,178,95,.15)', color: '#ffe3a6', borderRadius: 999, padding: '2px 8px' }}>أنت</span>}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{feedEventLabel(item.type, item.data)}</div>
