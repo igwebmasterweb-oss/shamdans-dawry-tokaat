@@ -1291,7 +1291,7 @@ const submitPrediction = async (match: any) => {
   return dateA - dateB;
 });
 
-setSelectedLeaderSummary(summaryData ? { ...summaryData, penalty_points: getPenaltyPoints(player.user_id) } : null);
+setSelectedLeaderSummary(summaryData ? { ...summaryData, totalPoints: player?.totalPoints ?? 0, penalty_points: getPenaltyPoints(player.user_id) } : { totalPoints: player?.totalPoints ?? 0, penalty_points: getPenaltyPoints(player.user_id) });
 setSelectedLeaderPredictions(normalizedPreds);
     } catch (err) {
       console.error('openLeaderDetails error:', err);
