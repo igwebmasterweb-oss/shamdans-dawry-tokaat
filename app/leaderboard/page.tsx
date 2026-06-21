@@ -14,6 +14,9 @@ interface Player {
   bonus_points?: number;
   penalty_points?: number;
   raw_total_points?: number;
+  details_total_points?: number;
+  prediction_points?: number;
+  profile_points?: number;
 }
 
 interface MemberPrediction {
