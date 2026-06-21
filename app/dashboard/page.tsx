@@ -463,14 +463,8 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [myRoundFilter, setMyRoundFilter]     = useState('');
   const [leaderRoundFilter, setLeaderRoundFilter] = useState('');
   const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
-  const addProfilePoints = (total = 0, completed = false) =>
-  total + (completed ? 5 : 0);
-
   const getPenaltyPoints = (userId?: string | null) =>
     userId ? Number(penaltyMap[userId] || 0) : 0;
-
-  const getAdjustedTotal = (total = 0, completed = false, userId?: string | null) =>
-    addProfilePoints(total, completed) - getPenaltyPoints(userId);
 
 
   useEffect(() => {
@@ -831,18 +825,24 @@ const userNameMap: Record<string, string> = {};
         setHistoryRankings([]);
       }
 
-      // Load general leaderboard from leaderboard_general_v1
+      // Load general leaderboard from leaderboard_unified_v2
       const { data: generalLbData } = await supabase
-        .from('leaderboard_general_v1')
-        .select('user_id, full_name, user_email, final_points, predictions_count, profile_completed, penalty_points')
-        .order('final_points', { ascending: false });
+        .from('leaderboard_unified_v2')
+        .select('user_id, full_name, user_email, official_total_points, details_total_points, raw_total_points, prediction_points, referral_points, profile_points, bonus_points, predictions_count, profile_completed, penalty_points')
+        .order('official_total_points', { ascending: false });
 
       setLeaderboard((generalLbData || []).map((row: any) => ({
         user_id: row.user_id,
         user_email: row.user_email,
         display_name: row.full_name || null,
         profile_completed: row.profile_completed || false,
-        totalPoints: row.final_points || 0,
+        totalPoints: row.official_total_points || 0,
+        details_total_points: row.details_total_points || 0,
+        raw_total_points: row.raw_total_points || 0,
+        prediction_points: row.prediction_points || 0,
+        referral_points: row.referral_points || 0,
+        profile_points: row.profile_points || 0,
+        bonus_points: row.bonus_points || 0,
         count: row.predictions_count || 0,
         penalty_points: row.penalty_points || 0,
       })));
@@ -1291,7 +1291,7 @@ const submitPrediction = async (match: any) => {
   return dateA - dateB;
 });
 
-setSelectedLeaderSummary(summaryData ? { ...summaryData, totalPoints: player?.totalPoints ?? 0, penalty_points: getPenaltyPoints(player.user_id) } : { totalPoints: player?.totalPoints ?? 0, penalty_points: getPenaltyPoints(player.user_id) });
+setSelectedLeaderSummary(summaryData ? { ...summaryData, totalPoints: player?.details_total_points ?? player?.totalPoints ?? 0, penalty_points: player?.penalty_points ?? getPenaltyPoints(player.user_id), referral_points: player?.referral_points ?? summaryData?.referral_points ?? 0, profile_points: player?.profile_points ?? ((summaryData?.profile_completed || player?.profile_completed) ? 5 : 0), bonus_points: player?.bonus_points ?? summaryData?.bonus_points ?? 0, profile_completed: player?.profile_completed ?? summaryData?.profile_completed ?? false } : { totalPoints: player?.details_total_points ?? player?.totalPoints ?? 0, penalty_points: player?.penalty_points ?? getPenaltyPoints(player.user_id), referral_points: player?.referral_points ?? 0, profile_points: player?.profile_points ?? (player?.profile_completed ? 5 : 0), bonus_points: player?.bonus_points ?? 0, profile_completed: player?.profile_completed ?? false });
 setSelectedLeaderPredictions(normalizedPreds);
     } catch (err) {
       console.error('openLeaderDetails error:', err);
@@ -1341,7 +1341,7 @@ setSelectedLeaderPredictions(normalizedPreds);
     </div>
   );
 
- const myPoints = getAdjustedTotal(myTotalPoints, profileCompleted, user?.id);
+ const myPoints = leaderboard.find((p: any) => p.user_id === user?.id)?.totalPoints || 0;
   const myRank      = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
   const mySelectedRound = myRoundFilter || activeRound;
@@ -1354,7 +1354,7 @@ setSelectedLeaderPredictions(normalizedPreds);
   const myFilteredRoundPts = predictions
     .filter((pr: any) => myFilteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
-  const myDisplayedTotal = predictionOnlyPoints + referralPoints + bonusPoints + (profileCompleted ? 5 : 0) - myPenaltyPoints;
+  const myDisplayedTotal = leaderboard.find((p: any) => p.user_id === user?.id)?.totalPoints || 0;
 
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
@@ -1631,7 +1631,7 @@ const myFilteredPredictionsSorted = [...predictions]
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
     <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط إكمال البروفايل</div>
     <div style={{ fontSize: 24, fontWeight: 800, color: '#7db1ff', fontVariantNumeric: 'tabular-nums' }}>
-      {(selectedLeaderSummary?.penalty_points ?? 0) > 0 ? 0 : (selectedLeaderSummary?.profile_completed ? 5 : 0)}
+      {(selectedLeaderSummary?.penalty_points ?? 0) > 0 ? 0 : (selectedLeaderSummary?.profile_points ?? 0)}
     </div>
   </div>
 
