@@ -1370,12 +1370,11 @@ setSelectedLeaderPredictions(normalizedPreds);
     .filter((pr: any) => myFilteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
   const myPredictionBreakdown = myLeaderRow?.prediction_points ?? predictionOnlyPoints;
-  const myProfilePoints = myLeaderRow?.profile_points ?? (profileCompleted ? 5 : 0);
-  const myReferralBreakdown = myLeaderRow?.referral_points ?? referralPoints;
-  const myBonusBreakdown = myLeaderRow?.bonus_points ?? bonusPoints;
-  const myPenaltyBreakdown = myLeaderRow?.penalty_points ?? myPenaltyPoints;
-  const myDisplayedTotal = myPredictionBreakdown + myReferralBreakdown + myProfilePoints + myBonusBreakdown - myPenaltyBreakdown;
-
+const myProfilePoints = myLeaderRow?.profile_points ?? (profileCompleted ? 5 : 0);
+const myReferralBreakdown = myLeaderRow?.referral_points ?? referralPoints;
+const myBonusBreakdown = myLeaderRow?.bonus_points ?? bonusPoints;
+const myPenaltyBreakdown = myLeaderRow?.penalty_points ?? myPenaltyPoints;
+const myDisplayedTotal = myLeaderRow?.details_total_points ?? myLeaderRow?.totalPoints ?? 0;
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
 
