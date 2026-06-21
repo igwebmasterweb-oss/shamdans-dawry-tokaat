@@ -1243,11 +1243,7 @@ const submitPrediction = async (match: any) => {
       setSelectedLeaderPredictions([]);
       setLeaderModalRoundFilter('');
 
-      const { data: summaryData } = await supabase
-        .from('user_points')
-        .select('*')
-        .eq('user_id', player.user_id)
-        .maybeSingle();
+      const summaryData = null;
 
       const { data: predsData } = await supabase
         .from('predictions')
@@ -1292,7 +1288,7 @@ const submitPrediction = async (match: any) => {
   return dateA - dateB;
 });
 
-setSelectedLeaderSummary(summaryData ? { ...summaryData, totalPoints: player?.details_total_points ?? player?.totalPoints ?? 0, penalty_points: player?.penalty_points ?? getPenaltyPoints(player.user_id), referral_points: player?.referral_points ?? summaryData?.referral_points ?? 0, profile_points: player?.profile_points ?? ((summaryData?.profile_completed || player?.profile_completed) ? 5 : 0), bonus_points: player?.bonus_points ?? summaryData?.bonus_points ?? 0, profile_completed: player?.profile_completed ?? summaryData?.profile_completed ?? false } : { totalPoints: player?.details_total_points ?? player?.totalPoints ?? 0, penalty_points: player?.penalty_points ?? getPenaltyPoints(player.user_id), referral_points: player?.referral_points ?? 0, profile_points: player?.profile_points ?? (player?.profile_completed ? 5 : 0), bonus_points: player?.bonus_points ?? 0, profile_completed: player?.profile_completed ?? false });
+setSelectedLeaderSummary({ ...(summaryData || {}), totalPoints: player?.details_total_points ?? player?.totalPoints ?? 0, prediction_points: player?.prediction_points ?? 0, penalty_points: player?.penalty_points ?? getPenaltyPoints(player.user_id), referral_points: player?.referral_points ?? 0, profile_points: player?.profile_points ?? 0, bonus_points: player?.bonus_points ?? 0, profile_completed: player?.profile_completed ?? false });
 setSelectedLeaderPredictions(normalizedPreds);
     } catch (err) {
       console.error('openLeaderDetails error:', err);
@@ -2391,7 +2387,7 @@ const myFilteredPredictionsSorted = [...predictions]
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{myDisplayedTotal} نقطة</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 8 }}>
   {(() => {
-    const predPoints = predictionOnlyPoints;
+    const predPoints = myLeaderRow?.prediction_points ?? predictionOnlyPoints;
             const chips = [
       { label: '⚽ توقعات', value: predPoints, color: 'rgba(138,224,179,.15)', border: 'rgba(138,224,179,.25)', text: '#8ae0b3' },
       ...(myReferralBreakdown > 0 ? [{ label: '👥 دعوات', value: myReferralBreakdown, color: 'rgba(125,177,255,.15)', border: 'rgba(125,177,255,.25)', text: '#7db1ff' }] : []),
