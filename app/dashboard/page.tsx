@@ -858,7 +858,8 @@ const userNameMap: Record<string, string> = {};
   };
 
 useEffect(() => {
-  if (!leaderRoundFilter) {
+  const targetRound = leaderRoundFilter || activeRound;
+  if (!targetRound) {
     setRoundLeaderboardRows([]);
     return;
   }
@@ -868,7 +869,7 @@ useEffect(() => {
 
   (async () => {
     try {
-      const { data, error } = await supabase.rpc('get_round_leaderboard', { p_round: leaderRoundFilter });
+      const { data, error } = await supabase.rpc('get_round_leaderboard', { p_round: targetRound });
 
       if (cancelled) return;
       if (error) throw error;
@@ -886,7 +887,7 @@ useEffect(() => {
   return () => {
     cancelled = true;
   };
-}, [leaderRoundFilter]);
+}, [leaderRoundFilter, activeRound]);
 
 
 
@@ -1341,7 +1342,8 @@ setSelectedLeaderPredictions(normalizedPreds);
     </div>
   );
 
- const myPoints = leaderboard.find((p: any) => p.user_id === user?.id)?.totalPoints || 0;
+ const myLeaderRow = leaderboard.find((p: any) => p.user_id === user?.id) || null;
+  const myPoints = myLeaderRow?.totalPoints || 0;
   const myRank      = leaderboard.findIndex(p => p.user_id === user?.id) + 1;
   const filteredMatches = matches.filter(m => m.league.round === activeRound);
   const mySelectedRound = myRoundFilter || activeRound;
@@ -1354,7 +1356,11 @@ setSelectedLeaderPredictions(normalizedPreds);
   const myFilteredRoundPts = predictions
     .filter((pr: any) => myFilteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
-  const myDisplayedTotal = leaderboard.find((p: any) => p.user_id === user?.id)?.totalPoints || 0;
+  const myDisplayedTotal = myLeaderRow?.totalPoints || 0;
+  const myProfilePoints = myLeaderRow?.profile_points || (profileCompleted ? 5 : 0);
+  const myReferralBreakdown = myLeaderRow?.referral_points ?? referralPoints;
+  const myBonusBreakdown = myLeaderRow?.bonus_points ?? bonusPoints;
+  const myPenaltyBreakdown = myLeaderRow?.penalty_points ?? myPenaltyPoints;
 
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
@@ -2388,10 +2394,10 @@ const myFilteredPredictionsSorted = [...predictions]
     const predPoints = predictionOnlyPoints;
             const chips = [
       { label: '⚽ توقعات', value: predPoints, color: 'rgba(138,224,179,.15)', border: 'rgba(138,224,179,.25)', text: '#8ae0b3' },
-      ...(referralPoints > 0 ? [{ label: '👥 دعوات', value: referralPoints, color: 'rgba(125,177,255,.15)', border: 'rgba(125,177,255,.25)', text: '#7db1ff' }] : []),
-      ...(bonusPoints > 0 ? [{ label: '🎁 بونص', value: bonusPoints, color: 'rgba(192,132,252,.15)', border: 'rgba(192,132,252,.25)', text: '#c084fc' }] : []),
-      ...(profileCompleted ? [{ label: '👤 بروفايل', value: 5, color: 'rgba(249,115,22,.15)', border: 'rgba(249,115,22,.25)', text: '#fb923c' }] : []),
-      ...(myPenaltyPoints > 0 ? [{ label: '⛔ خصم', value: -myPenaltyPoints, color: 'rgba(239,68,68,.15)', border: 'rgba(239,68,68,.3)', text: '#fca5a5' }] : []),
+      ...(myReferralBreakdown > 0 ? [{ label: '👥 دعوات', value: myReferralBreakdown, color: 'rgba(125,177,255,.15)', border: 'rgba(125,177,255,.25)', text: '#7db1ff' }] : []),
+      ...(myBonusBreakdown > 0 ? [{ label: '🎁 بونص', value: myBonusBreakdown, color: 'rgba(192,132,252,.15)', border: 'rgba(192,132,252,.25)', text: '#c084fc' }] : []),
+      ...(myProfilePoints > 0 ? [{ label: '👤 بروفايل', value: myProfilePoints, color: 'rgba(249,115,22,.15)', border: 'rgba(249,115,22,.25)', text: '#fb923c' }] : []),
+      ...(myPenaltyBreakdown > 0 ? [{ label: '⛔ خصم', value: -myPenaltyBreakdown, color: 'rgba(239,68,68,.15)', border: 'rgba(239,68,68,.3)', text: '#fca5a5' }] : []),
     ];
     return chips.map((chip, i) => (
       <div key={i} style={{
