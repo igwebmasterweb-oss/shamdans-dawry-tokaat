@@ -874,7 +874,24 @@ useEffect(() => {
       if (cancelled) return;
       if (error) throw error;
 
-      setRoundLeaderboardRows(data || []);
+      const generalMap = new Map((leaderboard || []).map((row: any) => [String(row.user_id), row]));
+      const enrichedRoundRows = (data || []).map((row: any) => {
+        const generalRow = generalMap.get(String(row.user_id));
+        return {
+          ...row,
+          totalPoints: generalRow?.totalPoints ?? row.total_points ?? 0,
+          details_total_points: generalRow?.details_total_points ?? row.total_points ?? 0,
+          prediction_points: generalRow?.prediction_points ?? row.total_points ?? 0,
+          referral_points: generalRow?.referral_points ?? 0,
+          profile_points: generalRow?.profile_points ?? 0,
+          bonus_points: generalRow?.bonus_points ?? 0,
+          penalty_points: generalRow?.penalty_points ?? 0,
+          profile_completed: generalRow?.profile_completed ?? false,
+          count: generalRow?.count ?? row.predictions_count ?? 0,
+        };
+      });
+
+      setRoundLeaderboardRows(enrichedRoundRows);
       setRoundLeaderLoading(false);
     } catch (error) {
       if (cancelled) return;
@@ -1352,11 +1369,12 @@ setSelectedLeaderPredictions(normalizedPreds);
   const myFilteredRoundPts = predictions
     .filter((pr: any) => myFilteredMatches.some((m: any) => m.fixture.id === pr.fixture_id))
     .reduce((sum: number, pr: any) => sum + (Number(pr?.points) || 0), 0);
-  const myDisplayedTotal = myLeaderRow?.totalPoints || 0;
-  const myProfilePoints = myLeaderRow?.profile_points || (profileCompleted ? 5 : 0);
+  const myPredictionBreakdown = myLeaderRow?.prediction_points ?? predictionOnlyPoints;
+  const myProfilePoints = myLeaderRow?.profile_points ?? (profileCompleted ? 5 : 0);
   const myReferralBreakdown = myLeaderRow?.referral_points ?? referralPoints;
   const myBonusBreakdown = myLeaderRow?.bonus_points ?? bonusPoints;
   const myPenaltyBreakdown = myLeaderRow?.penalty_points ?? myPenaltyPoints;
+  const myDisplayedTotal = myPredictionBreakdown + myReferralBreakdown + myProfilePoints + myBonusBreakdown - myPenaltyBreakdown;
 
   const getMatchCollapsed = (fixtureId: number) =>
     collapsedMatches[fixtureId] ?? true;
@@ -2387,7 +2405,7 @@ const myFilteredPredictionsSorted = [...predictions]
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#fff1ce', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{myDisplayedTotal} نقطة</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center', marginTop: 8 }}>
   {(() => {
-    const predPoints = myLeaderRow?.prediction_points ?? predictionOnlyPoints;
+    const predPoints = myPredictionBreakdown;
             const chips = [
       { label: '⚽ توقعات', value: predPoints, color: 'rgba(138,224,179,.15)', border: 'rgba(138,224,179,.25)', text: '#8ae0b3' },
       ...(myReferralBreakdown > 0 ? [{ label: '👥 دعوات', value: myReferralBreakdown, color: 'rgba(125,177,255,.15)', border: 'rgba(125,177,255,.25)', text: '#7db1ff' }] : []),
