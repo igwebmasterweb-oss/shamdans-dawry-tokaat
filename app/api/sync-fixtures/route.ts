@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
 
       const { data: existing } = await supabaseAdmin
         .from('fixtures')
-        .select('id, actual_home_score, first_scorer, red_card_in_match, penalty_in_match, scorers_json')
+        .select('id, actual_home_score, first_scorer, first_scorer_id, red_card_in_match, penalty_in_match, scorers_json, scorers_ids_json')
         .eq('api_fixture_id', apiId)
         .maybeSingle();
 
@@ -100,7 +100,11 @@ export async function GET(request: NextRequest) {
       let redCard = existing?.red_card_in_match ?? false;
       let penalty = existing?.penalty_in_match ?? false;
       let firstScorer: string | null = existing?.first_scorer ?? null;
+      let firstScorerId: number | null = existing?.first_scorer_id ?? null;
       let scorersJson: string[] = Array.isArray(existing?.scorers_json) ? existing.scorers_json : [];
+      let scorersIdsJson: number[] = Array.isArray(existing?.scorers_ids_json)
+        ? existing.scorers_ids_json.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+        : [];
 
       if (isFinished && !alreadySynced) {
         await sleep(250);
@@ -111,7 +115,9 @@ export async function GET(request: NextRequest) {
         redCard = false;
         penalty = false;
         firstScorer = null;
+        firstScorerId = null;
         scorersJson = [];
+        scorersIdsJson = [];
 
         for (const ev of events) {
           if (ev.type === 'Card' && ev.detail === 'Red Card') {
@@ -124,11 +130,21 @@ export async function GET(request: NextRequest) {
 
           if (ev.type === 'Goal' && ev.detail !== 'Own Goal') {
             const scorerName = ev.player?.name ? normalizeScorerName(ev.player.name) : null;
+            const scorerId = ev.player?.id !== null && ev.player?.id !== undefined
+              ? Number(ev.player.id)
+              : null;
 
             if (scorerName) {
               if (!firstScorer) firstScorer = scorerName;
               if (!scorersJson.some(name => name === scorerName)) {
                 scorersJson.push(scorerName);
+              }
+            }
+
+            if (scorerId !== null && Number.isFinite(scorerId)) {
+              if (firstScorerId === null) firstScorerId = scorerId;
+              if (!scorersIdsJson.includes(scorerId)) {
+                scorersIdsJson.push(scorerId);
               }
             }
           }
@@ -150,9 +166,11 @@ export async function GET(request: NextRequest) {
           went_extra_time: wentExtraTime,
           both_teams_scored: bothTeamsScored,
           scorers_json: scorersJson,
+          scorers_ids_json: scorersIdsJson,
           ...(goalsHome !== null ? { actual_home_score: goalsHome } : {}),
           ...(goalsAway !== null ? { actual_away_score: goalsAway } : {}),
           ...(firstScorer ? { first_scorer: firstScorer } : {}),
+          ...(firstScorerId !== null ? { first_scorer_id: firstScorerId } : {}),
           red_card_in_match: redCard,
           penalty_in_match: penalty,
         };
@@ -171,34 +189,36 @@ export async function GET(request: NextRequest) {
         inserted++;
 
       } else if (isFinished && !alreadySynced) {
-       await supabaseAdmin
-  .from('fixtures')
-  .update({
-    home_team_name: match.teams.home.name,
-    away_team_name: match.teams.away.name,
-    home_team_id: match.teams.home.id,
-    away_team_id: match.teams.away.id,
-    home_team_logo: match.teams.home.logo,
-    away_team_logo: match.teams.away.logo,
-    match_date: match.fixture.date,
-    round: match.league.round,
-    went_extra_time: wentExtraTime,
-    both_teams_scored: bothTeamsScored,
-    red_card_in_match: redCard,
-    penalty_in_match: penalty,
-    scorers_json: scorersJson,
-    ...(goalsHome !== null ? { actual_home_score: goalsHome } : {}),
-    ...(goalsAway !== null ? { actual_away_score: goalsAway } : {}),
-    ...(firstScorer ? { first_scorer: firstScorer } : {}),
-  })
-  .eq('api_fixture_id', apiId);
+        await supabaseAdmin
+          .from('fixtures')
+          .update({
+            home_team_name: match.teams.home.name,
+            away_team_name: match.teams.away.name,
+            home_team_id: match.teams.home.id,
+            away_team_id: match.teams.away.id,
+            home_team_logo: match.teams.home.logo,
+            away_team_logo: match.teams.away.logo,
+            match_date: match.fixture.date,
+            round: match.league.round,
+            went_extra_time: wentExtraTime,
+            both_teams_scored: bothTeamsScored,
+            red_card_in_match: redCard,
+            penalty_in_match: penalty,
+            scorers_json: scorersJson,
+            scorers_ids_json: scorersIdsJson,
+            ...(goalsHome !== null ? { actual_home_score: goalsHome } : {}),
+            ...(goalsAway !== null ? { actual_away_score: goalsAway } : {}),
+            ...(firstScorer ? { first_scorer: firstScorer } : {}),
+            ...(firstScorerId !== null ? { first_scorer_id: firstScorerId } : {}),
+          })
+          .eq('api_fixture_id', apiId);
 
         apiCalls++;
         await saveLineups(apiId, existing.id, match.teams.home.id);
 
         updated++;
 
-          } else if (isFinished && alreadySynced) {
+      } else if (isFinished && alreadySynced) {
         await supabaseAdmin
           .from('fixtures')
           .update({
@@ -213,6 +233,9 @@ export async function GET(request: NextRequest) {
             went_extra_time: wentExtraTime,
             both_teams_scored: bothTeamsScored,
             scorers_json: scorersJson,
+            scorers_ids_json: scorersIdsJson,
+            ...(firstScorer ? { first_scorer: firstScorer } : {}),
+            ...(firstScorerId !== null ? { first_scorer_id: firstScorerId } : {}),
           })
           .eq('api_fixture_id', apiId);
 
