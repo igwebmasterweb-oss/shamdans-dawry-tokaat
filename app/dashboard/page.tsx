@@ -122,7 +122,7 @@ function PlayerSelect({
       <input
         type="text"
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={e => onChange({ player_name: e.target.value, player_id: null })}
         className="field-input"
         placeholder="..."
         style={{ flex: 1 }}
