@@ -65,17 +65,23 @@ function PlayerSelect({
           ? await squadQuery.in('team_id', [homeTeamId, awayTeamId])
           : await squadQuery.in('team_name', [homeTeam, awayTeam]);
 
-      const playersData = (squadData || []).map((p: any) => ({
+      const playersData: {
+        player_name: string;
+        team_name: string;
+        player_id?: number | null;
+        team_id?: number | null;
+        team_side?: 'home' | 'away' | null;
+        position: string | null;
+      }[] = (squadData || []).map((p: any) => ({
         player_name: p.player_name,
         player_id: p.player_id ?? null,
         team_name: p.team_name,
         team_id: p.team_id ?? null,
-        team_side:
-          homeTeamId && p.team_id === homeTeamId
-            ? 'home'
-            : awayTeamId && p.team_id === awayTeamId
-            ? 'away'
-            : null,
+        team_side: homeTeamId && p.team_id === homeTeamId
+          ? 'home'
+          : awayTeamId && p.team_id === awayTeamId
+          ? 'away'
+          : null,
         position: p.position ?? null,
       }));
 
