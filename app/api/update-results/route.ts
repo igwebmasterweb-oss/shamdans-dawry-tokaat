@@ -10,7 +10,6 @@ const UPDATE_CHUNK_SIZE = 100;
 const FEED_CHUNK_SIZE = 200;
 const PROCESS_BATCH_SIZE = 1000;
 
-
 function normalizeName(s: string): string {
   return s
     .trim()
@@ -20,8 +19,6 @@ function normalizeName(s: string): string {
     .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ');
 }
-
-
 
 function getNameTokens(s: string | null | undefined): string[] {
   if (!s) return [];
@@ -34,7 +31,7 @@ function expandCompactPlayerName(s: string | null | undefined): string {
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/\./g, '. ')
     .replace(/[^a-z0-9.\s]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -198,13 +195,8 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
   const predHome = pred.predicted_home_score;
   const predAway = pred.predicted_away_score;
 
-  const actualWinner =
-    actualHome > actualAway ? 'home' :
-    actualAway > actualHome ? 'away' : 'draw';
-
-  const predWinner =
-    predHome > predAway ? 'home' :
-    predAway > predHome ? 'away' : 'draw';
+  const actualWinner = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw';
+  const predWinner = predHome > predAway ? 'home' : predAway > predHome ? 'away' : 'draw';
 
   if (actualWinner === predWinner) {
     points += 5;
@@ -227,37 +219,29 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
       : null;
 
   const scorerIds = Array.isArray(fixture.scorers_ids_json)
-    ? [...new Set(
-        fixture.scorers_ids_json
-          .map((id) => Number(id))
-          .filter((id) => Number.isFinite(id))
-      )]
+    ? [...new Set(fixture.scorers_ids_json.map((id) => Number(id)).filter((id) => Number.isFinite(id)))]
     : [];
 
   const allScorerNames = Array.isArray(fixture.scorers_json)
-    ? [...new Set(
-        fixture.scorers_json
-          .map((item: any) => {
-            if (typeof item === 'string') return item.trim();
-            if (item && typeof item === 'object') {
-              return String(
-                item.player_name ??
-                item.scorer_name ??
-                item.name ??
-                item.player?.name ??
-                ''
-              ).trim();
-            }
-            return '';
-          })
-          .filter(Boolean)
-      )]
+    ? [
+        ...new Set(
+          fixture.scorers_json
+            .map((item: any) => {
+              if (typeof item === 'string') return item.trim();
+              if (item && typeof item === 'object') {
+                return String(
+                  item.player_name ?? item.scorer_name ?? item.name ?? item.player?.name ?? ''
+                ).trim();
+              }
+              return '';
+            })
+            .filter(Boolean)
+        ),
+      ]
     : [];
 
   if (predictedScorerId !== null) {
-    const isFirstScorerById =
-      actualFirstScorerId !== null && predictedScorerId === actualFirstScorerId;
-
+    const isFirstScorerById = actualFirstScorerId !== null && predictedScorerId === actualFirstScorerId;
     const scoredInMatchById = scorerIds.includes(predictedScorerId);
 
     if (isFirstScorerById) {
@@ -266,8 +250,7 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
       points += 1;
     } else if (predictedScorer) {
       const isFirstScorerByName =
-        actualFirstScorer !== null &&
-        namesReferToSamePlayer(predictedScorer, actualFirstScorer);
+        actualFirstScorer !== null && namesReferToSamePlayer(predictedScorer, actualFirstScorer);
 
       const scoredInMatchByName = allScorerNames.some((name) =>
         namesReferToSamePlayer(predictedScorer, name)
@@ -281,8 +264,7 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
     }
   } else if (predictedScorer) {
     const isFirstScorerByName =
-      actualFirstScorer !== null &&
-      namesReferToSamePlayer(predictedScorer, actualFirstScorer);
+      actualFirstScorer !== null && namesReferToSamePlayer(predictedScorer, actualFirstScorer);
 
     const scoredInMatchByName = allScorerNames.some((name) =>
       namesReferToSamePlayer(predictedScorer, name)
@@ -308,7 +290,6 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
   if (fixture.penalty_in_match === false && pred.predicted_penalty === true) {
     points -= 1;
   }
-
 
   return {
     points,
@@ -358,134 +339,128 @@ export async function GET(request: NextRequest) {
     if (fixtures.length === 0) {
       return NextResponse.json({
         success: true,
-        message: targetFixtureId
-          ? 'لا توجد نتيجة محفوظة لهذه المباراة بعد'
-          : 'لا توجد ماتشات بها نتائج بعد',
+        message: targetFixtureId ? 'لا توجد نتيجة محفوظة لهذه المباراة بعد' : 'لا توجد ماتشات بها نتائج بعد',
         updated: 0,
         users: 0,
         cleanup,
       });
     }
 
-    const fixtureMap = new Map(fixtures.map((f) => [f.api_fixture_id, f]));
+    const fixtureMap = new Map<number, FixtureResult>(fixtures.map((f) => [f.api_fixture_id, f]));
     const fixtureIds = fixtures.map((f) => f.api_fixture_id);
 
     let totalUpdated = 0;
-const affectedUsers = new Set<string>();
-let totalPasses = 0;
-let lastId = 0;
+    const affectedUsers = new Set<string>();
+    let totalPasses = 0;
+    let lastId = 0;
 
-while (true) {
-  totalPasses++;
+    while (true) {
+      totalPasses++;
 
-    let predsQuery = supabaseAdmin
-    .from('predictions')
-    .select(
-      'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_first_scorer_id, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
-    )
-    .in('fixture_id', fixtureIds)
-    .gt('id', lastId)
-    .order('id', { ascending: true })
-    .limit(PROCESS_BATCH_SIZE);
+      let predsQuery = supabaseAdmin
+        .from('predictions')
+        .select(
+          'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_first_scorer_id, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
+        )
+        .in('fixture_id', fixtureIds)
+        .gt('id', lastId)
+        .order('id', { ascending: true })
+        .limit(PROCESS_BATCH_SIZE);
 
-  if (!targetFixtureId) {
-    predsQuery = predsQuery.or('points.is.null,points.eq.0');
-  }
+      if (!targetFixtureId) {
+        predsQuery = predsQuery.or('points.is.null,points.eq.0');
+      }
 
-  const { data: predsRaw, error: predError } = await predsQuery;
+      const { data: predsRaw, error: predError } = await predsQuery;
+      if (predError) throw predError;
 
-  if (predError) throw predError;
+      const preds = (predsRaw || []) as PredictionRow[];
+      if (preds.length === 0) break;
 
-  const preds = (predsRaw || []) as PredictionRow[];
+      const predictionUpdates: {
+        id: number;
+        points: number;
+        actual_home_score: number;
+        actual_away_score: number;
+      }[] = [];
 
-  if (preds.length === 0) break;
+      const socialFeedInserts: {
+        user_id: string;
+        type: string;
+        data: {
+          points: number;
+          fixture_id: number;
+          home_team: string;
+          away_team: string;
+        };
+      }[] = [];
 
-  const predictionUpdates: {
-    id: number;
-    points: number;
-    actual_home_score: number;
-    actual_away_score: number;
-  }[] = [];
+      for (const pred of preds) {
+        const fixture = fixtureMap.get(pred.fixture_id);
+        if (!fixture) continue;
 
-  const socialFeedInserts: {
-    user_id: string;
-    type: string;
-    data: {
-      points: number;
-      fixture_id: number;
-      home_team: string;
-      away_team: string;
-    };
-  }[] = [];
+        const calc = calculatePredictionPoints(pred, fixture);
 
-  for (const pred of preds) {
-    const fixture = fixtureMap.get(pred.fixture_id);
-    if (!fixture) continue;
+        predictionUpdates.push({
+          id: pred.id,
+          points: calc.points,
+          actual_home_score: calc.actual_home_score,
+          actual_away_score: calc.actual_away_score,
+        });
 
-    const calc = calculatePredictionPoints(pred, fixture);
+        affectedUsers.add(pred.user_id);
 
-    predictionUpdates.push({
-      id: pred.id,
-      points: calc.points,
-      actual_home_score: calc.actual_home_score,
-      actual_away_score: calc.actual_away_score,
-    });
+        if (calc.points !== 0) {
+          socialFeedInserts.push({
+            user_id: pred.user_id,
+            type: calc.points > 0 ? 'points_earned' : 'points_lost',
+            data: {
+              points: calc.points,
+              fixture_id: pred.fixture_id,
+              home_team: pred.home_team,
+              away_team: pred.away_team,
+            },
+          });
+        }
+      }
 
-    affectedUsers.add(pred.user_id);
+      for (const chunk of chunkArray(predictionUpdates, UPDATE_CHUNK_SIZE)) {
+        const results = await Promise.all(
+          chunk.map((update) =>
+            supabaseAdmin
+              .from('predictions')
+              .update({
+                points: update.points,
+                actual_home_score: update.actual_home_score,
+                actual_away_score: update.actual_away_score,
+              })
+              .eq('id', update.id)
+          )
+        );
 
- if (calc.points !== 0) {
-  socialFeedInserts.push({
-    user_id: pred.user_id,
-    type: calc.points > 0 ? 'points_earned' : 'points_lost',
-    data: {
-      points: calc.points,
-      fixture_id: pred.fixture_id,
-      home_team: pred.home_team,
-      away_team: pred.away_team,
-    },
-  });
-}
-  }
+        const failed = results.find((r) => r.error);
+        if (failed?.error) throw failed.error;
+      }
 
-  for (const chunk of chunkArray(predictionUpdates, UPDATE_CHUNK_SIZE)) {
-    const results = await Promise.all(
-      chunk.map((update) =>
-        supabaseAdmin
-          .from('predictions')
-          .update({
-            points: update.points,
-            actual_home_score: update.actual_home_score,
-            actual_away_score: update.actual_away_score,
-          })
-          .eq('id', update.id)
-      )
-    );
+      for (const chunk of chunkArray(socialFeedInserts, FEED_CHUNK_SIZE)) {
+        if (chunk.length === 0) continue;
 
-    const failed = results.find((r) => r.error);
-    if (failed?.error) throw failed.error;
-  }
+        const { error: feedError } = await supabaseAdmin.from('social_feed').insert(chunk);
+        if (feedError) throw feedError;
+      }
 
-  for (const chunk of chunkArray(socialFeedInserts, FEED_CHUNK_SIZE)) {
-    if (chunk.length === 0) continue;
+      totalUpdated += predictionUpdates.length;
+      lastId = preds[preds.length - 1].id;
 
-    const { error: feedError } = await supabaseAdmin
-      .from('social_feed')
-      .insert(chunk);
-
-    if (feedError) throw feedError;
-  }
-
-  totalUpdated += predictionUpdates.length;
-  lastId = preds[preds.length - 1].id;
-
-  if (preds.length < PROCESS_BATCH_SIZE) break;
-}
+      if (preds.length < PROCESS_BATCH_SIZE) break;
+    }
 
     const affectedUsersArray = Array.from(affectedUsers);
 
     if (affectedUsersArray.length > 0) {
-      const { error: batchRefreshError } = await supabaseAdmin
-        .rpc('refreshuserspointsbatch', { p_userids: affectedUsersArray });
+      const { error: batchRefreshError } = await supabaseAdmin.rpc('refreshuserspointsbatch', {
+        p_userids: affectedUsersArray,
+      });
 
       if (batchRefreshError) {
         console.warn(
@@ -494,8 +469,9 @@ while (true) {
         );
 
         for (const userId of affectedUsersArray) {
-          const { error: singleRefreshError } = await supabaseAdmin
-            .rpc('refreshuserpoints', { p_userid: userId });
+          const { error: singleRefreshError } = await supabaseAdmin.rpc('refreshuserpoints', {
+            p_userid: userId,
+          });
 
           if (singleRefreshError) {
             throw singleRefreshError;
