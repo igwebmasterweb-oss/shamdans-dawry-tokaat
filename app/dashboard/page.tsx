@@ -1128,6 +1128,9 @@ const submitPrediction = async (match: any) => {
 
   try {
     const ex = predictions.find((p: any) => p.fixture_id === match.fixture.id);
+    const resolvedFirstScorerId = form.firstScorer
+      ? (form.firstScorerId ?? await resolveFirstScorerId(match, form.firstScorer))
+      : null;
 
     const payload = {
       user_id: user.id,
