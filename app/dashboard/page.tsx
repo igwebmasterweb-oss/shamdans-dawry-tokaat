@@ -31,12 +31,12 @@ function PlayerSelect({
   homeTeamId?: number | null;
   awayTeamId?: number | null;
   value: string;
-  onChange: (v: { player_id: number | null; player_name: string }) => void;
+  onChange: (v: { player_name: string; player_id?: number | null }) => void;
 }) {
    const [players, setPlayers] = useState<{
-    player_id?: number | null;
     player_name: string;
     team_name: string;
+    player_id?: number | null;
     team_id?: number | null;
     team_side?: 'home' | 'away' | null;
     position: string | null;
@@ -56,7 +56,7 @@ function PlayerSelect({
     async function load() {
            const squadQuery = supabase
         .from('team_players')
-        .select('player_id, player_name, team_name, team_id, position')
+        .select('player_name, team_name, team_id, position')
         .order('team_name')
         .order('player_name');
 
@@ -67,13 +67,14 @@ function PlayerSelect({
 
             const { data: lineupData } = await supabase
         .from('fixture_players')
-        .select('player_name, team_name, team_side, position')
+        .select('player_name, player_id, team_name, team_side, position')
         .eq('api_fixture_id', fixtureId)
         .order('team_name')
         .order('player_name');
 
            const normalizedSquad = (squadData || []).map((p: any) => ({
         player_name: p.player_name,
+        player_id: p.player_id ?? null,
         team_name: p.team_name,
         team_id: p.team_id ?? null,
         team_side:
@@ -87,6 +88,7 @@ function PlayerSelect({
 
       const normalizedLineup = (lineupData || []).map((p: any) => ({
         player_name: p.player_name,
+        player_id: p.player_id ?? null,
         team_name: p.team_name,
         team_id: null,
         team_side: p.team_side ?? null,
@@ -120,7 +122,7 @@ function PlayerSelect({
       <input
         type="text"
         value={value}
-        onChange={e => onChange({ player_id: null, player_name: e.target.value })}
+        onChange={e => onChange(e.target.value)}
         className="field-input"
         placeholder="..."
         style={{ flex: 1 }}
@@ -230,7 +232,7 @@ function PlayerSelect({
                   key={`${p.team_name}-${p.player_name}`}
                   type="button"
                   onClick={() => {
-                    onChange({ player_id: p.player_id ?? null, player_name: p.player_name });
+                    onChange({ player_name: p.player_name, player_id: p.player_id ?? null });
                     setOpen(false);
                     setSearch('');
                   }}
@@ -270,7 +272,7 @@ function PlayerSelect({
                   key={`${p.team_name}-${p.player_name}`}
                   type="button"
                   onClick={() => {
-                    onChange({ player_id: p.player_id ?? null, player_name: p.player_name });
+                    onChange({ player_name: p.player_name, player_id: p.player_id ?? null });
                     setOpen(false);
                     setSearch('');
                   }}
