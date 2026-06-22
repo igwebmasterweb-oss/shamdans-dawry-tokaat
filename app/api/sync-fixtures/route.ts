@@ -124,7 +124,10 @@ export async function GET(request: NextRequest) {
             redCard = true;
           }
 
-          if (ev.type === 'Goal' && ev.detail === 'Penalty') {
+          if (
+            (ev.type === 'Goal' && (ev.detail === 'Penalty' || ev.detail === 'Missed Penalty')) ||
+            (ev.type === 'Var' && typeof ev.detail === 'string' && ev.detail.toLowerCase().includes('penalty'))
+          ) {
             penalty = true;
           }
 
