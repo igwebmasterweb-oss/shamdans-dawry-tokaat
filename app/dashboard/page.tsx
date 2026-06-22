@@ -31,9 +31,10 @@ function PlayerSelect({
   homeTeamId?: number | null;
   awayTeamId?: number | null;
   value: string;
-  onChange: (v: string) => void;
+  onChange: (v: { player_id: number | null; player_name: string }) => void;
 }) {
    const [players, setPlayers] = useState<{
+    player_id?: number | null;
     player_name: string;
     team_name: string;
     team_id?: number | null;
@@ -55,7 +56,7 @@ function PlayerSelect({
     async function load() {
            const squadQuery = supabase
         .from('team_players')
-        .select('player_name, team_name, team_id, position')
+        .select('player_id, player_name, team_name, team_id, position')
         .order('team_name')
         .order('player_name');
 
@@ -229,7 +230,7 @@ function PlayerSelect({
                   key={`${p.team_name}-${p.player_name}`}
                   type="button"
                   onClick={() => {
-                    onChange(p.player_name);
+                    onChange({ player_id: p.player_id ?? null, player_name: p.player_name });
                     setOpen(false);
                     setSearch('');
                   }}
@@ -269,7 +270,7 @@ function PlayerSelect({
                   key={`${p.team_name}-${p.player_name}`}
                   type="button"
                   onClick={() => {
-                    onChange(p.player_name);
+                    onChange({ player_id: p.player_id ?? null, player_name: p.player_name });
                     setOpen(false);
                     setSearch('');
                   }}
@@ -2830,7 +2831,7 @@ const myFilteredPredictionsSorted = [...predictions]
   homeTeamId={match.db_home_team_id}
   awayTeamId={match.db_away_team_id}
   value={form.firstScorer}
-  onChange={val => setForm(match.fixture.id, { firstScorer: val })}
+  onChange={val => setForm(match.fixture.id, { firstScorer: val.player_name, firstScorerId: val.player_id ?? null })}
 />
                           </div>
 
