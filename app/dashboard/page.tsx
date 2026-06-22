@@ -54,7 +54,7 @@ function PlayerSelect({
     }
 
     async function load() {
-           const squadQuery = supabase
+      const squadQuery = supabase
         .from('team_players')
         .select('player_id, player_name, team_name, team_id, position')
         .order('team_name')
@@ -65,14 +65,7 @@ function PlayerSelect({
           ? await squadQuery.in('team_id', [homeTeamId, awayTeamId])
           : await squadQuery.in('team_name', [homeTeam, awayTeam]);
 
-            const { data: lineupData } = await supabase
-        .from('fixture_players')
-        .select('player_name, player_id, team_name, team_side, position')
-        .eq('api_fixture_id', fixtureId)
-        .order('team_name')
-        .order('player_name');
-
-           const normalizedSquad = (squadData || []).map((p: any) => ({
+      const playersData = (squadData || []).map((p: any) => ({
         player_name: p.player_name,
         player_id: p.player_id ?? null,
         team_name: p.team_name,
@@ -86,23 +79,7 @@ function PlayerSelect({
         position: p.position ?? null,
       }));
 
-      const normalizedLineup = (lineupData || []).map((p: any) => ({
-        player_name: p.player_name,
-        player_id: p.player_id ?? null,
-        team_name: p.team_name,
-        team_id: null,
-        team_side: p.team_side ?? null,
-        position: p.position ?? null,
-      }));
-
-      const merged = [...normalizedSquad, ...normalizedLineup];
-      const unique = Array.from(
-        new Map(
-          merged.map((p: any) => [`${p.team_side || p.team_name}__${p.player_name}`, p])
-        ).values()
-      );
-
-      setPlayers(unique);
+      setPlayers(playersData);
       setLoaded(true);
     }
 
@@ -1090,14 +1067,6 @@ if (refreshPointsError) throw refreshPointsError;
 const resolveFirstScorerId = async (match: any, scorerName?: string | null) => {
 if (!scorerName?.trim()) return null;
 const cleanName = scorerName.trim();
-
-const { data: lineupData } = await supabase
-.from('fixture_players')
-.select('player_id, player_name, team_name, team_side')
-.eq('api_fixture_id', match.fixture.id);
-
-const lineupMatch = (lineupData || []).find((p: any) => p.player_name === cleanName && p.player_id);
-if (lineupMatch?.player_id) return lineupMatch.player_id;
 
 let squadQuery = supabase
 .from('team_players')
