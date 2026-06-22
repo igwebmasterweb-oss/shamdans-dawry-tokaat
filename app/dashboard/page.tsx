@@ -56,7 +56,7 @@ function PlayerSelect({
     async function load() {
            const squadQuery = supabase
         .from('team_players')
-        .select('player_name, team_name, team_id, position')
+        .select('player_id, player_name, team_name, team_id, position')
         .order('team_name')
         .order('player_name');
 
@@ -1087,6 +1087,33 @@ if (refreshPointsError) throw refreshPointsError;
 // NOTE: This downloadable artifact contains the exact safe replacement function
 // to paste into your live file, because the attached source is truncated in retrieval.
 
+const resolveFirstScorerId = async (match: any, scorerName?: string | null) => {
+if (!scorerName?.trim()) return null;
+const cleanName = scorerName.trim();
+
+const { data: lineupData } = await supabase
+.from('fixture_players')
+.select('player_id, player_name, team_name, team_side')
+.eq('api_fixture_id', match.fixture.id);
+
+const lineupMatch = (lineupData || []).find((p: any) => p.player_name === cleanName && p.player_id);
+if (lineupMatch?.player_id) return lineupMatch.player_id;
+
+let squadQuery = supabase
+.from('team_players')
+.select('player_id, player_name, team_name, team_id');
+
+let squadResult;
+if (match?.db_home_team_id && match?.db_away_team_id) {
+squadResult = await squadQuery.in('team_id', [match.db_home_team_id, match.db_away_team_id]);
+} else {
+squadResult = await squadQuery.in('team_name', [match.teams.home.name, match.teams.away.name]);
+}
+
+const squadMatch = (squadResult.data || []).find((p: any) => p.player_name === cleanName && p.player_id);
+return squadMatch?.player_id ?? null;
+};
+
 const submitPrediction = async (match: any) => {
   if (!user) return;
 
@@ -1111,7 +1138,7 @@ const submitPrediction = async (match: any) => {
       predicted_home_score: form.homeScore,
       predicted_away_score: form.awayScore,
       predicted_first_scorer: form.firstScorer || null,
-      predicted_first_scorer_id: form.firstScorerId ?? null,
+      predicted_first_scorer_id: resolvedFirstScorerId,
       predicted_extra_time: form.extraTime,
       predicted_red_card: form.predicted_red_card ?? false,
       predicted_penalty: form.predicted_penalty ?? false,
@@ -1125,7 +1152,7 @@ const submitPrediction = async (match: any) => {
           predicted_home_score:   form.homeScore,
           predicted_away_score:   form.awayScore,
           predicted_first_scorer: form.firstScorer || null,
-          predicted_first_scorer_id: form.firstScorerId ?? null,
+          predicted_first_scorer_id: resolvedFirstScorerId,
           predicted_extra_time:   form.extraTime,
           predicted_red_card:     form.predicted_red_card ?? false,
           predicted_penalty:      form.predicted_penalty ?? false,
@@ -1167,7 +1194,10 @@ const submitPrediction = async (match: any) => {
 
     if (reloadError) throw reloadError;
 
-    setPredictions(data || []);
+    setPredictions((data || []).map((row: any) => ({
+...row,
+predicted_first_scorer_id: row.predicted_first_scorer_id ?? null,
+})));
     setMessages(m => ({ ...m, [match.fixture.id]: '✅ تم الحفظ!' }));
     setTimeout(() => setMessages(m => ({ ...m, [match.fixture.id]: '' })), 3000);
   } catch (err) {
