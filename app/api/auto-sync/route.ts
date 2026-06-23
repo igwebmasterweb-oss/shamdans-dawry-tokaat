@@ -33,6 +33,49 @@ function normalizeScorerName(name: string): string {
   return name.trim().replace(/\s+/g, ' ');
 }
 
+// استدعاء update-results لمباراة واحدة محددة بالـ fixture id فقط، مع إعادة المحاولة.
+// مهم: دايمًا موجّه بـ ?fixture=apiId ولا يمسّ القاعدة كلها إطلاقًا — الحِمل محصور بمباراة واحدة.
+async function calcMatchPointsWithRetry(
+  apiId: number,
+  maxAttempts: number = 3
+): Promise<{ ok: boolean; message?: string; error?: string; attempts: number }> {
+  let lastError = '';
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      // فاصل تصاعدي بين المحاولات (1ث، 2ث، 3ث...) لتفادي ضغط لحظي
+      await sleep(1000 * attempt);
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/api/update-results?fixture=${apiId}`,
+        {
+          // الهيدر ده مش مطلوب حاليًا لـ update-results بعد فتحه،
+          // بس مش مضر ونسيبه لو حبيت ترجّع حماية داخلية فيما بعد.
+          headers: { 'x-internal-key': process.env.CRON_SECRET || '' },
+        }
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data?.success) {
+        return {
+          ok: true,
+          message: data.message || `${data.updated ?? 0} توقع`,
+          attempts: attempt,
+        };
+      }
+
+      // فشل منطقي (رد غير ناجح) — نسجّل السبب ونعيد المحاولة لو فيه محاولات متبقية
+      lastError = data?.error || res.statusText || `HTTP ${res.status}`;
+    } catch (err: any) {
+      // فشل شبكي/تايم آوت — نعيد المحاولة لنفس المباراة فقط
+      lastError = err?.message || String(err);
+    }
+  }
+
+  return { ok: false, error: lastError, attempts: maxAttempts };
+}
+
 export async function GET(request: Request) {
   // حماية الكرون: لازم Authorization: Bearer CRON_SECRET
   const authHeader = request.headers.get('authorization');
@@ -203,42 +246,20 @@ export async function GET(request: Request) {
     }
 
     // بعد ما نثبت نتائج الماتشات المنتهية، نحسب نقاط التوقعات لكل ماتش
+    // كل مباراة موجّهة بالـ fixture id فقط، مع إعادة المحاولة عند الفشل (بدون أي نداء عام على القاعدة).
+    const failedPointFixtures: number[] = [];
     if (syncedFixtureIds.length > 0) {
       for (const apiId of syncedFixtureIds) {
-        try {
-          await sleep(1000);
-          const updateRes = await fetch(
-            `${process.env.NEXT_PUBLIC_SITE_URL}/api/update-results?fixture=${apiId}`,
-            {
-              // الهيدر ده مش مطلوب حاليًا لـ update-results بعد فتحه،
-              // بس مش مضر ونسيبه لو حبيت ترجّع حماية داخلية فيما بعد.
-              headers: { 'x-internal-key': process.env.CRON_SECRET || '' },
-            }
-          );
+        const result = await calcMatchPointsWithRetry(apiId);
 
-          const updateData = await updateRes.json();
-
-          if (!updateRes.ok || !updateData.success) {
-            log.push(
-              `⚠️ فشل تحديث النقاط للمباراة ${apiId}: ${
-                updateData.error || updateRes.statusText
-              }`
-            );
-            continue;
-          }
-
+        if (result.ok) {
+          log.push(`⚡ تحديث النقاط للمباراة ${apiId}: ${result.message}`);
+        } else {
+          // فشل بعد كل المحاولات — نسجّله بوضوح عشان يتعالج بنداء يدوي موجّه لنفس المباراة لاحقًا
+          failedPointFixtures.push(apiId);
           log.push(
-            `⚡ تحديث النقاط للمباراة ${apiId}: ${
-              updateData.message || `${updateData.updated} توقع`
-            }`
+            `⚠️ فشل تحديث النقاط للمباراة ${apiId} بعد ${result.attempts} محاولات: ${result.error || 'سبب غير معروف'}`
           );
-        } catch (err: any) {
-          log.push(
-            `⚠️ خطأ أثناء استدعاء update-results للمباراة ${apiId}: ${
-              err?.message || String(err)
-            }`
-          );
-          continue;
         }
       }
     }
@@ -247,6 +268,8 @@ export async function GET(request: Request) {
       success: true,
       synced: syncedCount,
       apiCalls,
+      pointsFailed: failedPointFixtures.length,
+      pointsFailedFixtures: failedPointFixtures,
       log,
       timestamp: now.toISOString(),
     });
