@@ -47,28 +47,42 @@ export async function GET() {
 
       if (players.length === 0) continue;
 
-      // ③ الـ player IDs الحاليين من API
-      const currentPlayerIds = players.map((p: any) => p.id);
+      // ③ الـ player IDs الحاليين من API — مع تصفية صارمة للأرقام الصالحة فقط
+      // (نستبعد null/undefined/غير الرقمي لتجنب بناء استعلام in () غير صالح)
+      const currentPlayerIds = [
+        ...new Set(
+          players
+            .map((p: any) => Number(p?.id))
+            .filter((id: number) => Number.isFinite(id))
+        ),
+      ];
 
       // ④ احذف اللاعبين اللي مش في السكواد الحالي (المستبعدين)
-      const { data: deletedRows } = await supabaseAdmin
-        .from('team_players')
-        .delete()
-        .eq('team_id', teamId)
-        .not('player_id', 'in', `(${currentPlayerIds.join(',')})`)
-        .select('id');
+      // تحصين: نحذف فقط لو عندنا قائمة IDs صالحة؛ وإلا نتخطى الحذف حتى لا نبني in () ولا نمسح السكواد بالغلط
+      if (currentPlayerIds.length > 0) {
+        const { data: deletedRows } = await supabaseAdmin
+          .from('team_players')
+          .delete()
+          .eq('team_id', teamId)
+          .not('player_id', 'in', `(${currentPlayerIds.join(',')})`)
+          .select('id');
 
-      totalDeleted += deletedRows?.length ?? 0;
+        totalDeleted += deletedRows?.length ?? 0;
+      }
 
-      // ⑤ upsert السكواد الكامل الحالي
-      const rows = players.map((p: any) => ({
-        team_id: teamId,
-        team_name: teamName,
-        player_id: p.id,
-        player_name: p.name,
-        position: p.position ?? null,
-        number: p.number ?? null,
-      }));
+      // ⑤ upsert السكواد الكامل الحالي — نستبعد أي لاعب بدون id صالح (player_id مطلوب لـ onConflict)
+      const rows = players
+        .filter((p: any) => Number.isFinite(Number(p?.id)))
+        .map((p: any) => ({
+          team_id: teamId,
+          team_name: teamName,
+          player_id: Number(p.id),
+          player_name: p.name,
+          position: p.position ?? null,
+          number: p.number ?? null,
+        }));
+
+      if (rows.length === 0) continue;
 
       const { error } = await supabaseAdmin
         .from('team_players')
