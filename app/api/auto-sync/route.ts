@@ -120,7 +120,9 @@ export async function GET(request: Request) {
         let redCard = false;
         let penalty = false;
         let firstScorer: string | null = null;
+        let firstScorerId: number | null = null;
         const allScorers: string[] = [];
+        const scorersIdsJson: number[] = [];
 
         // نجيب أحداث الماتش (أهداف، كروت... إلخ) مع retry
         await sleep(300);
@@ -132,7 +134,12 @@ export async function GET(request: Request) {
             redCard = true;
           }
 
-          if (ev.type === 'Goal' && ev.detail === 'Penalty') {
+          // توحيد منطق اكتشاف الجزاء مع sync-fixtures:
+          // يشمل الجزاء المُسجّل، الجزاء الضائع، وأحداث الـ VAR المتعلقة بالجزاء
+          if (
+            (ev.type === 'Goal' && (ev.detail === 'Penalty' || ev.detail === 'Missed Penalty')) ||
+            (ev.type === 'Var' && typeof ev.detail === 'string' && ev.detail.toLowerCase().includes('penalty'))
+          ) {
             penalty = true;
           }
 
@@ -140,11 +147,21 @@ export async function GET(request: Request) {
             const scorerName = ev.player?.name
               ? normalizeScorerName(ev.player.name)
               : null;
+            const scorerId = ev.player?.id !== null && ev.player?.id !== undefined
+              ? Number(ev.player.id)
+              : null;
 
             if (scorerName) {
               if (!firstScorer) firstScorer = scorerName;
               if (!allScorers.includes(scorerName)) {
                 allScorers.push(scorerName);
+              }
+            }
+
+            if (scorerId !== null && Number.isFinite(scorerId)) {
+              if (firstScorerId === null) firstScorerId = scorerId;
+              if (!scorersIdsJson.includes(scorerId)) {
+                scorersIdsJson.push(scorerId);
               }
             }
           }
@@ -157,7 +174,9 @@ export async function GET(request: Request) {
             actual_home_score: goalsHome,
             actual_away_score: goalsAway,
             first_scorer: firstScorer,
+            first_scorer_id: firstScorerId,
             scorers_json: allScorers,
+            scorers_ids_json: scorersIdsJson,
             went_extra_time: wentExtraTime,
             both_teams_scored: bothTeamsScored,
             red_card_in_match: redCard,
