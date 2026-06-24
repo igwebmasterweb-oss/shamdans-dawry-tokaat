@@ -771,7 +771,10 @@ const userNameMap: Record<string, string> = {};
             if (a.week_start === b.week_start) return (b.total_points || 0) - (a.total_points || 0);
             return String(b.week_start).localeCompare(String(a.week_start));
           });
-        const dates = [...new Set(normalizedHist.map((r: any) => r.week_start))].sort((a: string, b: string) => b.localeCompare(a)) as string[];
+        // ✅ آخر 6 أيام بس (مرتبة تنازليًا من الأحدث)
+        const allDates = [...new Set(normalizedHist.map((r: any) => r.week_start))].sort((a: string, b: string) => b.localeCompare(a)) as string[];
+        const dates = allDates.slice(0, 6);
+        const datesSet = new Set(dates);
         setHistoryDates(dates);
         setActiveHistoryDate(prev => {
           const normalizedPrev = prev ? String(prev).slice(0, 10) : '';
@@ -780,6 +783,7 @@ const userNameMap: Record<string, string> = {};
         // dedupe: keep highest total_points per user_id per day, then top 25 per day
         const dedupeMap = new Map<string, any>();
         for (const row of normalizedHist) {
+          if (!datesSet.has(row.week_start)) continue; // نتجاهل الأيام خارج آخر 6
           const key = `${row.week_start}__${row.user_id}`;
           const existing = dedupeMap.get(key);
           if (!existing || (row.total_points || 0) > (existing.total_points || 0)) {
@@ -1438,7 +1442,13 @@ predicted_first_scorer_id: row.predicted_first_scorer_id ?? null,
   return dateA - dateB;
 });
 
-setSelectedLeaderSummary({ ...(summaryData || {}), totalPoints: player?.details_total_points ?? player?.totalPoints ?? 0, prediction_points: player?.prediction_points ?? 0, penalty_points: player?.penalty_points ?? getPenaltyPoints(player.user_id), referral_points: player?.referral_points ?? 0, profile_points: player?.profile_points ?? 0, bonus_points: player?.bonus_points ?? 0, profile_completed: player?.profile_completed ?? false });
+// ✅ توحيد مصدر الإجمالي: نجيب بيانات اللاعب الحقيقية من الترتيب العام (leaderboard)
+// عشان أي تاب (لاعبين/جولات/نشاط) يدي نفس الإجمالي الصح وما يحصلش لخبطة
+const lbRow = leaderboard.find((r: any) => String(r.user_id) === String(player?.user_id)) || {};
+const resolvedTotal =
+  lbRow.details_total_points ?? lbRow.totalPoints ??
+  player?.details_total_points ?? player?.totalPoints ?? 0;
+setSelectedLeaderSummary({ ...(summaryData || {}), totalPoints: resolvedTotal, prediction_points: lbRow.prediction_points ?? player?.prediction_points ?? 0, penalty_points: lbRow.penalty_points ?? player?.penalty_points ?? getPenaltyPoints(player.user_id), referral_points: lbRow.referral_points ?? player?.referral_points ?? 0, profile_points: lbRow.profile_points ?? player?.profile_points ?? 0, bonus_points: lbRow.bonus_points ?? player?.bonus_points ?? 0, profile_completed: lbRow.profile_completed ?? player?.profile_completed ?? false });
 setSelectedLeaderPredictions(normalizedPreds);
     } catch (err) {
       console.error('openLeaderDetails error:', err);
