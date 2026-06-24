@@ -7,13 +7,16 @@ import { supabase } from './supabase';
 
 export interface AppNotification {
   id: string;
-  type: 'invite' | 'invite_accepted' | 'invite_declined' | 'kicked' | 'league_deleted';
+  type: 'invite' | 'invite_accepted' | 'invite_declined' | 'kicked' | 'league_deleted' | 'announcement';
   data: {
     league_id?: string;
     league_name?: string;
     from_name?: string;
     from_user_id?: string;
     invited_user_name?: string;
+    // ✅ للإعلانات العامة (announcement)
+    title?: string;
+    body?: string;
   };
   is_read: boolean;
   created_at: string;
@@ -107,6 +110,11 @@ export function getNotificationText(n: AppNotification): string {
       return `🚫 تم إزالتك من ليج "${n.data.league_name}"`;
     case 'league_deleted':
       return `🗑️ تم حذف ليج "${n.data.league_name}" من قِبَل المنشئ`;
+    case 'announcement':
+      // إعلان عام — العنوان والنص في سطر واحد بفاصل (الـ div مفيهوش pre-line)
+      return n.data.body
+        ? `${n.data.title || '📢 إعلان'} — ${n.data.body}`
+        : (n.data.title || '📢 إعلان جديد');
     default:
       return 'إشعار جديد';
   }
