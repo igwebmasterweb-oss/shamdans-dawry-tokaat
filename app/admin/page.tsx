@@ -56,11 +56,18 @@ export default function AdminPage() {
   const [breakdownUser, setBreakdownUser]   = useState<any>(null);
   const [breakdownPreds, setBreakdownPreds] = useState<any[]>([]);
   const [showBreakdown, setShowBreakdown]   = useState(false);
+  // بيانات البروفايل الكاملة (الإيميل من auth.users) التي تجلبها الدالة الآمنة
+  const [profileDetails, setProfileDetails] = useState<any>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
   // ⑩ إعادة حساب نقاط مستخدم واحد من نافذة التفاصيل
   const [recalcingUser, setRecalcingUser] = useState(false);
   // ⑧ بحث بالاسم/الإيميل في التوقعات والصدارة
   const [predSearch, setPredSearch] = useState('');
   const [lbSearch, setLbSearch] = useState('');
+  // ① صدارة الجولات: 'general' = الصدارة العامة، أو اسم الجولة
+  const [lbScope, setLbScope] = useState<string>('general');
+  const [roundLeaderboard, setRoundLeaderboard] = useState<any[]>([]);
+  const [loadingRoundLb, setLoadingRoundLb] = useState(false);
 const [participantsCount, setParticipantsCount] = useState(0);
   const autoIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const [totalPredictionsCount, setTotalPredictionsCount] = useState(0);
@@ -646,6 +653,15 @@ const loadLeaderboard = useCallback(async () => {
   setBreakdownUser(p);
   setBreakdownPreds(userPreds);
   setShowBreakdown(true);
+
+  // ── جلب بيانات البروفايل الكاملة (الإيميل من auth.users) عبر الدالة الآمنة ──
+  setProfileDetails(null);
+  setLoadingProfile(true);
+  supabase.rpc('admin_profile_full', { p_user_id: p.user_id })
+    .then(({ data, error }) => {
+      if (!error && data && data.length > 0) setProfileDetails(data[0]);
+    })
+    .finally(() => setLoadingProfile(false));
 };
 
   // ⑩ إعادة حساب نقاط مستخدم واحد (يستدعي refreshuserpoints) ثم يحدّث الواجهة
@@ -662,6 +678,42 @@ const loadLeaderboard = useCallback(async () => {
       showMsg('❌ ' + (err?.message || 'خطأ في إعادة الحساب'), 'error');
     }
     setRecalcingUser(false);
+  };
+
+  // ① تحميل صدارة جولة معينة من الـ view الجاهز (نفس مصدر صفحة الصدارة)
+  const loadRoundLeaderboard = async (round: string) => {
+    setLoadingRoundLb(true);
+    try {
+      const { data, error } = await supabase
+        .from('leaderboard_rounds_v1')
+        .select('*')
+        .eq('round', round)
+        .order('total_points', { ascending: false })
+        .order('predictions_count', { ascending: false });
+      if (error) throw error;
+      setRoundLeaderboard((data || []).map((row: any) => ({
+        user_id: row.user_id,
+        user_email: row.user_email || '',
+        full_name: row.display_name || row.user_email?.split('@')[0] || '—',
+        total: row.total_points || 0,
+        count: row.predictions_count || 0,
+        profile_completed: row.profile_completed ?? false,
+        bonus_points: row.bonus_points ?? 0,
+        referral_count: 0,
+      })));
+    } catch (err: any) {
+      console.error('loadRoundLeaderboard:', err);
+      setRoundLeaderboard([]);
+      showMsg('❌ خطأ في تحميل صدارة الجولة', 'error');
+    }
+    setLoadingRoundLb(false);
+  };
+
+  // ① عند اختيار نطاق الصدارة (عام / جولة)
+  const selectLbScope = (scope: string) => {
+    setLbScope(scope);
+    setLbSearch('');
+    if (scope !== 'general') loadRoundLeaderboard(scope);
   };
   // ─── Render states ─────────────────────────────────────
   if (loading) return (
@@ -729,10 +781,11 @@ const avgPoints = participantsCount > 0
 
   // ⑧ بحث الصدارة (اسم/إيميل)، مُطبَّع — مع الحفاظ على الترتيب الأصلي
   const lbSearchQ = normalizeScorerName(lbSearch);
+  const lbSource = lbScope === 'general' ? leaderboard : roundLeaderboard;
   const visibleLeaderboard = lbSearchQ
-    ? leaderboard.filter((p: any) =>
+    ? lbSource.filter((p: any) =>
         normalizeScorerName(`${p.full_name || ''} ${p.user_email || ''}`).includes(lbSearchQ))
-    : leaderboard;
+    : lbSource;
 
   // ⑥ round badges ✅
   const roundOpenMap: Record<string,{open:number,total:number}> = {};
@@ -981,6 +1034,20 @@ const avgPoints = participantsCount > 0
         {/* ══ LEADERBOARD ══ */}
         {activeTab==='leaderboard' && (
           <>
+            {/* ① شريط نطاق الصدارة: العامة + زر لكل جولة */}
+            <div style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
+              <button
+                onClick={()=>selectLbScope('general')}
+                style={{padding:'8px 16px',borderRadius:10,border:'1px solid '+(lbScope==='general'?'var(--gold)':'var(--line)'),background:lbScope==='general'?'rgba(217,178,95,.15)':'var(--surface-2)',color:lbScope==='general'?'var(--gold)':'var(--muted)',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif"}}
+              >🏆 الصدارة العامة</button>
+              {rounds.map(r=>(
+                <button
+                  key={r}
+                  onClick={()=>selectLbScope(r)}
+                  style={{padding:'8px 16px',borderRadius:10,border:'1px solid '+(lbScope===r?'var(--gold)':'var(--line)'),background:lbScope===r?'rgba(217,178,95,.15)':'var(--surface-2)',color:lbScope===r?'var(--gold)':'var(--muted)',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif",whiteSpace:'nowrap'}}
+                >{roundLabels[r]||r}</button>
+              ))}
+            </div>
             {/* ⑧ بحث الصدارة + Export CSV */}
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
               <input
@@ -990,7 +1057,9 @@ const avgPoints = participantsCount > 0
                 placeholder="🔍 بحث بالاسم أو الإيميل"
                 style={{padding:'8px 14px',borderRadius:10,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--text)',fontFamily:"'Cairo',sans-serif",fontSize:13,outline:'none',minWidth:220}}
               />
-              {lbSearchQ && <span style={{fontSize:12,color:'var(--muted)'}}>يعرض {visibleLeaderboard.length} من {leaderboard.length}</span>}
+              {lbSearchQ
+                ? <span style={{fontSize:12,color:'var(--muted)'}}>يعرض {visibleLeaderboard.length} من {lbSource.length}</span>
+                : lbScope!=='general' && <span style={{fontSize:12,color:'var(--muted)'}}>{loadingRoundLb?'⏳ جاري التحميل...':`صدارة ${roundLabels[lbScope]||lbScope} · ${lbSource.length} لاعب`}</span>}
               <button onClick={exportLeaderboardCSV} className="export-btn" style={{marginRight:'auto'}}>⬇️ تصدير CSV</button>
             </div>
             <div style={{overflowX:'auto'}}>
@@ -1000,8 +1069,8 @@ const avgPoints = participantsCount > 0
                   {visibleLeaderboard.length===0 ? (
                     <tr><td colSpan={6} style={{textAlign:'center',color:'var(--muted)',padding:40}}>{lbSearchQ ? 'لا يوجد مطابق' : 'لا توجد بيانات'}</td></tr>
                   ) : visibleLeaderboard.map((p)=>{
-                    // الرتبة الأصلية من الصدارة الكاملة (تثبت حتى مع البحث)
-                    const i = leaderboard.indexOf(p);
+                    // الرتبة الأصلية من المصدر الكامل (عام أو جولة) — تثبت حتى مع البحث
+                    const i = lbSource.indexOf(p);
                     return (
                     <tr key={p.user_id || i}>
                       <td style={{fontWeight:800,color:i<3?'var(--gold)':'var(--muted)'}}>{i<3?medals[i]:`#${i+1}`}</td>
@@ -1351,24 +1420,40 @@ const avgPoints = participantsCount > 0
 
             {/* ── بيانات البروفايل الكاملة ── */}
             <div style={{background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:16,padding:'14px 18px',marginBottom:20}}>
-              <div style={{fontSize:13,color:'var(--muted)',fontWeight:700,marginBottom:12}}>👤 بيانات العضو</div>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+                <span style={{fontSize:13,color:'var(--muted)',fontWeight:700}}>👤 بيانات العضو</span>
+                {loadingProfile && <span style={{fontSize:11,color:'var(--muted)'}}>⏳ جاري جلب البيانات...</span>}
+              </div>
+              {(() => {
+                const pd = profileDetails || {};
+                const fullName = pd.full_name || breakdownUser.full_name || '—';
+                const email    = pd.email || breakdownUser.user_email || null;
+                const phone    = pd.phone || breakdownUser.phone || null;
+                const fbUrl    = pd.facebook_url || breakdownUser.facebook_url || null;
+                const fbId     = pd.facebook_id || breakdownUser.facebook_id || null;
+                const team     = pd.football_team || breakdownUser.football_team || null;
+                const dob      = pd.date_of_birth || breakdownUser.date_of_birth || null;
+                const refCode  = pd.referral_code || breakdownUser.referral_code || null;
+                return (
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'10px 18px'}}>
                 {/* الاسم */}
                 <div>
                   <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>الاسم الكامل</div>
-                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{breakdownUser.full_name || '—'}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{fullName}</div>
                 </div>
                 {/* الإيميل */}
                 <div>
                   <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>الإيميل</div>
-                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)',wordBreak:'break-all'}}>{breakdownUser.user_email || '—'}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)',wordBreak:'break-all'}}>
+                    {email ? <a href={`mailto:${email}`} style={{color:'#60c3ff',textDecoration:'none'}}>{email}</a> : <span style={{color:'var(--muted)'}}>—</span>}
+                  </div>
                 </div>
                 {/* التليفون */}
                 <div>
                   <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>التليفون</div>
                   <div style={{fontSize:13,fontWeight:700,color:'var(--text)',direction:'ltr',textAlign:'right'}}>
-                    {breakdownUser.phone
-                      ? <a href={`tel:${breakdownUser.phone}`} style={{color:'#60c3ff',textDecoration:'none'}}>{breakdownUser.phone}</a>
+                    {phone
+                      ? <a href={`tel:${phone}`} style={{color:'#60c3ff',textDecoration:'none'}}>{phone}</a>
                       : <span style={{color:'var(--muted)'}}>—</span>}
                   </div>
                 </div>
@@ -1376,35 +1461,37 @@ const avgPoints = participantsCount > 0
                 <div>
                   <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>📘 الفيسبوك</div>
                   <div style={{fontSize:13,fontWeight:700}}>
-                    {breakdownUser.facebook_url
-                      ? <a href={breakdownUser.facebook_url} target="_blank" rel="noopener noreferrer" style={{color:'#60c3ff',textDecoration:'underline',wordBreak:'break-all'}}>فتح البروفايل</a>
-                      : breakdownUser.facebook_id
-                        ? <span style={{color:'var(--text)'}}>ID: {breakdownUser.facebook_id}</span>
+                    {fbUrl
+                      ? <a href={fbUrl} target="_blank" rel="noopener noreferrer" style={{color:'#60c3ff',textDecoration:'underline',wordBreak:'break-all'}}>فتح البروفايل</a>
+                      : fbId
+                        ? <span style={{color:'var(--text)'}}>ID: {fbId}</span>
                         : <span style={{color:'var(--muted)'}}>—</span>}
                   </div>
                 </div>
                 {/* الفريق المفضل */}
-                {breakdownUser.football_team && (
+                {team && (
                   <div>
                     <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>⚽ الفريق المفضل</div>
-                    <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{breakdownUser.football_team}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{team}</div>
                   </div>
                 )}
                 {/* تاريخ الميلاد */}
-                {breakdownUser.date_of_birth && (
+                {dob && (
                   <div>
                     <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>🎂 تاريخ الميلاد</div>
-                    <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{breakdownUser.date_of_birth}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{dob}</div>
                   </div>
                 )}
                 {/* كود الدعوة */}
-                {breakdownUser.referral_code && (
+                {refCode && (
                   <div>
                     <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>🤝 كود الدعوة</div>
-                    <div style={{fontSize:13,fontWeight:700,color:'var(--text)',direction:'ltr',textAlign:'right'}}>{breakdownUser.referral_code}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:'var(--text)',direction:'ltr',textAlign:'right'}}>{refCode}</div>
                   </div>
                 )}
               </div>
+                );
+              })()}
             </div>
 
             {/* ملخص الإجمالي */}
