@@ -37,7 +37,7 @@ begin
   return query
   select
     p.id                                   as user_id,
-    coalesce(au.email, up.user_email)      as email,        -- الإيميل من auth أولاً
+    coalesce(au.email, up.user_email)::text as email,       -- الإيميل من auth أولاً (cast لأن auth.users.email نوعه varchar)
     coalesce(p.full_name, up.full_name)    as full_name,
     p.phone                                as phone,
     p.facebook_url                         as facebook_url,
