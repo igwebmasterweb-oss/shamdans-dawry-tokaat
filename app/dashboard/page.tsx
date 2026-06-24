@@ -1937,22 +1937,36 @@ const myFilteredPredictionsSorted = [...predictions]
 
                 {(() => {
                   const now = new Date();
-                  const currentMatch = [...matches]
+                  // ✅ كل الماتشات الشغّالة دلوقتي (بدأت ولسه ما اتحسمتش) — ممكن يبقوا أكتر من ماتش
+                  const currentMatches = [...matches]
                     .filter((m: any) => {
                       const matchDate = m?.fixture?.date ? new Date(m.fixture.date) : null;
                       const started = !!matchDate && matchDate <= now;
                       const hasFinalResult = m?.actual_home_score !== null && m?.actual_home_score !== undefined;
                       return started && !hasFinalResult;
                     })
-                    .sort((a: any, b: any) => new Date(a.fixture.date).getTime() - new Date(b.fixture.date).getTime())[0];
+                    .sort((a: any, b: any) => new Date(a.fixture.date).getTime() - new Date(b.fixture.date).getTime());
 
+                  if (currentMatches.length === 0) {
+                    return (
+                      <div className="rank-item" style={{ marginBottom: 14, borderStyle: 'dashed', opacity: 0.9 }}>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginBottom: 8 }}>🟡 التوقع الحالي للماتش الجاري</div>
+                        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
+                          لا يوجد الآن ماتش جارٍ لعرض التوقع الحالي. سيظهر هنا تلقائيًا عند بدء أي مباراة وقبل تسجيل النتيجة النهائية.
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (<>
+                  {currentMatches.length > 1 && (
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#93c5fd', marginBottom: 8, textAlign: 'right' }}>
+                      🔵 فيه {currentMatches.length} ماتشات شغّالة دلوقتي
+                    </div>
+                  )}
+                  {currentMatches.map((currentMatch: any) => {
                   const currentFixtureId = Number(currentMatch?.fixture?.id);
-                  const currentPrediction = currentMatch
-                    ? selectedLeaderPredictions.find((pred: any) => Number(pred.fixture_id) === currentFixtureId || Number(pred.api_fixture_id) === currentFixtureId)
-                    : null;
-                  const currentMatchPredictionCount = currentMatch
-                    ? selectedLeaderPredictions.filter((pred: any) => Number(pred.fixture_id) === currentFixtureId || Number(pred.api_fixture_id) === currentFixtureId).length
-                    : 0;
+                  const currentPrediction = selectedLeaderPredictions.find((pred: any) => Number(pred.fixture_id) === currentFixtureId || Number(pred.api_fixture_id) === currentFixtureId);
 
                   const currentMatchDate = currentMatch?.fixture?.date
                     ? new Date(currentMatch.fixture.date).toLocaleDateString('ar-EG', {
@@ -1964,8 +1978,8 @@ const myFilteredPredictionsSorted = [...predictions]
                       })
                     : null;
 
-                  return currentMatch ? (
-                    <div className="rank-item" style={{ marginBottom: 14, borderColor: 'rgba(59,130,246,.24)', background: 'linear-gradient(90deg,rgba(59,130,246,.10),rgba(255,255,255,.02))', padding: '14px 16px' }}>
+                  return (
+                    <div key={currentFixtureId} className="rank-item" style={{ marginBottom: 14, borderColor: 'rgba(59,130,246,.24)', background: 'linear-gradient(90deg,rgba(59,130,246,.10),rgba(255,255,255,.02))', padding: '14px 16px' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, marginBottom: 10 }}>
                         <div style={{ fontSize: 13, fontWeight: 800, color: '#93c5fd', textAlign: 'right', lineHeight: 1.7 }}>🔵 التوقع الحالي للماتش الجاري</div>
                         <div style={{ alignSelf: 'flex-start', padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 11, fontWeight: 800, lineHeight: 1.6 }}>بدأت المباراة</div>
@@ -2021,14 +2035,9 @@ const myFilteredPredictionsSorted = [...predictions]
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <div className="rank-item" style={{ marginBottom: 14, borderStyle: 'dashed', opacity: 0.9 }}>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--gold)', marginBottom: 8 }}>🟡 التوقع الحالي للماتش الجاري</div>
-                      <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.8 }}>
-                        لا يوجد الآن ماتش جارٍ لعرض التوقع الحالي. سيظهر هنا تلقائيًا عند بدء أي مباراة وقبل تسجيل النتيجة النهائية.
-                      </div>
-                    </div>
                   );
+                  })}
+                  </>);
                 })()}
 
                 {selectedLeaderPredictions.length === 0 ? (
