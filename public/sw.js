@@ -1,4 +1,4 @@
-const CACHE_NAME = 'elshamadan-wc26-v2'; // ← غيّرنا الاسم
+const CACHE_NAME = 'elshamadan-wc26-v3'; // ← غيّرنا الاسم + استراتيجية Network-First للصفحات
 
 const APP_SHELL = ['/', '/Shedan_logo.png', '/manifest.webmanifest'];
 
@@ -24,28 +24,49 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  
-  // ← حذفنا السطر القديم بالدومين الغلط
+
+  // ── API و Supabase: مباشر من السيرفر دايماً (داتا حيّة، مش بتتخزن) ──
   if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase')) return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
+  // ── الأصول الثابتة (صور/خطوط): Cache-First — سريعة ونادراً ما تتغير ──
+  const isStaticAsset = /\.(png|jpe?g|svg|ico|webp|gif|woff2?|ttf)$/i.test(url.pathname);
 
-      return fetch(event.request)
-        .then((response) => {
-          if (
-            response.ok &&
-            event.request.url.startsWith(self.location.origin) &&
-            !event.request.url.includes('_next/webpack-hmr')
-          ) {
-            const cloned = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
-          }
-          return response;
-        })
-        .catch(() => caches.match('/'));
-    })
+  if (isStaticAsset) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request)
+          .then((response) => {
+            if (response.ok && event.request.url.startsWith(self.location.origin)) {
+              const cloned = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
+            }
+            return response;
+          })
+          .catch(() => caches.match('/'));
+      })
+    );
+    return;
+  }
+
+  // ── الصفحات والـ JS/CSS: Network-First — نجيب آخر نسخة من النت الأول ──
+  // كده التعديلات توصل للأعضاء فوراً مع أول refresh، ولو النت فشل نرجع للكاش (offline)
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (
+          response.ok &&
+          event.request.url.startsWith(self.location.origin) &&
+          !event.request.url.includes('_next/webpack-hmr')
+        ) {
+          const cloned = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(event.request).then((cached) => cached || caches.match('/'))
+      )
   );
 });
 
