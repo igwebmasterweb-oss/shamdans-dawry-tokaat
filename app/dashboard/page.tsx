@@ -3,6 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+// ✅ نظام الإشعارات المركزي (نفس المستخدم في صفحة ليجاتي)
+import { useNotifications, sendNotification, getNotificationText } from '../../lib/useNotifications';
 
 interface Profile {
   id: string;
@@ -449,6 +451,9 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [myRoundFilter, setMyRoundFilter]     = useState('');
   const [leaderRoundFilter, setLeaderRoundFilter] = useState('');
   const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
+  // ✅ الإشعارات (جرس الداش بورد) — نفس منطق صفحة ليجاتي
+  const [showNotif, setShowNotif] = useState(false);
+  const { notifications, unreadCount, markRead } = useNotifications();
   const getPenaltyPoints = (userId?: string | null) =>
     userId ? Number(penaltyMap[userId] || 0) : 0;
 
@@ -1239,6 +1244,69 @@ predicted_first_scorer_id: row.predicted_first_scorer_id ?? null,
 };
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
 
+  // ✅ الرد على دعوة ليج من جرس الداش بورد (نفس منطق صفحة ليجاتي)
+  const respondToInvite = async (notif: any, accept: boolean) => {
+    if (!user) return;
+    const { league_id, league_name, from_user_id } = notif.data;
+    try {
+      const { data: inviteRow, error: inviteErr } = await supabase
+        .from('mini_league_invitations')
+        .select('id, status')
+        .eq('league_id', league_id)
+        .eq('invited_user', user.id)
+        .maybeSingle();
+      if (inviteErr) throw inviteErr;
+
+      if (!inviteRow) {
+        alert('❌ الدعوة غير موجودة أو تم حذفها');
+        await markRead(notif.id);
+        return;
+      }
+      if (inviteRow.status !== 'pending') {
+        alert('ℹ️ تم التعامل مع هذه الدعوة بالفعل');
+        await markRead(notif.id);
+        return;
+      }
+
+      const { error: updateInviteErr } = await supabase
+        .from('mini_league_invitations')
+        .update({ status: accept ? 'accepted' : 'declined' })
+        .eq('id', inviteRow.id);
+      if (updateInviteErr) throw updateInviteErr;
+
+      if (accept) {
+        const { data: existingMember, error: existingErr } = await supabase
+          .from('mini_league_members')
+          .select('league_id')
+          .eq('league_id', league_id)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (existingErr) throw existingErr;
+
+        if (!existingMember) {
+          const { error: memberInsertErr } = await supabase
+            .from('mini_league_members')
+            .insert({ league_id, user_id: user.id, role: 'member' });
+          if (memberInsertErr) throw memberInsertErr;
+        }
+
+        await sendNotification(from_user_id, 'invite_accepted', {
+          league_id, league_name, invited_user_name: displayName,
+        });
+        setLeagueJoinMsg(`✅ انضممت لـ "${league_name}"`);
+      } else {
+        await sendNotification(from_user_id, 'invite_declined', {
+          league_id, league_name, invited_user_name: displayName,
+        });
+        setLeagueJoinMsg('تم رفض الدعوة');
+      }
+
+      await markRead(notif.id);
+    } catch (err: any) {
+      alert('❌ ' + (err.message || 'حدث خطأ أثناء التعامل مع الدعوة'));
+    }
+  };
+
   const handlePushSubscribe = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       alert('المتصفح ده مش بيدعم الإشعارات. استخدم Chrome أو Edge');
@@ -1642,6 +1710,18 @@ const myFilteredPredictionsSorted = [...predictions]
             <Link href="/my-leagues" style={{ padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(59,130,246,.3)', background: 'rgba(59,130,246,.08)', color: '#93c5fd', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               🏆 ليجاتي
             </Link>
+            {/* ✅ جرس الإشعارات — يعرض الإعلانات ودعوات الليج (قبول/رفض) */}
+            <button
+              onClick={() => setShowNotif(true)}
+              style={{ position: 'relative', padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(217,178,95,.3)', background: 'rgba(217,178,95,.08)', color: '#f2d79e', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              🔔 الإشعارات
+              {unreadCount > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -4, background: '#c93a2f', color: '#fff', borderRadius: 999, minWidth: 18, height: 18, fontSize: 10, fontWeight: 900, display: 'grid', placeItems: 'center', padding: '0 4px' }}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
             <button onClick={() => setShowReferral(true)} style={{ padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(39,176,110,.3)', background: 'rgba(39,176,110,.08)', color: '#5effa8', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               🎁 ادعُ صديق
               {referralCount > 0 && <span style={{ background: 'rgba(39,176,110,.2)', borderRadius: 999, padding: '1px 7px', fontSize: 11 }}>{referralCount}</span>}
@@ -2480,6 +2560,46 @@ const myFilteredPredictionsSorted = [...predictions]
     </div>
   </div>
 )}
+
+      {/* ══ NOTIFICATIONS MODAL (نفس ستايل صفحة ليجاتي) ══ */}
+      {showNotif && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', backdropFilter: 'blur(6px)', display: 'grid', placeItems: 'center', zIndex: 1000, padding: 20 }} onClick={() => setShowNotif(false)}>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 24, padding: 24, width: '100%', maxWidth: 420, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>🔔 الإشعارات</div>
+              <button onClick={() => setShowNotif(false)} style={{ background: 'var(--surface-3)', border: '1px solid var(--line)', borderRadius: 10, width: 34, height: 34, cursor: 'pointer', color: 'var(--text)', fontSize: 16, display: 'grid', placeItems: 'center' }}>✕</button>
+            </div>
+
+            {/* Empty state */}
+            {notifications.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '36px 0', color: 'var(--muted)' }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>🔔</div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>لا توجد إشعارات بعد</div>
+                <div style={{ fontSize: 12, marginTop: 6, color: 'var(--muted)', opacity: .7 }}>هتظهر هنا الإعلانات ودعوات الليج</div>
+              </div>
+            ) : (
+              notifications.map((n: any) => (
+                <div key={n.id} className="notif-item" style={{ padding: '14px 0', borderBottom: '1px solid var(--line)', opacity: n.is_read ? 0.5 : 1, transition: 'opacity .25s' }}>
+                  <div style={{ fontSize: 13, fontWeight: n.is_read ? 600 : 800, lineHeight: 1.65, color: n.is_read ? 'var(--muted)' : 'var(--text)', marginBottom: 5 }}>
+                    {getNotificationText(n)}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: n.type === 'invite' && !n.is_read ? 10 : 0 }}>
+                    {new Date(n.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  {n.type === 'invite' && !n.is_read && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => respondToInvite(n, true)} className="action-btn" style={{ background: 'rgba(39,176,110,.15)', border: '1px solid rgba(39,176,110,.25)', color: '#94f0c0', borderRadius: 12, padding: '8px 20px', fontSize: 13 }}>✅ قبول</button>
+                      <button onClick={() => respondToInvite(n, false)} className="action-btn" style={{ background: 'rgba(201,58,47,.1)', border: '1px solid rgba(201,58,47,.2)', color: '#ff9c91', borderRadius: 12, padding: '8px 20px', fontSize: 13 }}>❌ رفض</button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 16 }}>
           {[
