@@ -1592,9 +1592,13 @@ const myFilteredPredictionsSorted = [...predictions]
           .score-row { padding: 10px 12px; gap: 8px; border-radius: 14px; }
           .field-row { padding: 10px 12px; gap: 8px; border-radius: 14px; }
 
-          /* أزرار +/- : منطقة لمس أكبر (44px الحد الموصى به) */
-          .score-btn { width: 44px; height: 44px; border-radius: 13px; font-size: 22px; }
-          .score-val { font-size: 24px; min-width: 36px; }
+          /* أزرار +/- : حجم متوازن يرتاح جوّا بوكس الفريق (بوكسين جنب بعض) */
+          .score-btn { width: 40px; height: 40px; border-radius: 12px; font-size: 21px; }
+          .score-val { font-size: 22px; min-width: 28px; }
+          /* بوكس إدخال توقع النتيجة: تصغير المسافات الداخلية عشان ميطلعش برّه الشاشة */
+          .score-input-box { padding: 10px 8px !important; }
+          .score-input-box > div:last-child { gap: 6px !important; }
+          .score-input-row { gap: 6px !important; }
 
           /* التابات الرئيسية حاويتها scroll أفقي → flex-shrink:0 يخليها تمرّ ناعم بدل التزاحم */
           .tab-btn { padding: 9px 16px; font-size: 13px; flex-shrink: 0; }
@@ -2902,18 +2906,18 @@ const myFilteredPredictionsSorted = [...predictions]
                           <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 12 }}>توقّع النتيجة</div>
 
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, marginBottom: 10, alignItems: 'center' }}>
-                            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '12px 16px' }}>
+                            <div className="score-input-box" style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '12px 16px' }}>
                               <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 8, textAlign: 'center' }}>{match.teams.home.name}</div>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                              <div className="score-input-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                                 <button className="score-btn" onClick={() => setForm(match.fixture.id, { homeScore: Math.max(0, (form.homeScore || 0) - 1) })}>−</button>
                                 <span className="score-val">{form.homeScore || 0}</span>
                                 <button className="score-btn plus" onClick={() => setForm(match.fixture.id, { homeScore: (form.homeScore || 0) + 1 })}>+</button>
                               </div>
                             </div>
                             <div style={{ textAlign: 'center', color: 'var(--muted)', fontWeight: 800, fontSize: 16 }}>VS<br /><span style={{ fontSize: 10 }}>—</span></div>
-                            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '12px 16px' }}>
+                            <div className="score-input-box" style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '12px 16px' }}>
                               <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 8, textAlign: 'center' }}>{match.teams.away.name}</div>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                              <div className="score-input-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                                 <button className="score-btn" onClick={() => setForm(match.fixture.id, { awayScore: Math.max(0, (form.awayScore || 0) - 1) })}>−</button>
                                 <span className="score-val">{form.awayScore || 0}</span>
                                 <button className="score-btn plus" onClick={() => setForm(match.fixture.id, { awayScore: (form.awayScore || 0) + 1 })}>+</button>
