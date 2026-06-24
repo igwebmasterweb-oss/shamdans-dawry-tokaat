@@ -11,6 +11,8 @@ export default function AdminPage() {
   const [matches, setMatches]         = useState<any[]>([]);
   const [predictions, setPredictions] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  // خريطة بيانات البروفايل الكاملة (تليفون/فيسبوك/فريق...) من جدول profiles
+  const [profilesMap, setProfilesMap] = useState<Record<string, any>>({});
   const [leagues, setLeagues]         = useState<any[]>([]);
   const [leagueMembers, setLeagueMembers] = useState<Record<string,any[]>>({});
   const [expandedLeague, setExpandedLeague] = useState<string|null>(null);
@@ -54,6 +56,11 @@ export default function AdminPage() {
   const [breakdownUser, setBreakdownUser]   = useState<any>(null);
   const [breakdownPreds, setBreakdownPreds] = useState<any[]>([]);
   const [showBreakdown, setShowBreakdown]   = useState(false);
+  // ⑩ إعادة حساب نقاط مستخدم واحد من نافذة التفاصيل
+  const [recalcingUser, setRecalcingUser] = useState(false);
+  // ⑧ بحث بالاسم/الإيميل في التوقعات والصدارة
+  const [predSearch, setPredSearch] = useState('');
+  const [lbSearch, setLbSearch] = useState('');
 const [participantsCount, setParticipantsCount] = useState(0);
   const autoIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const [totalPredictionsCount, setTotalPredictionsCount] = useState(0);
@@ -79,7 +86,7 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
       const data = await res.json();
       const apiMatches = data.response || [];
       const { data: sbFixtures } = await supabase.from('fixtures')
-        .select('api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,went_extra_time,red_card_in_match,penalty_in_match,both_teams_scored');
+        .select('api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,first_scorer_id,scorers_ids_json,went_extra_time,red_card_in_match,penalty_in_match,both_teams_scored,updated_at');
       const sbMap = new Map(sbFixtures?.map((f: any) => [f.api_fixture_id, f]) || []);
       const merged = apiMatches.map((m: any) => {
         const sb = sbMap.get(m.fixture.id);
@@ -89,10 +96,13 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
           actual_home_score:  sb?.actual_home_score ?? null,
           actual_away_score:  sb?.actual_away_score ?? null,
           first_scorer:       sb?.first_scorer ?? '',
+          first_scorer_id:    sb?.first_scorer_id ?? null,
+          scorers_ids_json:   sb?.scorers_ids_json ?? [],
           went_extra_time:    sb?.went_extra_time ?? false,
           red_card_in_match:  sb?.red_card_in_match ?? false,
           penalty_in_match:   sb?.penalty_in_match ?? false,
           both_teams_scored:  sb?.both_teams_scored ?? false,
+          updated_at:         sb?.updated_at ?? null,
         };
       });
       setMatches(merged);
@@ -163,17 +173,26 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
 
 const loadLeaderboard = useCallback(async () => {
   try {
-    const [{ data }, { count }] = await Promise.all([
+    const [{ data }, { count }, { data: profs }] = await Promise.all([
       supabase.from('user_points').select('*').order('total_points', { ascending: false }),
       supabase.from('user_points').select('*', { count: 'exact', head: true }),
+      // بيانات البروفايل الكاملة (تليفون/فيسبوك/فريق/تاريخ ميلاد)
+      supabase.from('profiles').select('id,full_name,phone,facebook_url,facebook_id,football_team,date_of_birth,avatar_url,referral_code,created_at'),
     ]);
 
     setParticipantsCount(count ?? 0);
 
-    setLeaderboard((data || []).map((row: any) => ({
+    // خريطة البروفايل بـ user_id
+    const pMap: Record<string, any> = {};
+    (profs || []).forEach((pr: any) => { pMap[pr.id] = pr; });
+    setProfilesMap(pMap);
+
+    setLeaderboard((data || []).map((row: any) => {
+      const prof = pMap[row.user_id] || {};
+      return {
       user_id: row.user_id,
       user_email: row.user_email,
-      full_name: row.full_name,
+      full_name: row.full_name || prof.full_name,
       total: row.total_points || 0,
       count: row.predictions_count || 0,
       referral_count: row.referral_count || 0,
@@ -181,7 +200,16 @@ const loadLeaderboard = useCallback(async () => {
       facebook_bonus_awarded: row.facebook_bonus_awarded ?? false,
       profile_completed: row.profile_completed ?? false,
       bonus_points: row.bonus_points ?? 0,
-    })));
+      // ── بيانات البروفايل للعرض في نافذة التفاصيل ──
+      phone: prof.phone || null,
+      facebook_url: prof.facebook_url || null,
+      facebook_id: prof.facebook_id || null,
+      football_team: prof.football_team || null,
+      date_of_birth: prof.date_of_birth || null,
+      avatar_url: prof.avatar_url || row.avatar_url || null,
+      referral_code: prof.referral_code || null,
+      };
+    }));
   } catch (err) {
     console.error('loadLeaderboard:', err);
   }
@@ -513,11 +541,29 @@ const loadLeaderboard = useCallback(async () => {
     a.download = `leaderboard-${new Date().toISOString().slice(0,10)}.csv`; a.click();
   };
 
+  // تطبيع اسم الهداف: يشيل الحركات (Muñoz→munoz) + lowercase + trim
+  const normalizeScorerName = (name: string | null | undefined): string =>
+    (name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
   const openBreakdown = (p: any) => {
   const userPreds = predictions
     .filter(pr => pr.user_id === p.user_id && pr.points !== null)
     .map(pr => {
       const items: { icon: string; label: string; pts: number }[] = [];
+
+      // جلب حقائق الماتش من matches state (لأنها في جدول fixtures مش predictions)
+      const mx = matches.find((m: any) => m.fixture.id === pr.fixture_id);
+      const actualFirstScorer = mx?.first_scorer ?? '';
+      const actualFirstScorerId = mx?.first_scorer_id ?? null;
+      const scorersIds: number[] = Array.isArray(mx?.scorers_ids_json) ? mx.scorers_ids_json : [];
+      const redCardInMatch = mx?.red_card_in_match ?? false;
+      const penaltyInMatch = mx?.penalty_in_match ?? false;
+      const wentExtraTime = mx?.went_extra_time ?? false;
+      const bothTeamsScored = mx?.both_teams_scored ?? false;
 
       const isExact =
         pr.predicted_home_score === pr.actual_home_score &&
@@ -544,42 +590,54 @@ const loadLeaderboard = useCallback(async () => {
         }
       }
 
-      if (
-        pr.predicted_first_scorer &&
-        pr.first_scorer_actual &&
-        pr.predicted_first_scorer.trim().toLowerCase() ===
-          pr.first_scorer_actual.trim().toLowerCase()
-      ) {
+      // أول هدف: أولوية للـ ID (مطابقة دقيقة)، ثم fallback بالاسم المُطبَّع (زي منطق update-results)
+      const predScorerId =
+        pr.predicted_first_scorer_id !== null && pr.predicted_first_scorer_id !== undefined
+          ? Number(pr.predicted_first_scorer_id)
+          : null;
+      const scorerExactById =
+        predScorerId !== null && actualFirstScorerId !== null &&
+        predScorerId === Number(actualFirstScorerId);
+      const scorerInListById =
+        predScorerId !== null && scorersIds.map(Number).includes(predScorerId);
+      const scorerByName =
+        !!pr.predicted_first_scorer && !!actualFirstScorer &&
+        normalizeScorerName(pr.predicted_first_scorer) === normalizeScorerName(actualFirstScorer);
+
+      if (scorerExactById || scorerByName) {
         items.push({ icon: '⚽', label: 'أول هدف صح', pts: 3 });
+      } else if (scorerInListById) {
+        items.push({ icon: '⚽', label: 'سجّل هدف (مش الأول)', pts: 1 });
       }
 
-      if (pr.predicted_red_card && pr.red_card_in_match) {
+      if (pr.predicted_red_card && redCardInMatch) {
         items.push({ icon: '🟥', label: 'كرت أحمر صح', pts: 3 });
       }
-      if (!pr.red_card_in_match && pr.predicted_red_card) {
+      if (!redCardInMatch && pr.predicted_red_card) {
         items.push({ icon: '🟥', label: 'كرت أحمر غلط', pts: -1 });
       }
 
-      if (pr.predicted_penalty && pr.penalty_in_match) {
+      if (pr.predicted_penalty && penaltyInMatch) {
         items.push({ icon: '🥅', label: 'ركلة جزاء صح', pts: 3 });
       }
-      if (!pr.penalty_in_match && pr.predicted_penalty) {
+      if (!penaltyInMatch && pr.predicted_penalty) {
         items.push({ icon: '🥅', label: 'ركلة جزاء غلط', pts: -1 });
       }
 
-      if (pr.predicted_extra_time && pr.went_extra_time) {
+      if (pr.predicted_extra_time && wentExtraTime) {
         items.push({ icon: '⏱️', label: 'وقت إضافي صح', pts: 2 });
       }
-      if (!pr.went_extra_time && pr.predicted_extra_time) {
+      if (!wentExtraTime && pr.predicted_extra_time) {
         items.push({ icon: '⏱️', label: 'وقت إضافي غلط', pts: -1 });
       }
 
-      if (pr.predicted_both_teams && pr.both_teams_scored) {
+      if (pr.predicted_both_teams && bothTeamsScored) {
         items.push({ icon: '🔄', label: 'الفريقين سجلا', pts: 2 });
       }
 
       return {
         ...pr,
+        first_scorer_actual: actualFirstScorer, // للعرض في نافذة التفاصيل
         items,
         calcTotal: Math.max(0, items.reduce((s, i) => s + i.pts, 0)),
       };
@@ -589,6 +647,22 @@ const loadLeaderboard = useCallback(async () => {
   setBreakdownPreds(userPreds);
   setShowBreakdown(true);
 };
+
+  // ⑩ إعادة حساب نقاط مستخدم واحد (يستدعي refreshuserpoints) ثم يحدّث الواجهة
+  const recalcSingleUser = async (userId: string, name: string) => {
+    setRecalcingUser(true);
+    try {
+      const { error } = await supabase.rpc('refreshuserpoints', { p_userid: userId });
+      if (error) throw error;
+      // إعادة تحميل الصدارة لجلب النقاط المحدّثة
+      await loadLeaderboard();
+      showMsg(`✅ تم إعادة حساب نقاط "${name}"`);
+      setShowBreakdown(false);
+    } catch (err: any) {
+      showMsg('❌ ' + (err?.message || 'خطأ في إعادة الحساب'), 'error');
+    }
+    setRecalcingUser(false);
+  };
   // ─── Render states ─────────────────────────────────────
   if (loading) return (
     <div style={{display:'grid',placeItems:'center',height:'100vh',background:'#070809',color:'#d9b25f',fontFamily:"'Cairo',sans-serif",gap:16,fontSize:18}}>
@@ -632,18 +706,33 @@ const avgPoints = participantsCount > 0
   : 0;
   const ungradedCount = ungradedPredictionsCount;
   const noResultCount   = matches.filter(m => m.actual_home_score === null && !m.is_open).length;
+  // ③ ماتشات خلصت (ليها نتيجة) بس لسة مفتوحة للتوقع — حماية من نسيان الغلق
+  const finishedButOpen = matches.filter(m => m.actual_home_score !== null && m.actual_home_score !== undefined && m.is_open);
   const topScore        = leaderboard.length > 0 ? Math.max(...leaderboard.map((p:any) => p.total)) : 0;
   const zeroPointsCount = leaderboard.filter((p:any) => p.total === 0).length;
 
   // ⑦ filtered predictions ✅
+  // ⑧ بحث التوقعات (اسم/إيميل)، مُطبَّع
+  const predSearchQ = normalizeScorerName(predSearch);
   const visiblePredictions = predictions.filter(p => {
     if (predRoundFilter !== 'all') {
       const m = matches.find(m => m.fixture.id === p.fixture_id);
       if (!m || m.league?.round !== predRoundFilter) return false;
     }
    if (predStatusFilter === 'ungraded' && p.points !== null) return false;
+    if (predSearchQ) {
+      const hay = normalizeScorerName(`${p.user_name || ''} ${p.user_email || ''}`);
+      if (!hay.includes(predSearchQ)) return false;
+    }
     return true;
   });
+
+  // ⑧ بحث الصدارة (اسم/إيميل)، مُطبَّع — مع الحفاظ على الترتيب الأصلي
+  const lbSearchQ = normalizeScorerName(lbSearch);
+  const visibleLeaderboard = lbSearchQ
+    ? leaderboard.filter((p: any) =>
+        normalizeScorerName(`${p.full_name || ''} ${p.user_email || ''}`).includes(lbSearchQ))
+    : leaderboard;
 
   // ⑥ round badges ✅
   const roundOpenMap: Record<string,{open:number,total:number}> = {};
@@ -773,6 +862,20 @@ const avgPoints = participantsCount > 0
               <button onClick={openAllMatches} disabled={updating} className="action-btn" style={{background:'linear-gradient(135deg,#22c55e,#16a34a)'}}>🟢 فتح الكل</button>
               <button onClick={closeAllMatches} disabled={updating} className="action-btn" style={{background:'linear-gradient(135deg,#ef4444,#b91c1c)'}}>🔒 غلق الكل</button>
             </div>
+            {/* ③ تنبيه: ماتشات خلصت بس لسة مفتوحة للتوقع */}
+            {finishedButOpen.length > 0 && (
+              <div style={{background:'rgba(201,58,47,.1)',border:'1px solid rgba(201,58,47,.25)',borderRadius:14,padding:'12px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+                <span style={{fontSize:20}}>⚠️</span>
+                <div style={{flex:1,minWidth:200}}>
+                  <div style={{fontWeight:800,fontSize:13,color:'#ff9c91'}}>
+                    في {finishedButOpen.length} ماتش خلص بس لسة مفتوح للتوقع
+                  </div>
+                  <div style={{fontSize:11,color:'var(--muted)',fontWeight:700,marginTop:2}}>
+                    {finishedButOpen.slice(0,4).map((m:any)=>`${m.teams.home.name} × ${m.teams.away.name}`).join('، ')}{finishedButOpen.length>4?` وأخرى...`:''}
+                  </div>
+                </div>
+              </div>
+            )}
             {filteredMatches.map(match=>{
               const hasResult  = match.actual_home_score !== null && match.actual_home_score !== undefined;
               const matchPreds = predictions.filter(p=>p.fixture_id===match.fixture.id);
@@ -801,6 +904,8 @@ const avgPoints = participantsCount > 0
                         </span>
                       )}
                       {hasResult && <span style={{color:'var(--gold)',fontWeight:700}}>النتيجة: {match.actual_home_score} - {match.actual_away_score}</span>}
+                      {/* ①② آخر تحديث للنتيجة */}
+                      {match.updated_at && <span style={{color:'var(--muted)',fontSize:11}}>🕒 آخر تحديث: {new Date(match.updated_at).toLocaleString('ar-EG',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>}
                     </div>
                   </div>
                   <button onClick={()=>toggleMatchOpen(match)} className="action-btn" style={{background:match.is_open?'linear-gradient(135deg,#ef4444,#b91c1c)':'linear-gradient(135deg,#22c55e,#16a34a)',fontSize:12,padding:'8px 14px'}}>
@@ -835,6 +940,14 @@ const avgPoints = participantsCount > 0
               >
                 {predStatusFilter==='ungraded'?'✅ غير محسوبة فقط':'⬜ غير محسوبة فقط'}
               </button>
+              {/* ⑧ بحث بالاسم/الإيميل */}
+              <input
+                type="text"
+                value={predSearch}
+                onChange={e=>setPredSearch(e.target.value)}
+                placeholder="🔍 بحث بالاسم أو الإيميل"
+                style={{padding:'8px 14px',borderRadius:10,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--text)',fontFamily:"'Cairo',sans-serif",fontSize:13,outline:'none',minWidth:200}}
+              />
               <span style={{fontSize:12,color:'var(--muted)',marginRight:4}}>
                 يعرض {visiblePredictions.length} من {predictions.length}
               </span>
@@ -868,20 +981,36 @@ const avgPoints = participantsCount > 0
         {/* ══ LEADERBOARD ══ */}
         {activeTab==='leaderboard' && (
           <>
-            {/* ⑧ Export CSV leaderboard ✅ */}
-            <div style={{display:'flex',justifyContent:'flex-start',marginBottom:12}}>
-              <button onClick={exportLeaderboardCSV} className="export-btn">⬇️ تصدير CSV</button>
+            {/* ⑧ بحث الصدارة + Export CSV */}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+              <input
+                type="text"
+                value={lbSearch}
+                onChange={e=>setLbSearch(e.target.value)}
+                placeholder="🔍 بحث بالاسم أو الإيميل"
+                style={{padding:'8px 14px',borderRadius:10,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--text)',fontFamily:"'Cairo',sans-serif",fontSize:13,outline:'none',minWidth:220}}
+              />
+              {lbSearchQ && <span style={{fontSize:12,color:'var(--muted)'}}>يعرض {visibleLeaderboard.length} من {leaderboard.length}</span>}
+              <button onClick={exportLeaderboardCSV} className="export-btn" style={{marginRight:'auto'}}>⬇️ تصدير CSV</button>
             </div>
             <div style={{overflowX:'auto'}}>
               <table>
                 <thead><tr><th>#</th><th>اللاعب</th><th>الإيميل</th><th>النقاط</th><th>التوقعات</th><th></th></tr></thead>
                 <tbody>
-                  {leaderboard.length===0 ? (
-                    <tr><td colSpan={5} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
-                  ) : leaderboard.map((p,i)=>(
-                    <tr key={i}>
+                  {visibleLeaderboard.length===0 ? (
+                    <tr><td colSpan={6} style={{textAlign:'center',color:'var(--muted)',padding:40}}>{lbSearchQ ? 'لا يوجد مطابق' : 'لا توجد بيانات'}</td></tr>
+                  ) : visibleLeaderboard.map((p)=>{
+                    // الرتبة الأصلية من الصدارة الكاملة (تثبت حتى مع البحث)
+                    const i = leaderboard.indexOf(p);
+                    return (
+                    <tr key={p.user_id || i}>
                       <td style={{fontWeight:800,color:i<3?'var(--gold)':'var(--muted)'}}>{i<3?medals[i]:`#${i+1}`}</td>
-                      <td style={{fontWeight:700}}>{p.full_name || p.user_email?.split('@')[0] || '—'}</td>
+                      {/* اسم اللاعب قابل للنقر لعرض تفاصيل بروفايله */}
+                      <td style={{fontWeight:700}}>
+                        <span onClick={()=>openBreakdown(p)} style={{cursor:'pointer',color:'var(--gold)',borderBottom:'1px dashed rgba(217,178,95,.4)'}}>
+                          {p.full_name || p.user_email?.split('@')[0] || '—'}
+                        </span>
+                      </td>
                       <td style={{color:'var(--muted)',fontSize:12}}>{p.user_email}</td>
                       <td style={{color:'var(--gold)',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{p.total}</td>
                       <td style={{color:'var(--muted)'}}>{p.count}</td>
@@ -892,7 +1021,8 @@ const avgPoints = participantsCount > 0
                         >🔍 تفاصيل</button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1158,6 +1288,14 @@ const avgPoints = participantsCount > 0
                   <button
                     disabled={savingWinner}
                     onClick={async () => {
+                      // ── منع التكرار: لو فيه فائزين متسجلين للمرحلة دي فعلاً ──
+                      const existingWins = prizeWinners.filter((w: any) => w.phase_id === selectedPhase.id);
+                      if (existingWins.length > 0) {
+                        showMsg('⚠️ تم إعلان الفائزين لهذه المرحلة من قبل', 'error');
+                        return;
+                      }
+                      // ── تأكيد قبل الإعلان (إجراء لا يمكن التراجع عنه) ──
+                      if (!confirm(`تأكيد إعلان الفائزين لمرحلة "${selectedPhase.name}"؟\nسيتم تسجيل ${phaseLeaderboard.length} فائز ولا يمكن التراجع.`)) return;
                       setSavingWinner(true);
                       try {
                         for (let i = 0; i < phaseLeaderboard.length; i++) {
@@ -1193,14 +1331,80 @@ const avgPoints = participantsCount > 0
           <div onClick={e=>e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:24,padding:24,width:'100%',maxWidth:580,maxHeight:'88vh',overflowY:'auto',direction:'rtl'}}>
 
             {/* Header */}
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-              <div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:10}}>
+              <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:900,fontSize:16,color:'var(--gold)'}}>
                   {breakdownUser.full_name || breakdownUser.user_email?.split('@')[0] || '—'}
                 </div>
                 <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{breakdownUser.user_email}</div>
               </div>
-              <button onClick={()=>setShowBreakdown(false)} style={{background:'var(--surface-3)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center'}}>✕</button>
+              {/* ⑩ زر إعادة حساب نقاط هذا المستخدم فقط */}
+              <button
+                onClick={()=>recalcSingleUser(breakdownUser.user_id, breakdownUser.full_name || breakdownUser.user_email?.split('@')[0] || 'المستخدم')}
+                disabled={recalcingUser}
+                style={{padding:'8px 14px',borderRadius:10,border:'1px solid rgba(217,178,95,.3)',background:recalcingUser?'rgba(217,178,95,.05)':'rgba(217,178,95,.1)',color:'var(--gold)',fontSize:12,fontWeight:700,cursor:recalcingUser?'not-allowed':'pointer',fontFamily:'Cairo,sans-serif',whiteSpace:'nowrap',flexShrink:0}}
+              >
+                {recalcingUser?'⏳ جاري...':'🔄 إعادة حساب'}
+              </button>
+              <button onClick={()=>setShowBreakdown(false)} style={{background:'var(--surface-3)',border:'1px solid var(--line)',borderRadius:10,width:34,height:34,cursor:'pointer',color:'var(--text)',fontSize:16,display:'grid',placeItems:'center',flexShrink:0}}>✕</button>
+            </div>
+
+            {/* ── بيانات البروفايل الكاملة ── */}
+            <div style={{background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:16,padding:'14px 18px',marginBottom:20}}>
+              <div style={{fontSize:13,color:'var(--muted)',fontWeight:700,marginBottom:12}}>👤 بيانات العضو</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'10px 18px'}}>
+                {/* الاسم */}
+                <div>
+                  <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>الاسم الكامل</div>
+                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{breakdownUser.full_name || '—'}</div>
+                </div>
+                {/* الإيميل */}
+                <div>
+                  <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>الإيميل</div>
+                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)',wordBreak:'break-all'}}>{breakdownUser.user_email || '—'}</div>
+                </div>
+                {/* التليفون */}
+                <div>
+                  <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>التليفون</div>
+                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)',direction:'ltr',textAlign:'right'}}>
+                    {breakdownUser.phone
+                      ? <a href={`tel:${breakdownUser.phone}`} style={{color:'#60c3ff',textDecoration:'none'}}>{breakdownUser.phone}</a>
+                      : <span style={{color:'var(--muted)'}}>—</span>}
+                  </div>
+                </div>
+                {/* رابط الفيسبوك */}
+                <div>
+                  <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>📘 الفيسبوك</div>
+                  <div style={{fontSize:13,fontWeight:700}}>
+                    {breakdownUser.facebook_url
+                      ? <a href={breakdownUser.facebook_url} target="_blank" rel="noopener noreferrer" style={{color:'#60c3ff',textDecoration:'underline',wordBreak:'break-all'}}>فتح البروفايل</a>
+                      : breakdownUser.facebook_id
+                        ? <span style={{color:'var(--text)'}}>ID: {breakdownUser.facebook_id}</span>
+                        : <span style={{color:'var(--muted)'}}>—</span>}
+                  </div>
+                </div>
+                {/* الفريق المفضل */}
+                {breakdownUser.football_team && (
+                  <div>
+                    <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>⚽ الفريق المفضل</div>
+                    <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{breakdownUser.football_team}</div>
+                  </div>
+                )}
+                {/* تاريخ الميلاد */}
+                {breakdownUser.date_of_birth && (
+                  <div>
+                    <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>🎂 تاريخ الميلاد</div>
+                    <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{breakdownUser.date_of_birth}</div>
+                  </div>
+                )}
+                {/* كود الدعوة */}
+                {breakdownUser.referral_code && (
+                  <div>
+                    <div style={{fontSize:11,color:'var(--muted)',marginBottom:2}}>🤝 كود الدعوة</div>
+                    <div style={{fontSize:13,fontWeight:700,color:'var(--text)',direction:'ltr',textAlign:'right'}}>{breakdownUser.referral_code}</div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* ملخص الإجمالي */}
@@ -1281,6 +1485,12 @@ const avgPoints = participantsCount > 0
                   </div>
                 ) : (
                   <div style={{fontSize:11,color:'var(--muted)'}}>— لا نقاط من هذا الماتش</div>
+                )}
+                {/* ⑩ مؤشر تطابق النقاط: المحسوب من البنود (calcTotal) مقابل المحفوظ (points) */}
+                {(pr.calcTotal !== (pr.points || 0)) && (
+                  <div style={{marginTop:8,fontSize:11,fontWeight:700,color:'#ff9c91',background:'rgba(201,58,47,.1)',border:'1px solid rgba(201,58,47,.25)',borderRadius:8,padding:'5px 10px',display:'inline-block'}}>
+                    ⚠️ عدم تطابق: المحسوب من البنود {pr.calcTotal} · المحفوظ {pr.points || 0}
+                  </div>
                 )}
               </div>
             ))}
