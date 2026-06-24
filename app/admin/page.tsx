@@ -657,11 +657,16 @@ const loadLeaderboard = useCallback(async () => {
   // ── جلب بيانات البروفايل الكاملة (الإيميل من auth.users) عبر الدالة الآمنة ──
   setProfileDetails(null);
   setLoadingProfile(true);
-  supabase.rpc('admin_profile_full', { p_user_id: p.user_id })
-    .then(({ data, error }) => {
+  (async () => {
+    try {
+      const { data, error } = await supabase.rpc('admin_profile_full', { p_user_id: p.user_id });
       if (!error && data && data.length > 0) setProfileDetails(data[0]);
-    })
-    .finally(() => setLoadingProfile(false));
+    } catch (err) {
+      console.error('admin_profile_full:', err);
+    } finally {
+      setLoadingProfile(false);
+    }
+  })();
 };
 
   // ⑩ إعادة حساب نقاط مستخدم واحد (يستدعي refreshuserpoints) ثم يحدّث الواجهة
