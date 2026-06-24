@@ -1539,9 +1539,52 @@ const myDisplayedTotal =
   const correctPreds   = resolvedPreds.filter((p: any) => p.points && p.points > 0);
   const accuracyPct    = resolvedPreds.length > 0
   ? Math.round((correctPreds.length / resolvedPreds.length) * 100) : 0;
-const maxPossible    = resolvedPreds.length * 19;
+
+// ✅ دقة التوقع — تحسب على الجزء الأساسي بس (أقصى 13 للماتش: سكور 10 + هداف 3)
+// الإكسترا (كارت/بنلطي/وقت إضافي/الفريقين) والخصومات ما تدخلش في دقة التوقع
+const normScorer = (name: string | null | undefined): string =>
+  (name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+const BASE_MAX_PER_MATCH = 13; // 10 (سكور مظبوط) + 3 (هداف صح)
+
+// تحسب نقاط الأساسي لتوقع واحد بنفس منطق الأدمن (بدون إكسترا)
+const calcBasePoints = (pr: any): number => {
+  if (pr.actual_home_score === null || pr.actual_home_score === undefined) return 0;
+  let pts = 0;
+
+  // 1️⃣ النتيجة/السكور (10 أو 5 — مش الاتنين مع بعض)
+  const isExact =
+    pr.predicted_home_score === pr.actual_home_score &&
+    pr.predicted_away_score === pr.actual_away_score;
+  if (isExact) {
+    pts += 10;
+  } else {
+    const homeWin = pr.actual_home_score > pr.actual_away_score;
+    const awayWin = pr.actual_away_score > pr.actual_home_score;
+    const isDraw  = pr.actual_home_score === pr.actual_away_score;
+    const pHomeWin = pr.predicted_home_score > pr.predicted_away_score;
+    const pAwayWin = pr.predicted_away_score > pr.predicted_home_score;
+    const pDraw    = pr.predicted_home_score === pr.predicted_away_score;
+    if ((homeWin && pHomeWin) || (awayWin && pAwayWin) || (isDraw && pDraw)) pts += 5;
+  }
+
+  // 2️⃣ أول هداف (الهداف الفعلي من جدول الماتشات)
+  const mx = matches.find((m: any) => m.fixture?.id === pr.fixture_id);
+  const actualFirstScorer = mx?.first_scorer ?? '';
+  const scorerByName =
+    !!pr.predicted_first_scorer && !!actualFirstScorer &&
+    normScorer(pr.predicted_first_scorer) === normScorer(actualFirstScorer);
+  if (scorerByName) pts += 3;
+
+  // الحد الأقصى للأساسي 13 (ومفيش سالب لأن الأساسي ما فيهوش خصومات)
+  return Math.min(BASE_MAX_PER_MATCH, Math.max(0, pts));
+};
+
+// بسط النسبة = مجموع نقاط الأساسي لكل الماتشات المنتهية
+const basePointsTotal = resolvedPreds.reduce((s: number, pr: any) => s + calcBasePoints(pr), 0);
+const maxPossible    = resolvedPreds.length * BASE_MAX_PER_MATCH; // × 13
 const efficiencyPct  = maxPossible > 0
-  ? Math.round((predictionOnlyPoints / maxPossible) * 100) : 0;
+  ? Math.min(100, Math.round((basePointsTotal / maxPossible) * 100)) : 0;
 
   const roundsWithPred = new Set(
     predictions.map((p: any) => {
@@ -1740,24 +1783,6 @@ const myFilteredPredictionsSorted = [...predictions]
   📜 الشروط والأحكام
 </button>
           </div>
-
-        <div
-          style={{
-            marginTop: 14,
-            padding: '12px 14px',
-            borderRadius: 16,
-            border: '1px solid rgba(217,178,95,.18)',
-            background: 'linear-gradient(180deg,rgba(217,178,95,.10),rgba(255,255,255,.03))',
-            boxShadow: '0 10px 24px rgba(0,0,0,.16)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <span style={{ fontSize: 18, lineHeight: 1, color: '#ffe3a6', marginTop: 1 }}>✨</span>
-            <div style={{ fontSize: 13, lineHeight: 1.9, color: '#f3ead8', fontWeight: 700 }}>
-              نعمل على تحديث النظام يوميًا لتحسين الأداء ودقة البيانات وتقديم تجربة أفضل باستمرار. ولضمان ظهور آخر التحديثات بشكل صحيح، يُفضّل تنظيف كاش المتصفح من وقت لآخر.
-            </div>
-          </div>
-        </div>
         </div>
       </div>
 
@@ -2605,7 +2630,7 @@ const myFilteredPredictionsSorted = [...predictions]
           {[
             { label: 'توقعاتي',    value: predictions.length,                                        color: '#8ae0b3', icon: '⚽' },
             { label: 'المتسابقون', value: totalParticipants, color: '#7db1ff', icon: '👥' },
-           { label: 'دقة التوقع', value: maxPossible > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: maxPossible > 0 ? `${predictionOnlyPoints} من ${maxPossible} نقطة` : '' },
+           { label: 'دقة التوقع', value: maxPossible > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: maxPossible > 0 ? `${basePointsTotal} من ${maxPossible} نقطة` : '' },
             { label: 'الجولات',    value: streakCount > 0 ? `${streakCount} 🔥` : '—',               color: '#f97316', icon: '📅' },
           ].map((s: any) => (
            
