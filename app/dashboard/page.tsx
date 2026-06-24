@@ -1731,7 +1731,7 @@ const myFilteredPredictionsSorted = [...predictions]
               disabled={pushEnabled || pushLoading}
               style={{ padding: '8px 14px', borderRadius: 12, border: pushEnabled ? '1px solid rgba(39,176,110,.3)' : '1px solid rgba(255,255,255,.12)', background: pushEnabled ? 'rgba(39,176,110,.08)' : 'var(--surface-2)', color: pushEnabled ? '#5effa8' : 'var(--muted)', cursor: pushEnabled ? 'default' : 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: pushLoading ? 0.6 : 1, transition: 'all .2s' }}
             >
-              {pushEnabled ? '🔔 مفعّل' : pushLoading ? '...' : '🔔 إشعارات'}
+              {pushEnabled ? '✅ التنبيهات مفعّلة' : pushLoading ? '...' : '🔕 تفعيل التنبيهات'}
             </button>
             <button
   onClick={() => setShowTerms(true)}
