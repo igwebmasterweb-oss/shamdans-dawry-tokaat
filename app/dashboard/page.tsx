@@ -1579,6 +1579,42 @@ const myFilteredPredictionsSorted = [...predictions]
         .quick-input:focus { border-color:rgba(217,178,95,.4); }
         .alert-banner { animation: slideDown .4s cubic-bezier(0.16,1,0.3,1); }
         .pulse { animation: pulse 2s ease-in-out infinite; }
+
+        /* ══════ تحسينات الموبايل (≤ 600px) — بتعدّل على الـ classes بس، مفيش لمس للمنطق ══════ */
+        @media (max-width: 600px) {
+          /* منع الـ scroll الأفقي المزعج */
+          html, body { overflow-x: hidden; max-width: 100%; }
+          img, video { max-width: 100%; height: auto; }
+
+          /* بطاقات الماتشات: مسافات أصغر = محتوى أوضح */
+          .match-card { padding: 14px; border-radius: 18px; margin-bottom: 11px; }
+          .pred-box { padding: 10px 12px; border-radius: 14px; }
+          .score-row { padding: 10px 12px; gap: 8px; border-radius: 14px; }
+          .field-row { padding: 10px 12px; gap: 8px; border-radius: 14px; }
+
+          /* أزرار +/- : منطقة لمس أكبر (44px الحد الموصى به) */
+          .score-btn { width: 44px; height: 44px; border-radius: 13px; font-size: 22px; }
+          .score-val { font-size: 24px; min-width: 36px; }
+
+          /* التابات الرئيسية حاويتها scroll أفقي → flex-shrink:0 يخليها تمرّ ناعم بدل التزاحم */
+          .tab-btn { padding: 9px 16px; font-size: 13px; flex-shrink: 0; }
+          /* الجولات حاويتها flex-wrap → تسيبها تلفّ طبيعي (مفيش flex-shrink) */
+          .round-btn { padding: 7px 13px; font-size: 12px; }
+
+          /* عناصر الترتيب والمودال */
+          .rank-item { padding: 12px 14px; gap: 10px; border-radius: 16px; }
+          .medal-box { width: 38px; height: 38px; border-radius: 12px; font-size: 19px; }
+          .modal-box { padding: 20px; border-radius: 22px; }
+          .modal-overlay { padding: 12px; }
+          .save-btn { padding: 13px; font-size: 14px; }
+        }
+
+        /* شاشات صغيرة جداً (≤ 380px): تصغير إضافي خفيف */
+        @media (max-width: 380px) {
+          .match-card { padding: 12px; }
+          .score-btn { width: 42px; height: 42px; }
+          .tab-btn { padding: 8px 13px; font-size: 12px; }
+        }
       `}</style>
 
       <div style={{ background: 'linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01))', borderBottom: '1px solid var(--line)', padding: '12px 16px' }}>
