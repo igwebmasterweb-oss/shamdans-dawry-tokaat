@@ -1066,27 +1066,78 @@ if (refreshPointsError) throw refreshPointsError;
   const setForm = (fixtureId: number, patch: any) =>
     setPredForms(prev => ({ ...prev, [fixtureId]: { ...getForm({ fixture: { id: fixtureId } }), ...patch } }));
 
- // Updated file prepared with only submitPrediction hardening change.
-// NOTE: This downloadable artifact contains the exact safe replacement function
-// to paste into your live file, because the attached source is truncated in retrieval.
+// 🔧 تطبيع الاسم: حذف الأكسنت + توحيد الحالة + حذف المسافات الزائدة
+// (نفس فلسفة namesReferToSamePlayer في الباك إند لضمان الاتساق)
+const normalizeScorerName = (s: string | null | undefined): string => {
+  if (!s) return '';
+  return String(s)
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // حذف علامات الأكسنت (ñ→n, ć→c, ı→i...)
+    .replace(/[^a-z0-9\s.]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
 
+// 🔧 آخر كلمة (اسم العائلة) للمطابقة الاحتياطية
+const lastToken = (s: string): string => {
+  const parts = normalizeScorerName(s).replace(/\./g, ' ').split(' ').filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : '';
+};
+
+// 🔧 resolveFirstScorerId مُحصَّن: يجمع نطاق team_id + team_name معاً،
+// ويستخدم مطابقة مرنة (تطبيع الأكسنت/الحالة) ثم مطابقة احتياطية باسم العائلة
 const resolveFirstScorerId = async (match: any, scorerName?: string | null) => {
-if (!scorerName?.trim()) return null;
-const cleanName = scorerName.trim();
+  if (!scorerName?.trim()) return null;
+  const cleanName = scorerName.trim();
 
-let squadQuery = supabase
-.from('team_players')
-.select('player_id, player_name, team_name, team_id');
+  // اجمع كل المرشحين من النطاقين معاً (team_id لو متوفر + team_name كاحتياط)
+  const teamIds = [match?.db_home_team_id, match?.db_away_team_id].filter(
+    (v): v is number => typeof v === 'number'
+  );
+  const teamNames = [match?.teams?.home?.name, match?.teams?.away?.name].filter(
+    (v): v is string => typeof v === 'string' && v.length > 0
+  );
 
-let squadResult;
-if (match?.db_home_team_id && match?.db_away_team_id) {
-squadResult = await squadQuery.in('team_id', [match.db_home_team_id, match.db_away_team_id]);
-} else {
-squadResult = await squadQuery.in('team_name', [match.teams.home.name, match.teams.away.name]);
-}
+  const candidates: { player_id: number | null; player_name: string }[] = [];
 
-const squadMatch = (squadResult.data || []).find((p: any) => p.player_name === cleanName && p.player_id);
-return squadMatch?.player_id ?? null;
+  if (teamIds.length > 0) {
+    const { data } = await supabase
+      .from('team_players')
+      .select('player_id, player_name, team_id')
+      .in('team_id', teamIds);
+    if (data) candidates.push(...data);
+  }
+
+  if (candidates.length === 0 && teamNames.length > 0) {
+    const { data } = await supabase
+      .from('team_players')
+      .select('player_id, player_name, team_name')
+      .in('team_name', teamNames);
+    if (data) candidates.push(...data);
+  }
+
+  const valid = candidates.filter((p) => p.player_id != null);
+  if (valid.length === 0) return null;
+
+  // ① مطابقة دقيقة (الاسم كما هو)
+  const exact = valid.find((p) => p.player_name === cleanName);
+  if (exact) return exact.player_id ?? null;
+
+  // ② مطابقة مرنة بعد التطبيع (تجاهل الأكسنت/الحالة/المسافات)
+  const target = normalizeScorerName(cleanName);
+  const fuzzy = valid.find((p) => normalizeScorerName(p.player_name) === target);
+  if (fuzzy) return fuzzy.player_id ?? null;
+
+  // ③ مطابقة احتياطية باسم العائلة (آخر كلمة) — فقط لو فريدة لتجنب اللبس
+  const targetLast = lastToken(cleanName);
+  if (targetLast) {
+    const byLast = valid.filter((p) => lastToken(p.player_name) === targetLast);
+    if (byLast.length === 1) return byLast[0].player_id ?? null;
+  }
+
+  return null;
 };
 
 const submitPrediction = async (match: any) => {
