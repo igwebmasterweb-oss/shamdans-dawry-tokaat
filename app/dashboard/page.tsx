@@ -1691,6 +1691,10 @@ const myFilteredPredictionsSorted = [...predictions]
         .stat-card { background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:12px 10px; }
         .rank-item { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:14px; padding:14px 18px; background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01)); border:1px solid var(--line); border-radius:20px; margin-bottom:10px; transition:border-color .2s; }
         .rank-item.me { border-color:rgba(217,178,95,.28); background:linear-gradient(90deg,rgba(217,178,95,.10),rgba(255,255,255,.02)); }
+        /* ✅ كارت الماتش الشغّال — نصّين: يمين (العنوان+الفريقين+التاريخ) وشمال (التوقع) */
+        .live-match-card { display:flex; gap:12px; align-items:stretch; padding:14px 16px; border:1px solid rgba(59,130,246,.24); border-radius:18px; margin-bottom:14px; background:linear-gradient(90deg,rgba(59,130,246,.10),rgba(255,255,255,.02)); }
+        .live-match-right { flex:0 0 46%; min-width:0; display:flex; flex-direction:column; gap:8px; text-align:right; border-left:1px solid var(--line); padding-left:12px; }
+        .live-match-left  { flex:1 1 0; min-width:0; display:flex; flex-direction:column; justify-content:center; }
         .medal-box { width:44px; height:44px; border-radius:14px; background:rgba(217,178,95,.1); display:grid; place-items:center; font-size:22px; }
         .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.75); backdrop-filter:blur(6px); display:grid; place-items:center; z-index:1000; padding:20px; }
         .modal-box { background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015)),var(--surface); border:1px solid rgba(217,178,95,.2); border-radius:28px; padding:28px; width:100%; max-width:460px; box-shadow:0 24px 64px rgba(0,0,0,.6); }
@@ -1725,6 +1729,10 @@ const myFilteredPredictionsSorted = [...predictions]
           .tab-btn { padding: 9px 16px; font-size: 13px; flex-shrink: 0; }
           /* الجولات حاويتها flex-wrap → تسيبها تلفّ طبيعي (مفيش flex-shrink) */
           .round-btn { padding: 7px 13px; font-size: 12px; }
+
+          /* كارت الماتش الشغّال: يفضل نصّين على الموبايل بمسافات أصغر */
+          .live-match-card { padding: 12px; gap: 10px; border-radius: 16px; }
+          .live-match-right { flex-basis: 45%; padding-left: 10px; gap: 6px; }
 
           /* عناصر الترتيب والمودال */
           .rank-item { padding: 12px 14px; gap: 10px; border-radius: 16px; }
@@ -1979,26 +1987,25 @@ const myFilteredPredictionsSorted = [...predictions]
                     : null;
 
                   return (
-                    <div key={currentFixtureId} className="rank-item" style={{ marginBottom: 14, borderColor: 'rgba(59,130,246,.24)', background: 'linear-gradient(90deg,rgba(59,130,246,.10),rgba(255,255,255,.02))', padding: '14px 16px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, marginBottom: 10 }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: '#93c5fd', textAlign: 'right', lineHeight: 1.7 }}>🔵 التوقع الحالي للماتش الجاري</div>
-                        <div style={{ alignSelf: 'flex-start', padding: '4px 10px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 11, fontWeight: 800, lineHeight: 1.6 }}>بدأت المباراة</div>
-                      </div>
-
-                      <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap', textAlign: 'center', lineHeight: 1.9 }}>
+                    <div key={currentFixtureId} className="live-match-card">
+                      {/* ✅ النص اليمين: العنوان + الفريقين + التاريخ/الوقت (كل واحد في سطر) */}
+                      <div className="live-match-right">
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#93c5fd', lineHeight: 1.6 }}>🔵 التوقع الحالي</div>
+                        <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', lineHeight: 1.7, justifyContent: 'flex-end' }}>
                           {currentMatch?.teams?.home?.logo && <img src={currentMatch.teams.home.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
                           <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}</span>
                           {currentMatch?.teams?.away?.logo && <img src={currentMatch.teams.away.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
                         </div>
-
                         {currentMatchDate && (
-                          <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.8 }}>
-                            {currentMatchDate}
+                          <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }}>
+                            🕒 {currentMatchDate}
                           </div>
                         )}
+                        <div style={{ alignSelf: 'flex-end', padding: '3px 9px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 10, fontWeight: 800, lineHeight: 1.6 }}>بدأت المباراة</div>
                       </div>
 
+                      {/* ✅ النص الشمال: التوقع زي ما هو */}
+                      <div className="live-match-left">
                       {currentPrediction ? (
                         <div style={{ display: 'grid', gap: 8 }}>
                           <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
@@ -2034,6 +2041,7 @@ const myFilteredPredictionsSorted = [...predictions]
                           لا يوجد توقع لهذا العضو على الماتش الجاري.
                         </div>
                       )}
+                      </div>{/* نهاية live-match-left */}
                     </div>
                   );
                   })}
