@@ -84,6 +84,20 @@ export default function HomePage() {
       reward: '5,000 جنيه',
       icon: '🏅',
     },
+    {
+      phase: 'دور الـ 16',
+      date: '9 يوليو 2026',
+      desc: 'دور جديد أضفناه بناءً على طلب المتسابقين — أعلى نقاط في هذه المرحلة يحصل على الجائزة وعند التساوي تُقسم.',
+      reward: '5,000 جنيه',
+      icon: '🏅',
+    },
+    {
+      phase: 'الطريق للنهائي',
+      date: '19 يوليو 2026',
+      desc: 'مرحلة مجمّعة تشمل (ربع النهائي + نصف النهائي + مباراة المركز الثالث + النهائي) — أعلى نقاط مجمّعة يفوز بالجائزة.',
+      reward: '5,000 جنيه',
+      icon: '🛣️',
+    },
   ];
 
   const grandPrizes = [
@@ -726,12 +740,28 @@ export default function HomePage() {
 
         <section style={{ padding: '44px 20px' }}>
           <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+            {/* بانر تشجيعي — إعلان عن الأدوار الجديدة والفائزين الأكثر */}
+            <div style={{
+              background: 'linear-gradient(90deg,rgba(217,178,95,.18),rgba(217,178,95,.06))',
+              border: '1px solid rgba(217,178,95,.3)',
+              borderRadius: 18,
+              padding: '16px 20px',
+              marginBottom: 26,
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#fff1ce', lineHeight: 1.8, marginBottom: 6 }}>
+                ✨ بناءً على طلب المتسابقين — أضفنا أدوار جديدة وفائزين أكتر! فرص أكبر للجميع 🏆
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.9 }}>
+                أضفنا دورين جديدين: <span style={{ color: 'var(--gold)', fontWeight: 700 }}>دور الـ 16</span> بجائزة مستقلة، و<span style={{ color: 'var(--gold)', fontWeight: 700 }}>الطريق للنهائي</span> وهي مرحلة مجمّعة تشمل ربع النهائي ونصف النهائي ومباراة المركز الثالث والنهائي.
+              </div>
+            </div>
+
             <div style={{ textAlign: 'center', marginBottom: 26 }}>
               <div style={{ color: 'var(--gold)', fontWeight: 900, marginBottom: 8 }}>الجوائز</div>
               <h2 style={{ fontSize: 'clamp(28px,4vw,42px)', lineHeight: 1.2, marginBottom: 10 }}>جوائز حقيقية طوال البطولة</h2>
               <p style={{ maxWidth: 760, margin: '0 auto', color: 'var(--muted)', lineHeight: 1.9 }}>
-                تم ترتيب بطاقات الجوائز في صفين، كل صف فيه بطاقتان، مع وضع التاريخ في سطر منفصل والجائزة في آخر
-                البطاقة بشكل أوضح.
+                جوائز نقدية في كل مرحلة من مراحل البطولة، بالإضافة للجوائز الكبرى في النهاية — وعند التساوي تُقسم الجائزة.
               </p>
             </div>
 

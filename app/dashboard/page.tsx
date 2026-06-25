@@ -2799,6 +2799,23 @@ const myFilteredPredictionsSorted = [...predictions]
           </div>
         )}
 
+        {/* بانر تشجيعي ذهبي — يحفّز اللاعب على المشاركة والتوقع */}
+        <div style={{
+          background: 'linear-gradient(90deg,rgba(217,178,95,.18),rgba(217,178,95,.06))',
+          border: '1px solid rgba(217,178,95,.3)',
+          borderRadius: 18,
+          padding: '14px 18px',
+          marginBottom: 24,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <div style={{ fontSize: 26, flexShrink: 0 }}>🌟</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff1ce', lineHeight: 1.7 }}>
+            شارك في مسابقة حلمك وزود نقاطك — كل مشاركة وتوقع بيقرّبك من الذهب في نهاية البطولة!
+          </div>
+        </div>
+
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: '16px 20px', marginBottom: 24 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 12 }}>🏆 انضم لليج بكود سريع</div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
