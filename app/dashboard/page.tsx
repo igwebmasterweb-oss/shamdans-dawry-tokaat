@@ -339,6 +339,60 @@ function useCountUp(target: number, duration = 800) {
   return display;
 }
 
+// ════════════════════════════════════════════════════════════════════
+// 🎨 مكوّن موحّد لعرض بريك داون النقاط (شارات جمالية)
+// يتستخدم في كل أماكن عرض التوقعات: مودال العضو + تاب التوقعات + تاب توقعاتي
+// ════════════════════════════════════════════════════════════════════
+function PointsBreakdown({ items, total }: { items: { icon: string; label: string; pts: number }[]; total: number }) {
+  if (!items || items.length === 0) {
+    return (
+      <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, padding: '8px 0' }}>
+        مفيش نقاط من هذا الماتش
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--gold)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        🧮 النقاط جت منين
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {items.map((it, i) => {
+          const positive = it.pts >= 0;
+          return (
+            <span
+              key={i}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                fontSize: 11, fontWeight: 800, padding: '6px 10px', borderRadius: 999,
+                border: positive ? '1px solid rgba(39,176,110,.28)' : '1px solid rgba(201,58,47,.28)',
+                background: positive ? 'rgba(39,176,110,.10)' : 'rgba(201,58,47,.10)',
+                color: positive ? '#94f0c0' : '#ffb4b4',
+                fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+              }}
+            >
+              <span>{it.icon}</span>
+              <span>{it.label}</span>
+              <span style={{ fontWeight: 900 }}>{positive ? `+${it.pts}` : it.pts}</span>
+            </span>
+          );
+        })}
+      </div>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginTop: 2, padding: '8px 12px', borderRadius: 12,
+        background: 'linear-gradient(90deg,rgba(217,178,95,.10),rgba(217,178,95,.03))',
+        border: '1px solid rgba(217,178,95,.22)',
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)' }}>إجمالي نقاط الماتش</span>
+        <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
+          {total} نقطة
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const extractScorersList = (raw: any, fallbackFirst?: string | null) => {
     const names: string[] = [];
@@ -1596,6 +1650,94 @@ const maxPossible    = resolvedPreds.length * BASE_MAX_PER_MATCH; // × 13
 const efficiencyPct  = maxPossible > 0
   ? Math.min(100, Math.round((basePointsTotal / maxPossible) * 100)) : 0;
 
+// ════════════════════════════════════════════════════════════════════
+// 🧮 بريك داون نقاط التوقع لماتش واحد — مطابق 100% لمنطق update-results
+// بيرجّع بنود (أيقونة + وصف + نقاط) عشان العضو يفهم النقط جت منين.
+// المجموع لازم يساوي pred.points المحفوظة بالظبط (مفيش لخبطة).
+// البنود: اتجاه صح +5 | نتيجة بالظبط +5 | أول هداف +3 | سجّل هدف +1
+//        | كرت أحمر +3/-1 | ضربة جزاء +3/-1
+// (مفيش وقت إضافي ومفيش "الفريقين سجلا" لأنهم مش في نظام الحساب الرسمي)
+// ════════════════════════════════════════════════════════════════════
+const computeBreakdown = (pred: any): { items: { icon: string; label: string; pts: number }[]; total: number } => {
+  const items: { icon: string; label: string; pts: number }[] = [];
+
+  // لازم تكون فيه نتيجة فعلية محسومة
+  const actualHome = pred.actual_home_score;
+  const actualAway = pred.actual_away_score;
+  if (actualHome === null || actualHome === undefined || actualAway === null || actualAway === undefined) {
+    return { items, total: 0 };
+  }
+
+  // بيانات الماتش الفعلية (من predictions نفسها أو من جدول الماتشات matches)
+  const mx = matches.find((m: any) => m.fixture?.id === (pred.fixture_id || pred.api_fixture_id));
+  const actualFirstScorer = pred.first_scorer_actual ?? mx?.first_scorer ?? null;
+  const actualFirstScorerId =
+    (pred.first_scorer_id ?? mx?.first_scorer_id) != null
+      ? Number(pred.first_scorer_id ?? mx?.first_scorer_id)
+      : null;
+  const scorerIds: number[] = Array.isArray(mx?.scorers_ids_json)
+    ? mx.scorers_ids_json.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+    : [];
+  const redCardInMatch = (pred.red_card_in_match ?? mx?.red_card_in_match) === true;
+  const penaltyInMatch = (pred.penalty_in_match ?? mx?.penalty_in_match) === true;
+  const wentExtraTime  = (pred.went_extra_time ?? mx?.went_extra_time) === true;
+
+  const predHome = pred.predicted_home_score;
+  const predAway = pred.predicted_away_score;
+  const actualWinner = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw';
+  const predWinner   = predHome > predAway ? 'home' : predAway > predHome ? 'away' : 'draw';
+
+  // 1️⃣ الاتجاه (فائز/تعادل) — +5
+  if (actualWinner === predWinner) {
+    items.push({ icon: '✅', label: 'الاتجاه صح (فائز/تعادل)', pts: 5 });
+  }
+  // 2️⃣ النتيجة بالظبط — +5 إضافية (فوق الاتجاه)
+  if (predHome === actualHome && predAway === actualAway) {
+    items.push({ icon: '🎯', label: 'النتيجة بالظبط', pts: 5 });
+  }
+
+  // 3️⃣ أول هداف (أولوية للـ ID، ثم بالاسم) — +3 لأول هداف، +1 لو سجّل بس مش الأول
+  const predScorerName = pred.predicted_first_scorer || null;
+  const predScorerId =
+    pred.predicted_first_scorer_id != null ? Number(pred.predicted_first_scorer_id) : null;
+
+  const isFirstById = predScorerId !== null && actualFirstScorerId !== null && predScorerId === actualFirstScorerId;
+  const scoredById  = predScorerId !== null && scorerIds.includes(predScorerId);
+  const isFirstByName =
+    !!predScorerName && !!actualFirstScorer && normScorer(predScorerName) === normScorer(actualFirstScorer);
+
+  if (isFirstById || isFirstByName) {
+    items.push({ icon: '⚽', label: 'أول هداف صح', pts: 3 });
+  } else if (scoredById) {
+    items.push({ icon: '⚽', label: 'سجّل هدف (مش الأول)', pts: 1 });
+  }
+
+  // 4️⃣ كرت أحمر — +3 لو توقعه وحصل، -1 لو توقعه وماحصلش
+  if (pred.predicted_red_card === true && redCardInMatch) {
+    items.push({ icon: '🟥', label: 'كرت أحمر صح', pts: 3 });
+  } else if (pred.predicted_red_card === true && !redCardInMatch) {
+    items.push({ icon: '🟥', label: 'كرت أحمر غلط', pts: -1 });
+  }
+
+  // 5️⃣ ضربة جزاء — +3 لو توقعها وحصلت، -1 لو توقعها وماحصلتش
+  if (pred.predicted_penalty === true && penaltyInMatch) {
+    items.push({ icon: '🥅', label: 'ضربة جزاء صح', pts: 3 });
+  } else if (pred.predicted_penalty === true && !penaltyInMatch) {
+    items.push({ icon: '🥅', label: 'ضربة جزاء غلط', pts: -1 });
+  }
+
+  // 6️⃣ وقت إضافي — +2 لو توقعه وحصل، -1 لو توقعه وماحصلش
+  // (جاهز للعرض — يظهر بس لو العضو اختاره؛ هيتفعّل بعد إضافته في فورم التوقع + update-results للأدوار الإقصائية)
+  if (pred.predicted_extra_time === true && wentExtraTime) {
+    items.push({ icon: '⏱️', label: 'وقت إضافي صح', pts: 2 });
+  } else if (pred.predicted_extra_time === true && !wentExtraTime) {
+    items.push({ icon: '⏱️', label: 'وقت إضافي غلط', pts: -1 });
+  }
+
+  const total = items.reduce((s, i) => s + i.pts, 0);
+  return { items, total };
+};
+
   const roundsWithPred = new Set(
     predictions.map((p: any) => {
       const m = matches.find((m: any) => m.fixture.id === p.fixture_id);
@@ -2077,28 +2219,6 @@ const myFilteredPredictionsSorted = [...predictions]
                             minute: '2-digit',
                           })
                         : null;
-                      const predictedResult =
-                        pred.predicted_home_score === pred.predicted_away_score
-                          ? 'تعادل'
-                          : pred.predicted_home_score > pred.predicted_away_score
-                          ? 'فوز ' + (pred.home_team || 'صاحب الأرض')
-                          : 'فوز ' + (pred.away_team || 'الضيف');
-                      const actualResult = hasResult
-                        ? pred.actual_home_score === pred.actual_away_score
-                          ? 'تعادل'
-                          : pred.actual_home_score > pred.actual_away_score
-                          ? 'فوز ' + (pred.home_team || 'صاحب الأرض')
-                          : 'فوز ' + (pred.away_team || 'الضيف')
-                        : null;
-                      const scoreExact = hasResult && pred.predicted_home_score === pred.actual_home_score && pred.predicted_away_score === pred.actual_away_score;
-                      const directionCorrect = hasResult && predictedResult === actualResult;
-                      const firstScorerExact = hasResult && pred.predicted_first_scorer && pred.first_scorer_actual && pred.predicted_first_scorer === pred.first_scorer_actual;
-                      const firstScorerPicked = !!pred.predicted_first_scorer;
-                      const extraChecks = [
-                        pred.predicted_extra_time ? { label: '⏱ وقت إضافي', predicted: !!pred.predicted_extra_time, actual: !!pred.went_extra_time } : null,
-                        pred.predicted_red_card ? { label: '🟥 كرت أحمر', predicted: !!pred.predicted_red_card, actual: !!pred.red_card_in_match } : null,
-                        pred.predicted_penalty ? { label: '⚽ ضربة جزاء', predicted: !!pred.predicted_penalty, actual: !!pred.penalty_in_match } : null,
-                      ].filter(Boolean) as any[];
 
                       return (
                         <div
@@ -2183,103 +2303,15 @@ const myFilteredPredictionsSorted = [...predictions]
                               </div>
                             </div>
 
-                            {hasResult && (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 800,
-                                    padding: '6px 10px',
-                                    borderRadius: 999,
-                                    border: scoreExact ? '1px solid rgba(217,178,95,.24)' : '1px solid rgba(201,58,47,.24)',
-                                    background: scoreExact ? 'rgba(217,178,95,.12)' : 'rgba(201,58,47,.12)',
-                                    color: scoreExact ? '#ffe3a6' : '#ffb4b4',
-                                  }}
-                                >
-                                  🎯 النتيجة الكاملة {scoreExact ? '✓' : '✕'}
-                                </span>
-
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 800,
-                                    padding: '6px 10px',
-                                    borderRadius: 999,
-                                    border: directionCorrect ? '1px solid rgba(39,176,110,.24)' : '1px solid rgba(201,58,47,.24)',
-                                    background: directionCorrect ? 'rgba(39,176,110,.12)' : 'rgba(201,58,47,.12)',
-                                    color: directionCorrect ? '#94f0c0' : '#ffb4b4',
-                                  }}
-                                >
-                                  ✅ الاتجاه {directionCorrect ? '✓' : '✕'}
-                                </span>
-
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 800,
-                                    padding: '6px 10px',
-                                    borderRadius: 999,
-                                    border: !firstScorerPicked
-                                      ? '1px dashed var(--line)'
-                                      : firstScorerExact
-                                      ? '1px solid rgba(39,176,110,.24)'
-                                      : '1px solid rgba(201,58,47,.24)',
-                                    background: !firstScorerPicked
-                                      ? 'rgba(255,255,255,.03)'
-                                      : firstScorerExact
-                                      ? 'rgba(39,176,110,.12)'
-                                      : 'rgba(201,58,47,.12)',
-                                    color: !firstScorerPicked
-                                      ? 'var(--muted)'
-                                      : firstScorerExact
-                                      ? '#94f0c0'
-                                      : '#ffb4b4',
-                                  }}
-                                >
-                                  ⚽ الهداف {firstScorerPicked ? (firstScorerExact ? '✓' : '✕') : '—'}
-                                </span>
-
-                                {extraChecks.length > 0 ? (
-                                  extraChecks.map((item: any, extraIdx: number) => {
-                                    const isCorrect = item.predicted === item.actual;
-                                    return (
-                                      <span
-                                        key={extraIdx}
-                                        style={{
-                                          fontSize: 11,
-                                          fontWeight: 800,
-                                          padding: '6px 10px',
-                                          borderRadius: 999,
-                                          border: isCorrect
-                                            ? '1px solid rgba(39,176,110,.24)'
-                                            : '1px solid rgba(201,58,47,.24)',
-                                          background: isCorrect
-                                            ? 'rgba(39,176,110,.12)'
-                                            : 'rgba(201,58,47,.12)',
-                                          color: isCorrect ? '#94f0c0' : '#ffb4b4',
-                                        }}
-                                      >
-                                        {item.label} {isCorrect ? '✓' : '✕'}
-                                      </span>
-                                    );
-                                  })
-                                ) : (
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      padding: '6px 10px',
-                                      borderRadius: 999,
-                                      background: 'rgba(255,255,255,.03)',
-                                      border: '1px dashed var(--line)',
-                                      color: 'var(--muted)',
-                                    }}
-                                  >
-                                    لا توجد اختيارات إضافية
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                            {/* 🧮 بريك داون النقاط الموحّد — يوضح للعضو كل بند جاب كام نقطة */}
+                            {hasResult && (() => {
+                              const bd = computeBreakdown(pred);
+                              return (
+                                <div style={{ marginBottom: 12 }}>
+                                  <PointsBreakdown items={bd.items} total={bd.total} />
+                                </div>
+                              );
+                            })()}
 
                             <div style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
                               وقت إرسال التوقع: {pred.submitted_at ? new Date(pred.submitted_at).toLocaleString('ar-EG') : 'بدون تاريخ'}
@@ -3026,52 +3058,15 @@ const myFilteredPredictionsSorted = [...predictions]
                           </div>
                         </div>
                       )}
-                      {existing && (() => {
-                        const extraPredictions = [
-                          existing.predicted_extra_time ? { label: '⏱ وقت إضافي', predicted: !!existing.predicted_extra_time, actual: !!match.went_extra_time } : null,
-                          existing.predicted_red_card ? { label: '🟥 كرت أحمر', predicted: !!existing.predicted_red_card, actual: !!match.red_card_in_match } : null,
-                          existing.predicted_penalty ? { label: '⚽ ضربة جزاء', predicted: !!existing.predicted_penalty, actual: !!match.penalty_in_match } : null,
-                        ].filter(Boolean) as any[];
-
-                        return extraPredictions.length > 0 ? (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                            {extraPredictions.map((ex, idx) => {
-                              const hit = hasResult && ex.predicted === ex.actual;
-                              return (
-                                <div
-                                  key={idx}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    padding: '7px 10px',
-                                    borderRadius: 999,
-                                    border: '1px solid var(--line)',
-                                    background: hit ? 'rgba(39,176,110,.10)' : 'rgba(255,255,255,.04)',
-                                    color: hit ? '#94f0c0' : 'var(--muted)',
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  <span>{ex.label}</span>
-                                  <span>{ex.predicted ? 'نعم' : 'لا'}</span>
-                                </div>
-                              );
-                            })}
+                      {/* 🧮 بريك داون النقاط الموحّد (للماتشات المحسومة) */}
+                      {existing && hasResult && (() => {
+                        const bd = computeBreakdown({ ...existing, actual_home_score: match.actual_home_score, actual_away_score: match.actual_away_score });
+                        return (
+                          <div style={{ marginBottom: 12 }}>
+                            <PointsBreakdown items={bd.items} total={bd.total} />
                           </div>
-                        ) : null;
+                        );
                       })()}
-
-                      {existing && hasResult && (
-                        <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 10,
-                          background: (existing.points || 0) < 0 ? 'rgba(201,58,47,.1)' : (existing.points || 0) >= 10 ? 'rgba(217,178,95,.08)' : 'rgba(39,176,110,.08)',
-                          border: (existing.points || 0) < 0 ? '1px solid rgba(201,58,47,.2)' : '1px solid var(--line)',
-                          fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                          color: (existing.points || 0) < 0 ? '#ffb4b4' : (existing.points || 0) >= 10 ? '#ffe3a6' : '#94f0c0'
-                        }}>
-                          {(existing.points || 0) < 0 ? <>⚠ نقاطك: {existing.points} نقطة</> : <>نقاطك: <strong>{existing.points || 0}</strong> نقطة</>}
-                        </div>
-                      )}
 
                       {match.is_open && (
                         <div>
@@ -3122,8 +3117,10 @@ const myFilteredPredictionsSorted = [...predictions]
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                               {[
-                                                                { key: 'predicted_red_card', label: '🟥 بطاقة حمراء؟' },
+                                { key: 'predicted_red_card', label: '🟥 بطاقة حمراء؟' },
                                 { key: 'predicted_penalty',  label: '⚽ ركلة جزاء؟' },
+                                // ⏱️ الوقت الإضافي — يظهر بس في الأدوار الإقصائية (مش Group Stage)
+                                ...(/group stage/i.test(String(match.league?.round || match.round || '')) ? [] : [{ key: 'extraTime', label: '⏱️ وقت إضافي؟' }]),
                               ].map(({ key, label }) => (
                                 <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', borderRadius: 12, background: form[key] ? 'rgba(217,178,95,.08)' : 'var(--surface-3)', border: `1px solid ${form[key] ? 'rgba(217,178,95,.25)' : 'var(--line)'}`, transition: 'all .2s' }}>
                                   <input
@@ -3339,31 +3336,15 @@ const myFilteredPredictionsSorted = [...predictions]
         </div>
       </div>
 
-      {hasResult && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          <div style={{ width: '100%', fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 2 }}>خيارات العضو</div>
-          {[
-            { label: '🟥 كارت أحمر', value: !!p.predicted_red_card, actual: !!matchInfo?.red_card_in_match },
-            { label: '⚽ ضربة جزاء', value: !!p.predicted_penalty, actual: !!matchInfo?.penalty_in_match },
-            { label: '⏱ وقت إضافي', value: !!p.predicted_extra_time, actual: !!matchInfo?.went_extra_time },
-          ].map((opt, idx) => {
-            const isCorrect = opt.value === opt.actual;
-            return (
-              <div key={idx} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '5px 10px', borderRadius: 999,
-                border: '1px solid var(--line)',
-                background: isCorrect ? 'rgba(39,176,110,.10)' : 'rgba(255,255,255,.04)',
-                color: isCorrect ? '#94f0c0' : 'var(--muted)',
-                fontSize: 11, fontWeight: 700,
-              }}>
-                <span>{opt.label}</span>
-                <span>{opt.value ? '✅' : '❌'}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* 🧮 بريك داون النقاط الموحّد */}
+      {hasResult && (() => {
+        const bd = computeBreakdown(p);
+        return (
+          <div style={{ marginBottom: 10 }}>
+            <PointsBreakdown items={bd.items} total={bd.total} />
+          </div>
+        );
+      })()}
     </div>
 
     <div
