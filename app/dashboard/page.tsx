@@ -2318,34 +2318,15 @@ const myFilteredPredictionsSorted = [...predictions]
                             </div>
                           </div>
 
-                          {/* N8: negative/zero/positive points in modal */}
+                          {/* صندوق الانتظار يظهر فقط لو مفيش نتيجة — الإجمالي بقى في PointsBreakdown */}
+                          {!hasResult && (
                           <div
                             style={{
                               padding: '10px 14px',
                               borderRadius: 14,
-                              background: !hasResult
-                                ? 'var(--surface-3)'
-                                : (pred.points || 0) < 0
-                                ? 'rgba(201,58,47,.13)'
-                                : (pred.points || 0) === 0
-                                ? 'var(--surface-3)'
-                                : (pred.points || 0) >= 10
-                                ? 'rgba(217,178,95,.12)'
-                                : 'rgba(39,176,110,.12)',
-                              border: !hasResult
-                                ? '1px solid var(--line)'
-                                : (pred.points || 0) < 0
-                                ? '1px solid rgba(201,58,47,.3)'
-                                : '1px solid var(--line)',
-                              color: !hasResult
-                                ? 'var(--muted)'
-                                : (pred.points || 0) < 0
-                                ? '#ffb4b4'
-                                : (pred.points || 0) === 0
-                                ? 'var(--muted)'
-                                : (pred.points || 0) >= 10
-                                ? '#ffe3a6'
-                                : '#94f0c0',
+                              background: 'var(--surface-3)',
+                              border: '1px solid var(--line)',
+                              color: 'var(--muted)',
                               textAlign: 'center',
                               minWidth: 88,
                               display: 'flex',
@@ -2354,17 +2335,10 @@ const myFilteredPredictionsSorted = [...predictions]
                               alignItems: 'center',
                             }}
                           >
-                            <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
-                              {hasResult
-                                ? (pred.points || 0) < 0
-                                  ? <>⚠ {pred.points}</>
-                                  : (pred.points || 0)
-                                : '⏳'}
-                            </div>
-                            <div style={{ fontSize: 11, marginTop: 4, color: hasResult ? 'inherit' : 'var(--muted)' }}>
-                              {hasResult ? 'نقطة' : 'بانتظار'}
-                            </div>
+                            <div style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>⏳</div>
+                            <div style={{ fontSize: 11, marginTop: 4, color: 'var(--muted)' }}>بانتظار</div>
                           </div>
+                          )}
                         </div>
                       );
                     })}
@@ -3259,7 +3233,7 @@ const myFilteredPredictionsSorted = [...predictions]
     className="rank-item"
     style={{
       display: 'grid',
-      gridTemplateColumns: '1fr auto',
+      gridTemplateColumns: hasResult ? '1fr' : '1fr auto',
       gap: 14,
       alignItems: 'stretch',
       ...(p.points || 0) >= 10
@@ -3364,17 +3338,12 @@ const myFilteredPredictionsSorted = [...predictions]
       })()}
     </div>
 
+    {!hasResult && (
     <div
       style={{
         minWidth: 90,
         borderRadius: 16,
-        background: (p.points || 0) >= 10
-          ? 'linear-gradient(180deg,rgba(217,178,95,.16),rgba(217,178,95,.05))'
-          : (p.points || 0) > 0
-          ? 'rgba(39,176,110,.10)'
-          : (p.points || 0) < 0
-          ? 'rgba(201,58,47,.10)'
-          : 'rgba(255,255,255,.04)',
+        background: 'rgba(255,255,255,.04)',
         border: '1px solid var(--line)',
         display: 'grid',
         placeItems: 'center',
@@ -3382,12 +3351,11 @@ const myFilteredPredictionsSorted = [...predictions]
       }}
     >
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 28, fontWeight: 900, color: (p.points || 0) >= 10 ? 'var(--gold)' : (p.points || 0) > 0 ? '#94f0c0' : (p.points || 0) < 0 ? '#ffb4b4' : 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
-          {p.points || 0}
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700 }}>نقطة</div>
+        <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--muted)' }}>⏳</div>
+        <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700 }}>بانتظار</div>
       </div>
     </div>
+    )}
   </div>
               );
             })}
