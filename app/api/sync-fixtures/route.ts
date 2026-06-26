@@ -153,10 +153,14 @@ export async function GET(request: NextRequest) {
             }
           }
 
-          // 🥅 أول هدّاف = أول جون زمنياً في الماتش حتى لو كان هدف عكسي (Own Goal).
-          //    الـ API بيرجّع الأحداث مرتّبة زمنياً، فأول حدث Goal هو أول جون فعلي.
+          // ⚠️ ضربة الجزاء الضائعة بتيجي من الـ API كـ type='Goal' مع detail='Missed Penalty'
+          //    — دي مش هدف فعلي، فلازم نستبعدها من أول هدّاف ومن قائمة الهدّافين.
+          const isMissedPenalty = ev.type === 'Goal' && ev.detail === 'Missed Penalty';
+
+          // 🥅 أول هدّاف = أول جون فعلي زمنياً في الماتش حتى لو كان هدف عكسي (Own Goal).
+          //    الـ API بيرجّع الأحداث مرتّبة زمنياً، فأول حدث Goal فعلي هو أول جون.
           //    (اللاعب المسجّل في الـ own goal هو اللي حطّ الكورة في مرماه — ده اللي يتحسب أول هدّاف.)
-          if (ev.type === 'Goal') {
+          if (ev.type === 'Goal' && !isMissedPenalty) {
             const scorerName = ev.player?.name ? normalizeScorerName(ev.player.name) : null;
             const scorerId = ev.player?.id !== null && ev.player?.id !== undefined
               ? Number(ev.player.id)
@@ -169,8 +173,8 @@ export async function GET(request: NextRequest) {
           }
 
           // 📋 قائمة هدّافي الماتش (للـ +1 "سجّل في الماتش") — بتستثني الأهداف العكسية
-          //    لأن "سجّل في الماتش" معناها سجّل لفريقه، مش هدف عكسي في مرماه.
-          if (ev.type === 'Goal' && ev.detail !== 'Own Goal') {
+          //    وضربات الجزاء الضائعة لأن "سجّل في الماتش" معناها سجّل لفريقه فعلاً.
+          if (ev.type === 'Goal' && ev.detail !== 'Own Goal' && !isMissedPenalty) {
             const scorerName = ev.player?.name ? normalizeScorerName(ev.player.name) : null;
             const scorerId = ev.player?.id !== null && ev.player?.id !== undefined
               ? Number(ev.player.id)
