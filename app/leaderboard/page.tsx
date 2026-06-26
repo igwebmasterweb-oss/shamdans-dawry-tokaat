@@ -126,14 +126,38 @@ export default function LeaderboardPage() {
     bonus_points: row.bonus_points || 0,
   });
 
+  // جلب كل المتسابقين على دفعات (للبحث وحساب ترتيبي) — PostgREST بيحدّ الرد بـ 1000 صف،
+  // فبنلفّ بـ range لحد ما نجيب الكل بدل ما نتقص عند 1000.
+  const FETCH_CHUNK = 1000;
   const loadGeneralLeaderboard = async () => {
-    const { data, error } = await supabase
-      .from('leaderboard_general_v1')
-      .select('user_id, full_name, user_email, final_points, predictions_count, profile_completed, penalty_points, referral_points, bonus_points')
-      .order('final_points', { ascending: false });
+    const all: any[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('leaderboard_general_v1')
+        .select('user_id, full_name, user_email, final_points, predictions_count, profile_completed, penalty_points, referral_points, bonus_points')
+        .order('final_points', { ascending: false })
+        .range(offset, offset + FETCH_CHUNK - 1);
+      if (error) throw error;
+      const batch = data || [];
+      all.push(...batch);
+      if (batch.length < FETCH_CHUNK) break;
+      offset += FETCH_CHUNK;
+    }
+    return all.map(mapGeneralPlayer).sort((a, b) => b.total_points - a.total_points);
+  };
 
+  // جلب صفحة واحدة فقط + العدد الكلي الحقيقي (count exact) — أسرع وأدق من جلب الكل.
+  const loadGeneralPage = async (page: number) => {
+    const from = (page - 1) * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, error, count } = await supabase
+      .from('leaderboard_general_v1')
+      .select('user_id, full_name, user_email, final_points, predictions_count, profile_completed, penalty_points, referral_points, bonus_points', { count: 'exact' })
+      .order('final_points', { ascending: false })
+      .range(from, to);
     if (error) throw error;
-    return (data || []).map(mapGeneralPlayer).sort((a, b) => b.total_points - a.total_points);
+    return { rows: (data || []).map(mapGeneralPlayer), total: count ?? 0 };
   };
 
   const initializeData = async () => {
@@ -190,14 +214,12 @@ export default function LeaderboardPage() {
   const loadPage = async (page: number) => {
     if (page !== 1) setPageLoading(true);
 
-    const adjustedRows = await loadGeneralLeaderboard();
-    const from = (page - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE;
-    const pageRows = adjustedRows.slice(from, to);
+    // بنجيب الصفحة المطلوبة بس + العدد الكلي الحقيقي من القاعدة مباشرة.
+    const { rows: pageRows, total } = await loadGeneralPage(page);
 
     if (page === 1 && pageRows.length > 0) maxPoints.current = pageRows[0].total_points || 1;
     setPlayers(pageRows);
-    setTotalCount(adjustedRows.length);
+    setTotalCount(total);
     setCurrentPage(page);
 
     setLoading(false);
