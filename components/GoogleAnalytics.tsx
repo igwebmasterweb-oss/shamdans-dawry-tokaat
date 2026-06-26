@@ -4,7 +4,8 @@ import Script from 'next/script';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
-const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
+// .trim() مهم: لو القيمة في الـ env فيها مسافة أو سطر جديد، بتكسر الـ inline script.
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID?.trim();
 
 // أي مسار بيبدأ بالقيم دي مش هيتسجّل في Google Analytics (صفحات الإدارة + الـ API).
 const EXCLUDED_PREFIXES = ['/admin', '/api'];
