@@ -19,7 +19,15 @@ export default function AdminPage() {
   const [loading, setLoading]         = useState(true);
   // ① loadError ✅
   const [loadError, setLoadError]     = useState(false);
-  const [activeTab, setActiveTab]     = useState<'matches'|'predictions'|'leaderboard'|'leagues'|'prizes'>('matches');
+  const [activeTab, setActiveTab]     = useState<'matches'|'predictions'|'leaderboard'|'leagues'|'prizes'|'reports'>('matches');
+  // ⑫ التقارير — أكثر الداعين / نقاط مشبوهة / غير نشطين / إحصائيات عامة
+  const [rptOverview, setRptOverview]     = useState<any>(null);
+  const [rptReferrers, setRptReferrers]   = useState<any[]>([]);
+  const [rptSuspicious, setRptSuspicious] = useState<any[]>([]);
+  const [rptInactive, setRptInactive]     = useState<any[]>([]);
+  const [rptLoaded, setRptLoaded]         = useState(false);
+  const [rptLoading, setRptLoading]       = useState(false);
+  const [activeReport, setActiveReport]   = useState<'referrers'|'suspicious'|'inactive'>('referrers');
   const [activeRound, setActiveRound] = useState('Group Stage - 1');
   // ⑦ فلتر التوقعات بالجولة
   const [predRoundFilter, setPredRoundFilter] = useState<string>('all');
@@ -548,6 +556,57 @@ const loadLeaderboard = useCallback(async () => {
     a.download = `leaderboard-${new Date().toISOString().slice(0,10)}.csv`; a.click();
   };
 
+  // ⑫ تحميل التقارير من الـ views (مرة واحدة عند فتح التاب)
+  const loadReports = useCallback(async () => {
+    if (rptLoaded || rptLoading) return;
+    setRptLoading(true);
+    try {
+      const [ov, ref, sus, inact] = await Promise.all([
+        supabase.from('admin_report_overview_stats_v1').select('*').single(),
+        supabase.from('admin_report_top_referrers_v1').select('*').order('referral_count',{ascending:false}).limit(500),
+        supabase.from('admin_report_suspicious_late_points_v1').select('*').order('total_late_points',{ascending:false}).limit(500),
+        supabase.from('admin_report_inactive_users_v1').select('*').order('created_at',{ascending:false}).limit(500),
+      ]);
+      if (ov.data) setRptOverview(ov.data);
+      if (ref.data) setRptReferrers(ref.data);
+      if (sus.data) setRptSuspicious(sus.data);
+      if (inact.data) setRptInactive(inact.data);
+      setRptLoaded(true);
+    } catch {
+      showMsg('⚠️ تعذّر تحميل التقارير', 'error');
+    } finally {
+      setRptLoading(false);
+    }
+  }, [rptLoaded, rptLoading, showMsg]);
+
+  // تصدير عام لأي تقرير (CSV متوافق مع Excel — BOM + UTF-8)
+  const exportReportCSV = (headers: string[], rows: (string|number|null)[][], name: string) => {
+    const esc = (v: string|number|null) => {
+      const s = v === null || v === undefined ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+    };
+    const csv = [headers, ...rows].map(r => r.map(esc).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `${name}-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  };
+
+  const exportReferrersCSV = () => exportReportCSV(
+    ['#','الاسم','التليفون','الإيميل','عدد الدعوات','مدعو من','الدعوات المحتسبة','نقاط الدعوة'],
+    rptReferrers.map((r,i)=>[i+1, r.full_name||'—', r.phone||'', r.user_email||'', r.referral_count, r.referred_by_name||'', r.counted_referrals, r.referral_points]),
+    'top-referrers'
+  );
+  const exportSuspiciousCSV = () => exportReportCSV(
+    ['#','الاسم','الإيميل','ماتشات استفاد منها','إجمالي النقاط المتأخرة','أقصى تأخير','تصنيف التأخير'],
+    rptSuspicious.map((r,i)=>[i+1, r.display_name||'—', r.user_email||'', r.benefited_fixtures, r.total_late_points, r.max_delay_overall||'', r.delay_bucket]),
+    'suspicious-late-points'
+  );
+  const exportInactiveCSV = () => exportReportCSV(
+    ['#','الاسم','التليفون','الإيميل','البروفايل مكتمل','من دعوة','تاريخ التسجيل'],
+    rptInactive.map((r,i)=>[i+1, r.full_name||'—', r.phone||'', r.user_email||'', r.profile_completed?'نعم':'لا', r.came_from_referral?'نعم':'لا', r.created_at?String(r.created_at).slice(0,10):'']),
+    'inactive-members'
+  );
+
   // تطبيع اسم الهداف: يشيل الحركات (Muñoz→munoz) + lowercase + trim
   const normalizeScorerName = (name: string | null | undefined): string =>
     (name || '')
@@ -892,8 +951,9 @@ const avgPoints = participantsCount > 0
           {id:'leaderboard', label:`🏆 الصدارة (${participantsCount})`},
           {id:'leagues',     label:`🏅 الليجات (${leagues.length})`},
           {id:'prizes',      label:`🥇 الجوائز (${prizePhases.length})`},
+          {id:'reports',     label:`📊 التقارير`},
         ] as const).map(({id,label})=>(
-          <button key={id} className={`tab-btn${activeTab===id?' active':''}`} onClick={()=>setActiveTab(id)}>{label}</button>
+          <button key={id} className={`tab-btn${activeTab===id?' active':''}`} onClick={()=>{setActiveTab(id); if(id==='reports') loadReports();}}>{label}</button>
         ))}
       </div>
 
@@ -1268,6 +1328,150 @@ const avgPoints = participantsCount > 0
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ══ REPORTS ══ */}
+        {activeTab==='reports' && (
+          <div>
+            {rptLoading && !rptLoaded ? (
+              <div style={{textAlign:'center',color:'var(--muted)',padding:40}}>⏳ جاري تحميل التقارير...</div>
+            ) : (
+            <>
+              {/* ── بطاقات إحصائيات عامة ── */}
+              {rptOverview && (
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10,marginBottom:20}}>
+                  {([
+                    {label:'إجمالي الأعضاء',     value:rptOverview.total_members,        c:'var(--gold)'},
+                    {label:'بروفايلات مكتملة',   value:rptOverview.completed_profiles,   c:'#5effa8'},
+                    {label:'لديهم تليفون',        value:rptOverview.members_with_phone,   c:'#7fd1ff'},
+                    {label:'جاءوا بدعوة',         value:rptOverview.members_from_referral,c:'#ffd27f'},
+                    {label:'أعضاء نشطون',         value:rptOverview.active_predictors,    c:'#5effa8'},
+                    {label:'أعضاء غير نشطين',     value:rptOverview.inactive_members,     c:'#ff9c91'},
+                    {label:'إجمالي التوقعات',     value:rptOverview.total_predictions,    c:'var(--gold)'},
+                    {label:'توقعات مُقيَّمة',      value:rptOverview.graded_predictions,   c:'#5effa8'},
+                    {label:'توقعات غير مُقيَّمة',   value:rptOverview.ungraded_predictions, c:rptOverview.ungraded_predictions>0?'#ff9c91':'var(--muted)'},
+                  ]).map(s=>(
+                    <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:14,padding:'12px 14px',textAlign:'center'}}>
+                      <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,fontWeight:700}}>{s.label}</div>
+                      <div style={{fontSize:22,fontWeight:900,color:s.c,fontVariantNumeric:'tabular-nums'}}>{Number(s.value).toLocaleString('en-US')}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── مبدّل التقارير ── */}
+              <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+                {([
+                  {id:'referrers',  label:`📨 أكثر الداعين (${rptReferrers.length})`},
+                  {id:'suspicious', label:`⚠️ نقاط مشبوهة (${rptSuspicious.length})`},
+                  {id:'inactive',   label:`💤 أعضاء غير نشطين (${rptInactive.length})`},
+                ] as const).map(({id,label})=>(
+                  <button key={id} onClick={()=>setActiveReport(id)} style={{padding:'8px 16px',borderRadius:10,border:'1px solid '+(activeReport===id?'var(--gold)':'var(--line)'),background:activeReport===id?'rgba(217,178,95,.15)':'var(--surface-2)',color:activeReport===id?'var(--gold)':'var(--muted)',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif",whiteSpace:'nowrap'}}>{label}</button>
+                ))}
+              </div>
+
+              {/* ── تقرير: أكثر الداعين ── */}
+              {activeReport==='referrers' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>أعلى {rptReferrers.length} عضو من حيث عدد الدعوات · النقاط بحد أقصى 50 (10 دعوات)</span>
+                    <button onClick={exportReferrersCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>#</th><th>الاسم</th><th>التليفون</th><th>الإيميل</th><th>عدد الدعوات</th><th>محتسبة</th><th>نقاط الدعوة</th><th>مدعو من</th></tr></thead>
+                      <tbody>
+                        {rptReferrers.length===0 ? (
+                          <tr><td colSpan={8} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                        ) : rptReferrers.map((r,i)=>(
+                          <tr key={r.referrer_id}>
+                            <td style={{fontWeight:800,color:i<3?'var(--gold)':'var(--muted)'}}>{i<3?['🥇','🥈','🥉'][i]:`#${i+1}`}</td>
+                            <td style={{fontWeight:700}}>{r.full_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.phone||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.user_email||'—'}</td>
+                            <td style={{color:'var(--gold)',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{r.referral_count}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.counted_referrals}</td>
+                            <td style={{color:'#5effa8',fontWeight:800,fontVariantNumeric:'tabular-nums'}}>{r.referral_points}</td>
+                            <td style={{color:'var(--muted)',fontSize:12}}>{r.referred_by_name||'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: نقاط مشبوهة (بج التوقع المتأخر) ── */}
+              {activeReport==='suspicious' && (
+                <>
+                  <div style={{background:'rgba(201,58,47,.08)',border:'1px solid rgba(201,58,47,.2)',borderRadius:12,padding:'10px 14px',marginBottom:12,fontSize:12,color:'#ff9c91',fontWeight:700}}>
+                    ⚠️ أعضاء حصلوا على نقاط من توقعات أُرسلت <strong>بعد بداية الماتش</strong> (بسبب بج في السيستم). كلما زاد التأخير زاد الاشتباه.
+                  </div>
+                  <div style={{display:'flex',justifyContent:'flex-end',marginBottom:12}}>
+                    <button onClick={exportSuspiciousCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>#</th><th>الاسم</th><th>الإيميل</th><th>ماتشات استفاد منها</th><th>النقاط المتأخرة</th><th>أقصى تأخير</th><th>التصنيف</th></tr></thead>
+                      <tbody>
+                        {rptSuspicious.length===0 ? (
+                          <tr><td colSpan={7} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد حالات مشبوهة</td></tr>
+                        ) : rptSuspicious.map((r,i)=>{
+                          const bk = r.delay_bucket;
+                          const bdg = bk==='huge_delay' ? {t:'تأخير ضخم (≥24س)',c:'#ff6b5e'}
+                            : bk==='very_long' ? {t:'طويل جدًا (≥6س)',c:'#ff9c91'}
+                            : bk==='long' ? {t:'طويل (≥1س)',c:'#ffd27f'}
+                            : {t:'قصير',c:'var(--muted)'};
+                          return (
+                          <tr key={r.user_id}>
+                            <td style={{fontWeight:800,color:'var(--muted)'}}>{`#${i+1}`}</td>
+                            <td style={{fontWeight:700}}>{r.display_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.user_email||'—'}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.benefited_fixtures}</td>
+                            <td style={{color:'#ff9c91',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{r.total_late_points}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.max_delay_overall||'—'}</td>
+                            <td><span style={{color:bdg.c,fontWeight:700,fontSize:12}}>{bdg.t}</span></td>
+                          </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: أعضاء غير نشطين ── */}
+              {activeReport==='inactive' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>سجّلوا ولم يضعوا أي توقع · يعرض أحدث {rptInactive.length} (الإجمالي {rptOverview?Number(rptOverview.inactive_members).toLocaleString('en-US'):'—'})</span>
+                    <button onClick={exportInactiveCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>#</th><th>الاسم</th><th>التليفون</th><th>الإيميل</th><th>البروفايل</th><th>من دعوة</th><th>تاريخ التسجيل</th></tr></thead>
+                      <tbody>
+                        {rptInactive.length===0 ? (
+                          <tr><td colSpan={7} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا يوجد أعضاء غير نشطين</td></tr>
+                        ) : rptInactive.map((r,i)=>(
+                          <tr key={r.user_id}>
+                            <td style={{fontWeight:800,color:'var(--muted)'}}>{`#${i+1}`}</td>
+                            <td style={{fontWeight:700}}>{r.full_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.phone||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.user_email||'—'}</td>
+                            <td>{r.profile_completed?<span style={{color:'#5effa8',fontWeight:700,fontSize:12}}>✅ مكتمل</span>:<span style={{color:'var(--muted)',fontSize:12}}>— ناقص</span>}</td>
+                            <td>{r.came_from_referral?<span style={{color:'var(--gold)',fontSize:12}}>نعم</span>:<span style={{color:'var(--muted)',fontSize:12}}>لا</span>}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.created_at?String(r.created_at).slice(0,10):'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </>
+            )}
           </div>
         )}
 
