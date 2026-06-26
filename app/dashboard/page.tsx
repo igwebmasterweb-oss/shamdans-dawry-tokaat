@@ -2622,6 +2622,20 @@ const myFilteredPredictionsSorted = [...predictions]
         ))}
       </div>
 
+      {/* Section 6 — حق الاستبعاد (ملفت) */}
+      <div style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, rgba(220,38,38,.16), rgba(127,29,29,.20))', border: '1.5px solid rgba(248,113,113,.45)', borderRadius: 18, padding: '18px 18px', marginBottom: 14, boxShadow: '0 0 24px rgba(220,38,38,.12), inset 0 0 40px rgba(220,38,38,.05)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 20, flexShrink: 0 }}>⚖️</span>
+          <div style={{ fontWeight: 800, fontSize: 14.5, color: '#ffd5d5', textShadow: '0 0 12px rgba(255,120,120,.18)' }}>٦. حق إدارة المسابقة في الاستبعاد</div>
+        </div>
+        <div style={{ fontSize: 12.5, color: '#ffe3e3', lineHeight: 2, fontWeight: 600, marginBottom: 12, textAlign: 'justify' }}>
+          تحتفظ إدارة المسابقة بالحق المطلق، ووفقًا لتقديرها المنفرد والنهائي وغير القابل للطعن، في استبعاد أي مشارك يثبت أو يُشتبه بقيامه بأي سلوك غير لائق أو مسيء أو من شأنه الإضرار بسير المسابقة أو بسمعة القائمين عليها أو المشاركين فيها. ويشمل ذلك، على سبيل المثال لا الحصر: استخدام ألفاظ أو عبارات غير لائقة، إرسال رسائل متكررة أو مزعجة، إساءة استخدام قنوات التواصل مع إدارة المسابقة، تقديم بلاغات أو ادعاءات كيدية أو غير صحيحة، أو ارتكاب أي تصرف آخر ترى إدارة المسابقة، وفق تقديرها المطلق، أنه يشكل مخالفة لقواعد المشاركة أو إخلالًا بنزاهة المسابقة.
+        </div>
+        <div style={{ fontSize: 12.5, color: '#ffe3e3', lineHeight: 2, fontWeight: 600, textAlign: 'justify', borderTop: '1px solid rgba(248,113,113,.25)', paddingTop: 12 }}>
+          ويُعد قرار الاستبعاد نهائيًا وملزمًا، ويترتب عليه إلغاء أهلية المشارك للحصول على أي جوائز أو مزايا مرتبطة بالمسابقة، مع سقوط أي حق له في المطالبة بأي تعويض أو مراجعة أو اعتراض. كما تحتفظ إدارة المسابقة بحقها في اتخاذ أي إجراءات إضافية تراها مناسبة، بما في ذلك استبعاد أو تعليق أو حذف أي حسابات أخرى يثبت ارتباطها بالمشارك ذاته أو استخدامها للتحايل على قرار الاستبعاد، وذلك دون إشعار مسبق ودون أي مسؤولية قانونية أو التزام تجاه المشارك.
+        </div>
+      </div>
+
       {/* Footer */}
       <div style={{ borderTop: '1px solid var(--line)', paddingTop: 14, fontSize: 12, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.9 }}>
         بنتمنى لكم وقت ممتع مع مسابقات الشمعدان وبطولة كأس العالم 2026 🇪🇬<br />
