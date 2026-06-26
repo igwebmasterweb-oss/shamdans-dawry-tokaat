@@ -3,6 +3,7 @@ import './globals.css';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import InstallPrompt from '@/components/InstallPrompt';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
+import { Analytics } from '@vercel/analytics/next';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -57,6 +58,7 @@ export default function RootLayout({
     <html lang="ar" dir="rtl">
       <body>
         <GoogleAnalytics />
+        <Analytics />
         <ServiceWorkerRegister />
         <InstallPrompt />
         {children}
