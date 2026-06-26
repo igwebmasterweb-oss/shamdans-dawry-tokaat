@@ -857,28 +857,14 @@ const loadLeaderboard = useCallback(async () => {
 
   // ④ computed stats ✅
   const filteredMatches    = matches.filter(m => m.league.round === activeRound);
-  const openCount          = matches.filter(m => m.is_open).length;
- const gradedCount = gradedPredictionsCount;
   const medals             = ['🥇','🥈','🥉'];
   const totalLeagueMembers = leagues.reduce((s,lg)=>s+lg.member_count,0);
   const totalPending       = leagues.reduce((s,lg)=>s+lg.pending_invites,0);
   const biggestLeague      = leagues.reduce((best,lg)=>lg.member_count>(best?.member_count||0)?lg:best,null as any);
   const rounds             = [...new Set(matches.map((m:any)=>m.league?.round).filter(Boolean))] as string[];
 
-  // ④ 4 new computed stats ✅
-const avgPoints = participantsCount > 0
-  ? (leaderboard.reduce((s:number,p:any)=>s+p.total,0) / participantsCount).toFixed(1)
-  : '—';
-  const coveragePct = participantsCount > 0 && filteredMatches.length > 0
-  ? Math.round((predictions.filter(p => filteredMatches.find(m => m.fixture.id === p.fixture_id)).length
-      / (participantsCount * filteredMatches.length)) * 100)
-  : 0;
-  const ungradedCount = ungradedPredictionsCount;
-  const noResultCount   = matches.filter(m => m.actual_home_score === null && !m.is_open).length;
   // ③ ماتشات خلصت (ليها نتيجة) بس لسة مفتوحة للتوقع — حماية من نسيان الغلق
   const finishedButOpen = matches.filter(m => m.actual_home_score !== null && m.actual_home_score !== undefined && m.is_open);
-  const topScore        = leaderboard.length > 0 ? Math.max(...leaderboard.map((p:any) => p.total)) : 0;
-  const zeroPointsCount = leaderboard.filter((p:any) => p.total === 0).length;
 
   // ⑦ filtered predictions ✅
   // ⑧ بحث التوقعات (اسم/إيميل)، مُطبَّع
@@ -972,32 +958,10 @@ const avgPoints = participantsCount > 0
         </div>
       )}
 
-      {/* ④ STATS — 7 أصلية + 4 جديدة ✅ */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:10,padding:'20px 24px'}}>
-        {[
-          {label:'إجمالي التوقعات', value:totalPredictionsCount, color:'var(--gold)'},
-          {label:'محسوبة',           value:gradedCount,            color:'var(--green)'},
-          {label:'غير محسوبة',       value:ungradedCount,          color:'#fb923c'},
-          {label:'ماتشات مفتوحة',    value:openCount,              color:'#facc15'},
-          {label:'بدون نتيجة',       value:noResultCount,          color:'#f87171'},
-          {label:'المتسابقين',        value:participantsCount,     color:'#ff9c91'},
-          {label:'متوسط النقاط',     value:avgPoints,              color:'#a78bfa'},
-          {label:'تغطية الجولة',     value:`${coveragePct}%`,      color:'#38bdf8'},
-          {label:'ميني ليجات',        value:leagues.length,         color:'#a78bfa'},
-          {label:'أعضاء ميني ليج',   value:totalLeagueMembers,     color:'#38bdf8'},
-          {label:'دعوات معلقة',       value:totalPending,           color:'#fb923c'},
-          {label:'أعلى نقاط',           value:topScore,               color:'#4ade80'},
-          {label:'صفر نقاط',            value:zeroPointsCount,        color:'#f87171'},
-        ].map(s=>(
-          <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:16,padding:'12px 14px',textAlign:'center'}}>
-            <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,fontWeight:700}}>{s.label}</div>
-            <div style={{fontSize:22,fontWeight:900,color:s.color,fontVariantNumeric:'tabular-nums'}}>{s.value}</div>
-          </div>
-        ))}
-      </div>
+      {/* الإحصائيات انتقلت بالكامل لتاب 📊 التقارير (لوحة موحّدة من مصدر واحد) */}
 
       {/* ③ TABS — overflowX: auto ✅ */}
-      <div style={{display:'flex',gap:8,padding:'0 24px 16px',overflowX:'auto',scrollbarWidth:'none',WebkitOverflowScrolling:'touch'} as React.CSSProperties}>
+      <div style={{display:'flex',gap:8,padding:'20px 24px 16px',overflowX:'auto',scrollbarWidth:'none',WebkitOverflowScrolling:'touch'} as React.CSSProperties}>
         {([
           {id:'matches',     label:`🏟️ الماتشات (${matches.length})`},
           {id:'predictions', label:`📋 التوقعات (${totalPredictionsCount})`},
@@ -1391,27 +1355,53 @@ const avgPoints = participantsCount > 0
               <div style={{textAlign:'center',color:'var(--muted)',padding:40}}>⏳ جاري تحميل التقارير...</div>
             ) : (
             <>
-              {/* ── بطاقات إحصائيات عامة ── */}
-              {rptOverview && (
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10,marginBottom:20}}>
-                  {([
-                    {label:'إجمالي الأعضاء',     value:rptOverview.total_members,        c:'var(--gold)'},
-                    {label:'بروفايلات مكتملة',   value:rptOverview.completed_profiles,   c:'#5effa8'},
-                    {label:'لديهم تليفون',        value:rptOverview.members_with_phone,   c:'#7fd1ff'},
-                    {label:'جاءوا بدعوة',         value:rptOverview.members_from_referral,c:'#ffd27f'},
-                    {label:'أعضاء نشطون',         value:rptOverview.active_predictors,    c:'#5effa8'},
-                    {label:'أعضاء غير نشطين',     value:rptOverview.inactive_members,     c:'#ff9c91'},
-                    {label:'إجمالي التوقعات',     value:rptOverview.total_predictions,    c:'var(--gold)'},
-                    {label:'توقعات مُقيَّمة',      value:rptOverview.graded_predictions,   c:'#5effa8'},
-                    {label:'توقعات غير مُقيَّمة',   value:rptOverview.ungraded_predictions, c:rptOverview.ungraded_predictions>0?'#ff9c91':'var(--muted)'},
-                  ]).map(s=>(
-                    <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:14,padding:'12px 14px',textAlign:'center'}}>
-                      <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,fontWeight:700}}>{s.label}</div>
-                      <div style={{fontSize:22,fontWeight:900,color:s.c,fontVariantNumeric:'tabular-nums'}}>{Number(s.value).toLocaleString('en-US')}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* ── لوحة الإحصائيات الموحّدة (مصدر واحد: admin_report_overview_stats_v1) ── */}
+              {rptOverview && (() => {
+                const fmt = (v:any) => Number(v).toLocaleString('en-US');
+                const groups = [
+                  { title:'👥 الأعضاء', cards:[
+                    {label:'إجمالي الأعضاء',   value:fmt(rptOverview.total_members),       c:'var(--gold)'},
+                    {label:'بروفايلات مكتملة', value:fmt(rptOverview.completed_profiles),  c:'#5effa8'},
+                    {label:'لديهم تليفون',      value:fmt(rptOverview.members_with_phone),  c:'#7fd1ff'},
+                    {label:'جاءوا بدعوة',       value:fmt(rptOverview.members_from_referral),c:'#ffd27f'},
+                    {label:'أعضاء نشطون',       value:fmt(rptOverview.active_predictors),   c:'#5effa8'},
+                    {label:'غير نشطين',         value:fmt(rptOverview.inactive_members),    c:'#ff9c91'},
+                  ]},
+                  { title:'📋 التوقعات والماتشات', cards:[
+                    {label:'إجمالي التوقعات',   value:fmt(rptOverview.total_predictions),   c:'var(--gold)'},
+                    {label:'مُقيَّمة',           value:fmt(rptOverview.graded_predictions),  c:'#5effa8'},
+                    {label:'غير مُقيَّمة',        value:fmt(rptOverview.ungraded_predictions),c:rptOverview.ungraded_predictions>0?'#ff9c91':'var(--muted)'},
+                    {label:'إجمالي الماتشات',   value:fmt(rptOverview.total_fixtures),      c:'#a78bfa'},
+                    {label:'ماتشات مفتوحة',     value:fmt(rptOverview.open_fixtures),       c:'#facc15'},
+                    {label:'بدون نتيجة',        value:fmt(rptOverview.no_result_fixtures),  c:'#f87171'},
+                  ]},
+                  { title:'🏆 الليجات والنقاط', cards:[
+                    {label:'ميني ليجات',        value:fmt(rptOverview.total_leagues),       c:'#a78bfa'},
+                    {label:'أعضاء الليجات',     value:fmt(rptOverview.total_league_members),c:'#7fd1ff'},
+                    {label:'دعوات معلّقة',       value:fmt(rptOverview.pending_invites),     c:'#fb923c'},
+                    {label:'أعلى نقاط',         value:fmt(rptOverview.top_score),           c:'#4ade80'},
+                    {label:'متوسط النشطين',     value:rptOverview.avg_points_active,        c:'#38bdf8'},
+                    {label:'صفر أو أقل',        value:fmt(rptOverview.zero_or_less_members),c:'#f87171'},
+                  ]},
+                ];
+                return (
+                  <div style={{marginBottom:24}}>
+                    {groups.map(g=>(
+                      <div key={g.title} style={{marginBottom:14}}>
+                        <div style={{fontSize:13,fontWeight:800,color:'var(--muted)',marginBottom:8}}>{g.title}</div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10}}>
+                          {g.cards.map(s=>(
+                            <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:14,padding:'12px 14px',textAlign:'center'}}>
+                              <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,fontWeight:700}}>{s.label}</div>
+                              <div style={{fontSize:22,fontWeight:900,color:s.c,fontVariantNumeric:'tabular-nums'}}>{s.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* ── مبدّل التقارير ── */}
               <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
