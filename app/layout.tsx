@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import InstallPrompt from '@/components/InstallPrompt';
+import GoogleAnalytics from '@/components/GoogleAnalytics';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -55,6 +56,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl">
       <body>
+        <GoogleAnalytics />
         <ServiceWorkerRegister />
         <InstallPrompt />
         {children}
