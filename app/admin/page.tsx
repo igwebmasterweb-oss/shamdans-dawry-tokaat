@@ -25,9 +25,14 @@ export default function AdminPage() {
   const [rptReferrers, setRptReferrers]   = useState<any[]>([]);
   const [rptSuspicious, setRptSuspicious] = useState<any[]>([]);
   const [rptInactive, setRptInactive]     = useState<any[]>([]);
+  // التقارير الإضافية الأربعة
+  const [rptRoundCompletion, setRptRoundCompletion] = useState<any[]>([]);
+  const [rptPointsDist, setRptPointsDist]           = useState<any[]>([]);
+  const [rptLeagueActivity, setRptLeagueActivity]   = useState<any[]>([]);
+  const [rptTopPerRound, setRptTopPerRound]         = useState<any[]>([]);
   const [rptLoaded, setRptLoaded]         = useState(false);
   const [rptLoading, setRptLoading]       = useState(false);
-  const [activeReport, setActiveReport]   = useState<'referrers'|'suspicious'|'inactive'>('referrers');
+  const [activeReport, setActiveReport]   = useState<'referrers'|'suspicious'|'inactive'|'round_completion'|'points_dist'|'league_activity'|'top_per_round'>('referrers');
   const [activeRound, setActiveRound] = useState('Group Stage - 1');
   // ⑦ فلتر التوقعات بالجولة
   const [predRoundFilter, setPredRoundFilter] = useState<string>('all');
@@ -83,6 +88,22 @@ const [gradedPredictionsCount, setGradedPredictionsCount] = useState(0);
 const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
   const router = useRouter();
 
+  // ── جلب كل الصفوف بتجاوز حد PostgREST (1000 صف) عبر التقسيم ──
+  const fetchAll = useCallback(async (build: () => any): Promise<any[]> => {
+    const PAGE = 1000;
+    let from = 0;
+    const all: any[] = [];
+    while (true) {
+      const { data, error } = await build().range(from, from + PAGE - 1);
+      if (error) { console.error('fetchAll:', error); break; }
+      const chunk = data || [];
+      all.push(...chunk);
+      if (chunk.length < PAGE) break;
+      from += PAGE;
+    }
+    return all;
+  }, []);
+
   const roundLabels: Record<string,string> = {
     'Group Stage - 1':'الجولة الأولى','Group Stage - 2':'الجولة الثانية',
     'Group Stage - 3':'الجولة الثالثة','Round of 16':'دور الـ 16',
@@ -133,21 +154,25 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
  const loadPredictions = useCallback(async () => {
   try {
     const [
-      { data: preds },
-      { data: pts },
+      preds,
+      pts,
       { count: totalCount },
       { count: gradedCount },
       { count: ungradedCount },
     ] = await Promise.all([
-      supabase
-        .from('predictions')
-        .select('*')
-        .not('fixture_id', 'is', null)
-        .order('submitted_at', { ascending: false }),
+      fetchAll(() =>
+        supabase
+          .from('predictions')
+          .select('*')
+          .not('fixture_id', 'is', null)
+          .order('submitted_at', { ascending: false })
+      ),
 
-      supabase
-        .from('user_points')
-        .select('user_id,full_name,user_email'),
+      fetchAll(() =>
+        supabase
+          .from('user_points')
+          .select('user_id,full_name,user_email')
+      ),
 
       supabase
         .from('predictions')
@@ -184,15 +209,15 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
   } catch (err) {
     console.error('loadPredictions:', err);
   }
-}, []);
+}, [fetchAll]);
 
 const loadLeaderboard = useCallback(async () => {
   try {
-    const [{ data }, { count }, { data: profs }] = await Promise.all([
-      supabase.from('user_points').select('*').order('total_points', { ascending: false }),
+    const [data, { count }, profs] = await Promise.all([
+      fetchAll(() => supabase.from('user_points').select('*').order('total_points', { ascending: false })),
       supabase.from('user_points').select('*', { count: 'exact', head: true }),
       // بيانات البروفايل الكاملة (تليفون/فيسبوك/فريق/تاريخ ميلاد)
-      supabase.from('profiles').select('id,full_name,phone,facebook_url,facebook_id,football_team,date_of_birth,avatar_url,referral_code,created_at'),
+      fetchAll(() => supabase.from('profiles').select('id,full_name,phone,facebook_url,facebook_id,football_team,date_of_birth,avatar_url,referral_code,created_at')),
     ]);
 
     setParticipantsCount(count ?? 0);
@@ -228,14 +253,14 @@ const loadLeaderboard = useCallback(async () => {
   } catch (err) {
     console.error('loadLeaderboard:', err);
   }
-}, []);
+}, [fetchAll]);
 
   const loadLeagues = useCallback(async () => {
     try {
-      const { data: lgs }     = await supabase.from('mini_leagues').select('*').order('created_at',{ascending:false});
-      const { data: members } = await supabase.from('mini_league_members').select('*');
-      const { data: invites } = await supabase.from('mini_league_invitations').select('league_id,status');
-      const { data: userPts } = await supabase.from('user_points').select('user_id,full_name,user_email,total_points');
+      const lgs     = await fetchAll(() => supabase.from('mini_leagues').select('*').order('created_at',{ascending:false}));
+      const members = await fetchAll(() => supabase.from('mini_league_members').select('*'));
+      const invites = await fetchAll(() => supabase.from('mini_league_invitations').select('league_id,status'));
+      const userPts = await fetchAll(() => supabase.from('user_points').select('user_id,full_name,user_email,total_points'));
       const userPtsMap = new Map((userPts||[]).map((u:any)=>[u.user_id,u]));
       const enrichedMembers = (members||[]).map((m:any)=>({...m,_profile:userPtsMap.get(m.user_id)||null}));
       const membersMap: Record<string,any[]> = {};
@@ -247,7 +272,7 @@ const loadLeaderboard = useCallback(async () => {
       setLeagueMembers(membersMap);
       setLeagues((lgs||[]).map((lg:any)=>{ const m=membersMap[lg.id]||[]; const pts=m.map((x:any)=>x._profile?.total_points||0); return {...lg,member_count:m.length,pending_invites:pendingMap[lg.id]||0,top_points:pts.length?Math.max(...pts):0,owner_name:ownerMap[lg.id]||'—'}; }));
     } catch (err) { console.error('loadLeagues:', err); }
-  }, []);
+  }, [fetchAll]);
 
   const loadPrizes = useCallback(async () => {
   try {
@@ -561,16 +586,24 @@ const loadLeaderboard = useCallback(async () => {
     if (rptLoaded || rptLoading) return;
     setRptLoading(true);
     try {
-      const [ov, ref, sus, inact] = await Promise.all([
+      const [ov, ref, sus, inact, rc, pd, la, tpr] = await Promise.all([
         supabase.from('admin_report_overview_stats_v1').select('*').single(),
         supabase.from('admin_report_top_referrers_v1').select('*').order('referral_count',{ascending:false}).limit(500),
         supabase.from('admin_report_suspicious_late_points_v1').select('*').order('total_late_points',{ascending:false}).limit(500),
         supabase.from('admin_report_inactive_users_v1').select('*').order('created_at',{ascending:false}).limit(500),
+        supabase.from('admin_report_round_completion_v1').select('*').order('round_start',{ascending:true}),
+        supabase.from('admin_report_points_distribution_v1').select('*'),
+        supabase.from('admin_report_league_activity_v1').select('*').order('member_count',{ascending:false}).limit(500),
+        supabase.from('admin_report_top_per_round_v1').select('*').order('round',{ascending:true}).order('rank_in_round',{ascending:true}),
       ]);
       if (ov.data) setRptOverview(ov.data);
       if (ref.data) setRptReferrers(ref.data);
       if (sus.data) setRptSuspicious(sus.data);
       if (inact.data) setRptInactive(inact.data);
+      if (rc.data) setRptRoundCompletion(rc.data);
+      if (pd.data) setRptPointsDist(pd.data);
+      if (la.data) setRptLeagueActivity(la.data);
+      if (tpr.data) setRptTopPerRound(tpr.data);
       setRptLoaded(true);
     } catch {
       showMsg('⚠️ تعذّر تحميل التقارير', 'error');
@@ -605,6 +638,26 @@ const loadLeaderboard = useCallback(async () => {
     ['#','الاسم','التليفون','الإيميل','البروفايل مكتمل','من دعوة','تاريخ التسجيل'],
     rptInactive.map((r,i)=>[i+1, r.full_name||'—', r.phone||'', r.user_email||'', r.profile_completed?'نعم':'لا', r.came_from_referral?'نعم':'لا', r.created_at?String(r.created_at).slice(0,10):'']),
     'inactive-members'
+  );
+  const exportRoundCompletionCSV = () => exportReportCSV(
+    ['الجولة','عدد الماتشات','عدد التوقعات','عدد المتوقعين','متوسط التوقعات/مستخدم','نسبة الاكتمال %'],
+    rptRoundCompletion.map(r=>[roundLabels[r.round]||r.round, r.fixtures_count, r.predictions_count, r.predictors_count, r.avg_preds_per_user, r.fill_rate_pct]),
+    'round-completion'
+  );
+  const exportPointsDistCSV = () => exportReportCSV(
+    ['الشريحة','عدد الأعضاء','النسبة %'],
+    rptPointsDist.map(r=>[r.bucket_label, r.members_count, r.pct]),
+    'points-distribution'
+  );
+  const exportLeagueActivityCSV = () => exportReportCSV(
+    ['#','اسم الليج','الكود','نشط','المنشئ','إيميل المنشئ','عدد الأعضاء','دعوات معلّقة','تاريخ الإنشاء'],
+    rptLeagueActivity.map((r,i)=>[i+1, r.league_name||'—', r.code||'', r.is_active?'نعم':'لا', r.creator_name||'', r.creator_email||'', r.member_count, r.pending_invites, r.created_at?String(r.created_at).slice(0,10):'']),
+    'league-activity'
+  );
+  const exportTopPerRoundCSV = () => exportReportCSV(
+    ['الجولة','الترتيب','الاسم','الإيميل','النقاط','عدد التوقعات'],
+    rptTopPerRound.map(r=>[roundLabels[r.round]||r.round, r.rank_in_round, r.display_name||'—', r.user_email||'', r.total_points, r.predictions_count]),
+    'top-per-round'
   );
 
   // تطبيع اسم الهداف: يشيل الحركات (Muñoz→munoz) + lowercase + trim
@@ -1363,9 +1416,13 @@ const avgPoints = participantsCount > 0
               {/* ── مبدّل التقارير ── */}
               <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
                 {([
-                  {id:'referrers',  label:`📨 أكثر الداعين (${rptReferrers.length})`},
-                  {id:'suspicious', label:`⚠️ نقاط مشبوهة (${rptSuspicious.length})`},
-                  {id:'inactive',   label:`💤 أعضاء غير نشطين (${rptInactive.length})`},
+                  {id:'referrers',        label:`📨 أكثر الداعين (${rptReferrers.length})`},
+                  {id:'suspicious',       label:`⚠️ نقاط مشبوهة (${rptSuspicious.length})`},
+                  {id:'inactive',         label:`💤 أعضاء غير نشطين (${rptInactive.length})`},
+                  {id:'round_completion', label:`📊 اكتمال الجولات (${rptRoundCompletion.length})`},
+                  {id:'points_dist',      label:`📈 توزيع النقاط (${rptPointsDist.length})`},
+                  {id:'league_activity',  label:`🏆 نشاط الميني ليجات (${rptLeagueActivity.length})`},
+                  {id:'top_per_round',    label:`🥇 الأعلى لكل جولة (${rptTopPerRound.length})`},
                 ] as const).map(({id,label})=>(
                   <button key={id} onClick={()=>setActiveReport(id)} style={{padding:'8px 16px',borderRadius:10,border:'1px solid '+(activeReport===id?'var(--gold)':'var(--line)'),background:activeReport===id?'rgba(217,178,95,.15)':'var(--surface-2)',color:activeReport===id?'var(--gold)':'var(--muted)',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif",whiteSpace:'nowrap'}}>{label}</button>
                 ))}
@@ -1470,6 +1527,136 @@ const avgPoints = participantsCount > 0
                   </div>
                 </>
               )}
+
+              {/* ── تقرير: اكتمال الجولات ── */}
+              {activeReport==='round_completion' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>نسبة الاكتمال = (عدد التوقعات الفعلية ÷ (عدد الماتشات × عدد المتوقعين)) لكل جولة</span>
+                    <button onClick={exportRoundCompletionCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>الجولة</th><th>الماتشات</th><th>التوقعات</th><th>المتوقعون</th><th>متوسط/مستخدم</th><th>نسبة الاكتمال</th></tr></thead>
+                      <tbody>
+                        {rptRoundCompletion.length===0 ? (
+                          <tr><td colSpan={6} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                        ) : rptRoundCompletion.map((r)=>(
+                          <tr key={r.round}>
+                            <td style={{fontWeight:800,color:'var(--gold)'}}>{roundLabels[r.round]||r.round}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.fixtures_count}</td>
+                            <td style={{fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{Number(r.predictions_count).toLocaleString('en-US')}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{Number(r.predictors_count).toLocaleString('en-US')}</td>
+                            <td style={{color:'#7fd1ff',fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.avg_preds_per_user}</td>
+                            <td>
+                              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                                <div style={{flex:1,minWidth:60,height:8,background:'var(--surface-3)',borderRadius:4,overflow:'hidden'}}>
+                                  <div style={{width:`${Math.min(100,Number(r.fill_rate_pct))}%`,height:'100%',background:'var(--gold)'}} />
+                                </div>
+                                <span style={{color:'var(--gold)',fontWeight:900,fontSize:12,fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap'}}>{r.fill_rate_pct}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: توزيع النقاط ── */}
+              {activeReport==='points_dist' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>توزيع الأعضاء حسب شرائح النقاط النهائية (leaderboard_general_v1)</span>
+                    <button onClick={exportPointsDistCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>الشريحة</th><th>عدد الأعضاء</th><th>النسبة</th></tr></thead>
+                      <tbody>
+                        {rptPointsDist.length===0 ? (
+                          <tr><td colSpan={3} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                        ) : rptPointsDist.map((r)=>(
+                          <tr key={r.bucket_key}>
+                            <td style={{fontWeight:700}}>{r.bucket_label}</td>
+                            <td style={{color:'var(--gold)',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{Number(r.members_count).toLocaleString('en-US')}</td>
+                            <td>
+                              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                                <div style={{flex:1,minWidth:60,height:8,background:'var(--surface-3)',borderRadius:4,overflow:'hidden'}}>
+                                  <div style={{width:`${Math.min(100,Number(r.pct))}%`,height:'100%',background:'#5effa8'}} />
+                                </div>
+                                <span style={{color:'#5effa8',fontWeight:800,fontSize:12,fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap'}}>{r.pct}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: نشاط الميني ليجات ── */}
+              {activeReport==='league_activity' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>الميني ليجات مرتّبة حسب عدد الأعضاء · يعرض أعلى {rptLeagueActivity.length}</span>
+                    <button onClick={exportLeagueActivityCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>#</th><th>اسم الليج</th><th>الكود</th><th>الحالة</th><th>المنشئ</th><th>الأعضاء</th><th>دعوات معلّقة</th><th>الإنشاء</th></tr></thead>
+                      <tbody>
+                        {rptLeagueActivity.length===0 ? (
+                          <tr><td colSpan={8} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد ميني ليجات</td></tr>
+                        ) : rptLeagueActivity.map((r,i)=>(
+                          <tr key={r.league_id}>
+                            <td style={{fontWeight:800,color:i<3?'var(--gold)':'var(--muted)'}}>{i<3?['🥇','🥈','🥉'][i]:`#${i+1}`}</td>
+                            <td style={{fontWeight:700}}>{r.league_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.code||'—'}</td>
+                            <td>{r.is_active?<span style={{color:'#5effa8',fontWeight:700,fontSize:12}}>✅ نشط</span>:<span style={{color:'var(--muted)',fontSize:12}}>— موقوف</span>}</td>
+                            <td style={{color:'var(--muted)',fontSize:12}}>{r.creator_name||'—'}</td>
+                            <td style={{color:'var(--gold)',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{r.member_count}</td>
+                            <td style={{color:'#ffd27f',fontWeight:700,fontVariantNumeric:'tabular-nums'}}>{r.pending_invites}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.created_at?String(r.created_at).slice(0,10):'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: الأعلى لكل جولة ── */}
+              {activeReport==='top_per_round' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>أعلى 10 لاعبين في كل جولة حسب نقاط الجولة (leaderboard_rounds_v1)</span>
+                    <button onClick={exportTopPerRoundCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>الجولة</th><th>الترتيب</th><th>الاسم</th><th>الإيميل</th><th>النقاط</th><th>التوقعات</th></tr></thead>
+                      <tbody>
+                        {rptTopPerRound.length===0 ? (
+                          <tr><td colSpan={6} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                        ) : rptTopPerRound.map((r)=>(
+                          <tr key={`${r.round}-${r.user_id}`}>
+                            <td style={{fontWeight:800,color:'var(--gold)',fontSize:12}}>{roundLabels[r.round]||r.round}</td>
+                            <td style={{fontWeight:800,color:r.rank_in_round<=3?'var(--gold)':'var(--muted)'}}>{r.rank_in_round<=3?['🥇','🥈','🥉'][r.rank_in_round-1]:`#${r.rank_in_round}`}</td>
+                            <td style={{fontWeight:700}}>{r.display_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.user_email||'—'}</td>
+                            <td style={{color:'#5effa8',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{r.total_points}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.predictions_count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
             </>
             )}
           </div>
