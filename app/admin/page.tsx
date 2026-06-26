@@ -72,6 +72,8 @@ export default function AdminPage() {
   const [showPrizeModal, setShowPrizeModal]     = useState(false);
   const [prizeModalLoading, setPrizeModalLoading] = useState(false);
   const [savingWinner, setSavingWinner]         = useState(false);
+  // user_ids المختارين يدوياً كفائزين من قائمة المودال
+  const [selectedWinnerIds, setSelectedWinnerIds] = useState<string[]>([]);
 
   // ── Breakdown Modal ──
   const [breakdownUser, setBreakdownUser]   = useState<any>(null);
@@ -288,7 +290,6 @@ const loadLeaderboard = useCallback(async () => {
       { data: phases },
       { data: winners },
       { data: daily },
-      { data: userPts },
     ] = await Promise.all([
       supabase.from('prize_phases').select('*').order('id'),
       supabase.from('prize_winners').select('*').order('phase_id').order('rank'),
@@ -296,15 +297,20 @@ const loadLeaderboard = useCallback(async () => {
         p_date: new Date().toISOString().split('T')[0],
         p_limit: 10,
       }),
-      supabase.from('user_points').select('user_id,full_name,user_email'),
     ]);
 
-    const userMap = new Map(
-      (userPts || []).map((u: any) => [
-        u.user_id,
-        u.full_name || u.user_email?.split('@')[0] || '—',
-      ])
-    );
+    // جلب أسماء الفائزين المسجّلين فقط (بدل جلب 13ألف صف والتوقف عند 1000) — يحل مشكلة الاسم “—”
+    const winnerIds = Array.from(new Set((winners || []).map((w: any) => w.user_id)));
+    let userMap = new Map<string, string>();
+    if (winnerIds.length > 0) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id,full_name')
+        .in('id', winnerIds);
+      userMap = new Map(
+        (profs || []).map((p: any) => [p.id, p.full_name || '—'])
+      );
+    }
 
     const enrichedWinners = (winners || []).map((w: any) => ({
       ...w,
@@ -1375,8 +1381,12 @@ const loadLeaderboard = useCallback(async () => {
                             setShowPrizeModal(true);
                             setPrizeModalLoading(true);
                             setPhaseLeaderboard([]);
+                            setSelectedWinnerIds([]);
                             const { data } = await supabase.rpc('get_phase_leaderboard', { p_phase_key: phase.phase_key });
-                            setPhaseLeaderboard((data || []).slice(0, phase.winner_count || 1));
+                            // نعرض أعلى 10 للاختيار منهم، ونحدد أعلى winner_count مبدئياً
+                            const top = (data || []).slice(0, 10);
+                            setPhaseLeaderboard(top);
+                            setSelectedWinnerIds(top.slice(0, phase.winner_count || 1).map((r: any) => r.user_id));
                             setPrizeModalLoading(false);
                           }}
                           style={{padding:'8px 16px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#e0bc73,#b9892d)',color:'#1a0a00',fontWeight:800,fontSize:12,fontFamily:'Cairo,sans-serif',cursor:'pointer'}}
@@ -2000,42 +2010,54 @@ const loadLeaderboard = useCallback(async () => {
                 ? <div style={{textAlign:'center',padding:40,color:'var(--muted)',fontSize:14}}>لا توجد نقاط مسجلة في هذه المرحلة بعد</div>
                 : <>
                   <div style={{background:'rgba(217,178,95,.08)',border:'1px solid rgba(217,178,95,.15)',borderRadius:12,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#ffe3a6'}}>
-                    سيتم إعلان أعلى {selectedPhase.winner_count || 1} مشارك كفائز في هذه المرحلة
+                    اختر حتى {selectedPhase.winner_count || 1} فائز من أعلى {phaseLeaderboard.length} مشارك · المختار حالياً: {selectedWinnerIds.length}/{selectedPhase.winner_count || 1}
                   </div>
                   {phaseLeaderboard.map((row: any, i: number) => {
                     const prizeLabels = [selectedPhase.prize_label, selectedPhase.prize_label_2, selectedPhase.prize_label_3];
+                    const maxWinners = selectedPhase.winner_count || 1;
+                    const selIdx = selectedWinnerIds.indexOf(row.user_id);
+                    const isSel = selIdx !== -1;
+                    const toggle = () => {
+                      setSelectedWinnerIds(prev => {
+                        if (prev.includes(row.user_id)) return prev.filter(id => id !== row.user_id);
+                        if (prev.length >= maxWinners) { showMsg(`⚠️ الحد الأقصى ${maxWinners} فائز · ألغِ تحديداً أولاً`, 'error'); return prev; }
+                        return [...prev, row.user_id];
+                      });
+                    };
                     return (
-                      <div key={row.user_id} style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:'rgba(217,178,95,.06)',border:'1px solid rgba(217,178,95,.15)',borderRadius:14,marginBottom:8}}>
-                        <span style={{fontSize:24}}>{['🥇','🥈','🥉'][i] || String(i + 1)}</span>
+                      <div key={row.user_id} onClick={toggle} style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',background:isSel?'rgba(217,178,95,.14)':'rgba(255,255,255,.03)',border:'1px solid '+(isSel?'rgba(217,178,95,.5)':'var(--line)'),borderRadius:14,marginBottom:8,cursor:'pointer',transition:'all .15s'}}>
+                        <span style={{width:26,height:26,borderRadius:8,border:'2px solid '+(isSel?'var(--gold)':'var(--muted)'),background:isSel?'var(--gold)':'transparent',color:'#1a0a00',display:'grid',placeItems:'center',fontSize:14,fontWeight:900,flexShrink:0}}>{isSel?'✓':''}</span>
+                        <span style={{fontSize:22,minWidth:30,textAlign:'center'}}>{isSel ? (['🥇','🥈','🥉'][selIdx] || `#${selIdx+1}`) : <span style={{fontSize:13,color:'var(--muted)'}}>{`#${i+1}`}</span>}</span>
                         <div style={{flex:1}}>
                           <div style={{fontWeight:800,fontSize:15}}>{row.full_name || 'مجهول'}</div>
                           <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{row.phase_points} نقطة في المرحلة</div>
                         </div>
-                        {prizeLabels[i] && (
-                          <div style={{fontSize:13,color:'#ffe3a6',fontWeight:700,background:'rgba(217,178,95,.1)',borderRadius:8,padding:'4px 10px'}}>{prizeLabels[i]}</div>
+                        {isSel && prizeLabels[selIdx] && (
+                          <div style={{fontSize:13,color:'#ffe3a6',fontWeight:700,background:'rgba(217,178,95,.1)',borderRadius:8,padding:'4px 10px',flexShrink:0}}>{prizeLabels[selIdx]}</div>
                         )}
                       </div>
                     );
                   })}
                   <button
-                    disabled={savingWinner}
+                    disabled={savingWinner || selectedWinnerIds.length === 0}
                     onClick={async () => {
-                      // ── منع التكرار: لو فيه فائزين متسجلين للمرحلة دي فعلاً ──
                       const existingWins = prizeWinners.filter((w: any) => w.phase_id === selectedPhase.id);
                       if (existingWins.length > 0) {
                         showMsg('⚠️ تم إعلان الفائزين لهذه المرحلة من قبل', 'error');
                         return;
                       }
-                      // ── تأكيد قبل الإعلان (إجراء لا يمكن التراجع عنه) ──
-                      if (!confirm(`تأكيد إعلان الفائزين لمرحلة "${selectedPhase.name}"؟\nسيتم تسجيل ${phaseLeaderboard.length} فائز ولا يمكن التراجع.`)) return;
+                      if (selectedWinnerIds.length === 0) { showMsg('⚠️ اختر فائزًا واحدًا على الأقل', 'error'); return; }
+                      const chosen = selectedWinnerIds.map(id => phaseLeaderboard.find((r: any) => r.user_id === id)).filter(Boolean) as any[];
+                      const names = chosen.map((r, i) => `${i+1}. ${r.full_name || 'مجهول'} (${r.phase_points} نقطة)`).join('\n');
+                      if (!confirm(`تأكيد إعلان الفائزين لمرحلة "${selectedPhase.name}"؟\n\n${names}\n\nلا يمكن التراجع.`)) return;
                       setSavingWinner(true);
                       try {
-                        for (let i = 0; i < phaseLeaderboard.length; i++) {
+                        for (let i = 0; i < chosen.length; i++) {
                           await supabase.from('prize_winners').insert({
                             phase_id: selectedPhase.id,
-                            user_id:  phaseLeaderboard[i].user_id,
+                            user_id:  chosen[i].user_id,
                             rank:     i + 1,
-                            points:   Number(phaseLeaderboard[i].phase_points),
+                            points:   Number(chosen[i].phase_points),
                           });
                         }
                         await supabase.from('prize_phases').update({ status: 'completed' }).eq('id', selectedPhase.id);
@@ -2047,9 +2069,9 @@ const loadLeaderboard = useCallback(async () => {
                       }
                       setSavingWinner(false);
                     }}
-                    style={{width:'100%',padding:14,borderRadius:14,border:'none',background:savingWinner?'rgba(217,178,95,.3)':'linear-gradient(135deg,#e0bc73,#b9892d)',color:'#1a0a00',fontWeight:900,fontSize:15,fontFamily:'Cairo,sans-serif',cursor:savingWinner?'not-allowed':'pointer',marginTop:16}}
+                    style={{width:'100%',padding:14,borderRadius:14,border:'none',background:(savingWinner||selectedWinnerIds.length===0)?'rgba(217,178,95,.3)':'linear-gradient(135deg,#e0bc73,#b9892d)',color:'#1a0a00',fontWeight:900,fontSize:15,fontFamily:'Cairo,sans-serif',cursor:(savingWinner||selectedWinnerIds.length===0)?'not-allowed':'pointer',marginTop:16}}
                   >
-                    {savingWinner ? '⏳ جاري الحفظ...' : '✅ تأكيد وإعلان الفائزين'}
+                    {savingWinner ? '⏳ جاري الحفظ...' : `✅ تأكيد وإعلان ${selectedWinnerIds.length} فائز`}
                   </button>
                 </>
             }
