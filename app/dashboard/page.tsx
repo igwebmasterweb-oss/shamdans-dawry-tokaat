@@ -2145,9 +2145,11 @@ const myFilteredPredictionsSorted = [...predictions]
                       <div className="live-match-right">
                         <div style={{ fontSize: 13, fontWeight: 800, color: '#93c5fd', lineHeight: 1.6 }}>🔵 التوقع الحالي</div>
                         <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', lineHeight: 1.7, justifyContent: 'flex-end' }}>
+                          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'}</span>
                           {currentMatch?.teams?.home?.logo && <img src={currentMatch.teams.home.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
-                          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{currentMatch?.teams?.home?.name || currentMatch?.home_team_name || 'صاحب الأرض'} × {currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}</span>
+                          <span style={{ color: 'var(--muted)', fontWeight: 400 }}>×</span>
                           {currentMatch?.teams?.away?.logo && <img src={currentMatch.teams.away.logo} alt="" width={16} height={16} style={{ objectFit: 'contain', borderRadius: 3, flex: '0 0 auto' }} />}
+                          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{currentMatch?.teams?.away?.name || currentMatch?.away_team_name || 'الضيف'}</span>
                         </div>
                         {currentMatchDate && (
                           <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }}>
