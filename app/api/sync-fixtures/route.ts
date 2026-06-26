@@ -153,24 +153,35 @@ export async function GET(request: NextRequest) {
             }
           }
 
+          // 🥅 أول هدّاف = أول جون زمنياً في الماتش حتى لو كان هدف عكسي (Own Goal).
+          //    الـ API بيرجّع الأحداث مرتّبة زمنياً، فأول حدث Goal هو أول جون فعلي.
+          //    (اللاعب المسجّل في الـ own goal هو اللي حطّ الكورة في مرماه — ده اللي يتحسب أول هدّاف.)
+          if (ev.type === 'Goal') {
+            const scorerName = ev.player?.name ? normalizeScorerName(ev.player.name) : null;
+            const scorerId = ev.player?.id !== null && ev.player?.id !== undefined
+              ? Number(ev.player.id)
+              : null;
+
+            if (scorerName && !firstScorer) firstScorer = scorerName;
+            if (scorerId !== null && Number.isFinite(scorerId) && firstScorerId === null) {
+              firstScorerId = scorerId;
+            }
+          }
+
+          // 📋 قائمة هدّافي الماتش (للـ +1 "سجّل في الماتش") — بتستثني الأهداف العكسية
+          //    لأن "سجّل في الماتش" معناها سجّل لفريقه، مش هدف عكسي في مرماه.
           if (ev.type === 'Goal' && ev.detail !== 'Own Goal') {
             const scorerName = ev.player?.name ? normalizeScorerName(ev.player.name) : null;
             const scorerId = ev.player?.id !== null && ev.player?.id !== undefined
               ? Number(ev.player.id)
               : null;
 
-            if (scorerName) {
-              if (!firstScorer) firstScorer = scorerName;
-              if (!scorersJson.some(name => name === scorerName)) {
-                scorersJson.push(scorerName);
-              }
+            if (scorerName && !scorersJson.some(name => name === scorerName)) {
+              scorersJson.push(scorerName);
             }
 
-            if (scorerId !== null && Number.isFinite(scorerId)) {
-              if (firstScorerId === null) firstScorerId = scorerId;
-              if (!scorersIdsJson.includes(scorerId)) {
-                scorersIdsJson.push(scorerId);
-              }
+            if (scorerId !== null && Number.isFinite(scorerId) && !scorersIdsJson.includes(scorerId)) {
+              scorersIdsJson.push(scorerId);
             }
           }
         }
