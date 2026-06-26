@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
 
-// أي مسار بيبدأ بالقيم دي مش هيتسجّل في Google Analytics (صفحات الإدارة).
+// أي مسار بيبدأ بالقيم دي مش هيتسجّل في Google Analytics (صفحات الإدارة + الـ API).
 const EXCLUDED_PREFIXES = ['/admin', '/api'];
 
 const isExcluded = (path: string | null) =>
@@ -16,30 +16,36 @@ export default function GoogleAnalytics() {
   const pathname = usePathname();
 
   // تتبّع تغيّر الصفحات في الـ SPA (Next App Router مبيعملش full reload).
+  // بنبعت page_view بس لو الصفحة مش مستثناة.
   useEffect(() => {
     if (!GA_ID) return;
-    if (isExcluded(pathname)) return;
     if (typeof window === 'undefined' || typeof (window as any).gtag !== 'function') return;
+    if (isExcluded(pathname)) return;
     (window as any).gtag('config', GA_ID, { page_path: pathname });
   }, [pathname]);
 
-  // مفيش ID متظبّط، أو إحنا جوه صفحة إدارة → مفيش تتبّع خالص.
-  if (!GA_ID || isExcluded(pathname)) return null;
+  // لو مفيش ID متظبّط، مفيش تتبّع خالص.
+  // ملاحظة: بنحمّل الـ scripts مرة واحدة وبنخليها ثابتة (مبنفكّش mount مع تغيّر المسار)
+  // عشان نتجنّب خطأ appendChild في Next عند إعادة حقن inline script.
+  if (!GA_ID) return null;
 
   return (
     <>
       <Script
+        id="ga-src"
         src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
         strategy="afterInteractive"
       />
-      <Script id="ga-init" strategy="afterInteractive">
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', '${GA_ID}', { send_page_view: true });
-        `}
-      </Script>
+      <Script
+        id="ga-init"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_ID}', { send_page_view: false });`,
+        }}
+      />
     </>
   );
 }
