@@ -30,9 +30,17 @@ export default function AdminPage() {
   const [rptPointsDist, setRptPointsDist]           = useState<any[]>([]);
   const [rptLeagueActivity, setRptLeagueActivity]   = useState<any[]>([]);
   const [rptTopPerRound, setRptTopPerRound]         = useState<any[]>([]);
+  // تقارير الكنترول السبعة
+  const [rptGrowth, setRptGrowth]             = useState<any[]>([]);
+  const [rptBonusAudit, setRptBonusAudit]     = useState<any[]>([]);
+  const [rptPenalties, setRptPenalties]       = useState<any[]>([]);
+  const [rptIntegrity, setRptIntegrity]       = useState<any[]>([]);
+  const [rptSocial, setRptSocial]             = useState<any[]>([]);
+  const [rptFinishedOpen, setRptFinishedOpen] = useState<any[]>([]);
+  const [rptPrizeLifecycle, setRptPrizeLifecycle] = useState<any[]>([]);
   const [rptLoaded, setRptLoaded]         = useState(false);
   const [rptLoading, setRptLoading]       = useState(false);
-  const [activeReport, setActiveReport]   = useState<'referrers'|'suspicious'|'inactive'|'round_completion'|'points_dist'|'league_activity'|'top_per_round'>('referrers');
+  const [activeReport, setActiveReport]   = useState<'referrers'|'suspicious'|'inactive'|'round_completion'|'points_dist'|'league_activity'|'top_per_round'|'growth'|'bonus_audit'|'penalties'|'integrity'|'social'|'finished_open'|'prize_lifecycle'>('referrers');
   const [activeRound, setActiveRound] = useState('Group Stage - 1');
   // ⑦ فلتر التوقعات بالجولة
   const [predRoundFilter, setPredRoundFilter] = useState<string>('all');
@@ -586,7 +594,7 @@ const loadLeaderboard = useCallback(async () => {
     if (rptLoaded || rptLoading) return;
     setRptLoading(true);
     try {
-      const [ov, ref, sus, inact, rc, pd, la, tpr] = await Promise.all([
+      const [ov, ref, sus, inact, rc, pd, la, tpr, gr, ba, pen, integ, soc, fo, pl] = await Promise.all([
         supabase.from('admin_report_overview_stats_v1').select('*').single(),
         supabase.from('admin_report_top_referrers_v1').select('*').order('referral_count',{ascending:false}).limit(500),
         supabase.from('admin_report_suspicious_late_points_v1').select('*').order('total_late_points',{ascending:false}).limit(500),
@@ -595,6 +603,13 @@ const loadLeaderboard = useCallback(async () => {
         supabase.from('admin_report_points_distribution_v1').select('*'),
         supabase.from('admin_report_league_activity_v1').select('*').order('member_count',{ascending:false}).limit(500),
         supabase.from('admin_report_top_per_round_v1').select('*').order('round',{ascending:true}).order('rank_in_round',{ascending:true}),
+        supabase.from('admin_report_user_growth_v1').select('*').order('day',{ascending:false}).limit(60),
+        supabase.from('admin_report_bonus_audit_v1').select('*').order('duplicate_grants',{ascending:false}).limit(500),
+        supabase.from('admin_report_penalties_v1').select('*').order('penalty_points',{ascending:false}).limit(500),
+        supabase.from('admin_report_integrity_repeat_offenders_v1').select('*').order('rounds_affected',{ascending:false}).limit(500),
+        supabase.from('admin_report_social_activity_v1').select('*').order('total_activities',{ascending:false}).limit(500),
+        supabase.from('admin_report_finished_but_open_v1').select('*').order('match_date',{ascending:false}),
+        supabase.from('admin_report_prize_lifecycle_v1').select('*').order('start_date',{ascending:true}),
       ]);
       if (ov.data) setRptOverview(ov.data);
       if (ref.data) setRptReferrers(ref.data);
@@ -604,6 +619,13 @@ const loadLeaderboard = useCallback(async () => {
       if (pd.data) setRptPointsDist(pd.data);
       if (la.data) setRptLeagueActivity(la.data);
       if (tpr.data) setRptTopPerRound(tpr.data);
+      if (gr.data) setRptGrowth(gr.data);
+      if (ba.data) setRptBonusAudit(ba.data);
+      if (pen.data) setRptPenalties(pen.data);
+      if (integ.data) setRptIntegrity(integ.data);
+      if (soc.data) setRptSocial(soc.data);
+      if (fo.data) setRptFinishedOpen(fo.data);
+      if (pl.data) setRptPrizeLifecycle(pl.data);
       setRptLoaded(true);
     } catch {
       showMsg('⚠️ تعذّر تحميل التقارير', 'error');
@@ -658,6 +680,41 @@ const loadLeaderboard = useCallback(async () => {
     ['الجولة','الترتيب','الاسم','الإيميل','النقاط','عدد التوقعات'],
     rptTopPerRound.map(r=>[roundLabels[r.round]||r.round, r.rank_in_round, r.display_name||'—', r.user_email||'', r.total_points, r.predictions_count]),
     'top-per-round'
+  );
+  const exportGrowthCSV = () => exportReportCSV(
+    ['اليوم','أعضاء جدد','بروفايل مكتمل','من دعوة','من فيسبوك','من جوجل','التراكمي'],
+    rptGrowth.map(r=>[r.day?String(r.day).slice(0,10):'', r.new_members, r.completed_profiles, r.from_referral, r.from_facebook, r.from_google, r.cumulative_members]),
+    'user-growth'
+  );
+  const exportBonusAuditCSV = () => exportReportCSV(
+    ['الاسم','الإيميل','التليفون','عدد المنح','أصناف متميزة','إجمالي النقاط','منح مكررة','به تكرار؟','المصادر','أول منحة','آخر منحة'],
+    rptBonusAudit.map(r=>[r.full_name||'—', r.email||'', r.phone||'', r.grant_count, r.distinct_categories, r.total_bonus_points, r.duplicate_grants, r.has_duplicate?'نعم':'لا', r.sources||'', r.first_granted?String(r.first_granted).slice(0,10):'', r.last_granted?String(r.last_granted).slice(0,10):'']),
+    'bonus-audit'
+  );
+  const exportPenaltiesCSV = () => exportReportCSV(
+    ['الاسم','الإيميل','التليفون','النقاط','الحالة','نشط؟','المصدر','الرسالة','تاريخ الإنشاء'],
+    rptPenalties.map(r=>[r.display_name||'—', r.user_email||'', r.phone||'', r.penalty_points, r.status, r.is_active?'نعم':'لا', r.source||'', r.message||'', r.created_at?String(r.created_at).slice(0,10):'']),
+    'penalties'
+  );
+  const exportIntegrityCSV = () => exportReportCSV(
+    ['الاسم','الإيميل','جولات متأثرة','توقعات متأخرة','إجمالي النقاط المتأخرة','أقصى تأخير (ثانية)','مخالف متكرر؟'],
+    rptIntegrity.map(r=>[r.display_name||'—', r.user_email||'', r.rounds_affected, r.late_predictions, r.total_late_points, r.max_delay_seconds, r.is_repeat_offender?'نعم':'لا']),
+    'integrity-offenders'
+  );
+  const exportSocialCSV = () => exportReportCSV(
+    ['الاسم','الإيميل','إجمالي الأنشطة','مشاركات','أحداث ربح نقاط','أحداث خسارة نقاط','دعوات','انضمام ليجات','آخر نشاط'],
+    rptSocial.map(r=>[r.display_name||'—', r.user_email||'', r.total_activities, r.shares, r.points_earned_events, r.points_lost_events, r.invites, r.league_joins, r.last_activity?String(r.last_activity).slice(0,10):'']),
+    'social-activity'
+  );
+  const exportFinishedOpenCSV = () => exportReportCSV(
+    ['ID','API ID','الجولة','الفريق المستضيف','الفريق الضيف','هدف المستضيف','هدف الضيف','تاريخ الماتش','مفتوح؟'],
+    rptFinishedOpen.map(r=>[r.id, r.api_fixture_id, roundLabels[r.round]||r.round, r.home_team_name||'', r.away_team_name||'', r.actual_home_score, r.actual_away_score, r.match_date?String(r.match_date).slice(0,16).replace('T',' '):'', r.is_open?'نعم':'لا']),
+    'finished-but-open'
+  );
+  const exportPrizeLifecycleCSV = () => exportReportCSV(
+    ['الاسم','المفتاح','البداية','النهاية','الحالة','الفائزون المتوقعون','الجائزة','تراكمي؟','فائزون مسجلون','انتهت الفترة؟','يحتاج فائزين؟','ناقص فائزين؟'],
+    rptPrizeLifecycle.map(r=>[r.name||'—', r.phase_key||'', r.start_date?String(r.start_date).slice(0,10):'', r.end_date?String(r.end_date).slice(0,10):'', r.status, r.expected_winners, r.prize_label||'', r.is_cumulative?'نعم':'لا', r.recorded_winners, r.period_ended?'نعم':'لا', r.needs_winners?'نعم':'لا', r.incomplete_winners?'نعم':'لا']),
+    'prize-lifecycle'
   );
 
   // تطبيع اسم الهداف: يشيل الحركات (Muñoz→munoz) + lowercase + trim
@@ -1413,6 +1470,13 @@ const loadLeaderboard = useCallback(async () => {
                   {id:'points_dist',      label:`📈 توزيع النقاط (${rptPointsDist.length})`},
                   {id:'league_activity',  label:`🏆 نشاط الميني ليجات (${rptLeagueActivity.length})`},
                   {id:'top_per_round',    label:`🥇 الأعلى لكل جولة (${rptTopPerRound.length})`},
+                  {id:'growth',           label:`📈 نمو المستخدمين (${rptGrowth.length})`},
+                  {id:'bonus_audit',      label:`🎁 تدقيق البونص (${rptBonusAudit.length})`},
+                  {id:'penalties',        label:`⛔ العقوبات (${rptPenalties.length})`},
+                  {id:'integrity',        label:`🛡️ تدقيق النزاهة (${rptIntegrity.length})`},
+                  {id:'social',           label:`💬 نشاط الـ Feed (${rptSocial.length})`},
+                  {id:'finished_open',    label:`🔓 خلصت لكن مفتوحة (${rptFinishedOpen.length})`},
+                  {id:'prize_lifecycle',  label:`🏅 دورة الجوائز (${rptPrizeLifecycle.length})`},
                 ] as const).map(({id,label})=>(
                   <button key={id} onClick={()=>setActiveReport(id)} style={{padding:'8px 16px',borderRadius:10,border:'1px solid '+(activeReport===id?'var(--gold)':'var(--line)'),background:activeReport===id?'rgba(217,178,95,.15)':'var(--surface-2)',color:activeReport===id?'var(--gold)':'var(--muted)',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif",whiteSpace:'nowrap'}}>{label}</button>
                 ))}
@@ -1639,6 +1703,219 @@ const loadLeaderboard = useCallback(async () => {
                             <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.user_email||'—'}</td>
                             <td style={{color:'#5effa8',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{r.total_points}</td>
                             <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.predictions_count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: نمو المستخدمين ── */}
+              {activeReport==='growth' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>التسجيل اليومي لآخر 60 يوم · أعضاء جدد + التراكمي + مصادر الانضمام</span>
+                    <button onClick={exportGrowthCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>اليوم</th><th>أعضاء جدد</th><th>بروفايل مكتمل</th><th>من دعوة</th><th>فيسبوك</th><th>جوجل</th><th>التراكمي</th></tr></thead>
+                      <tbody>
+                        {rptGrowth.length===0 ? (
+                          <tr><td colSpan={7} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                        ) : rptGrowth.map((r)=>(
+                          <tr key={String(r.day)}>
+                            <td style={{fontWeight:800,color:'var(--gold)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.day?String(r.day).slice(0,10):'—'}</td>
+                            <td style={{fontWeight:900,color:'#5effa8',fontVariantNumeric:'tabular-nums'}}>{r.new_members}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.completed_profiles}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.from_referral}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.from_facebook}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.from_google}</td>
+                            <td style={{fontWeight:800,color:'var(--text)',fontVariantNumeric:'tabular-nums'}}>{r.cumulative_members}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: تدقيق البونص ── */}
+              {activeReport==='bonus_audit' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>تدقيق منح البونص · المنح المكررة محسوبة بعد تطبيع المصدر (إزالة لاحقة التاريخ)</span>
+                    <button onClick={exportBonusAuditCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>الاسم</th><th>الإيميل</th><th>عدد المنح</th><th>أصناف</th><th>إجمالي النقاط</th><th>منح مكررة</th><th>المصادر</th></tr></thead>
+                      <tbody>
+                        {rptBonusAudit.length===0 ? (
+                          <tr><td colSpan={7} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                        ) : rptBonusAudit.map((r)=>(
+                          <tr key={r.user_id} style={r.has_duplicate?{background:'rgba(255,107,107,.06)'}:undefined}>
+                            <td style={{fontWeight:700}}>{r.has_duplicate?'⚠️ ':''}{r.full_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.email||'—'}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.grant_count}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.distinct_categories}</td>
+                            <td style={{color:'#5effa8',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{r.total_bonus_points}</td>
+                            <td style={{fontWeight:900,color:r.duplicate_grants>0?'#ff6b6b':'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.duplicate_grants}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right',maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.sources||'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: العقوبات ── */}
+              {activeReport==='penalties' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>سجلّ العقوبات (user_penalty_notices) · مرتّب تنازلياً حسب النقاط</span>
+                    <button onClick={exportPenaltiesCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>الاسم</th><th>الإيميل</th><th>النقاط</th><th>الحالة</th><th>نشط</th><th>المصدر</th><th>الرسالة</th><th>التاريخ</th></tr></thead>
+                      <tbody>
+                        {rptPenalties.length===0 ? (
+                          <tr><td colSpan={8} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                        ) : rptPenalties.map((r)=>(
+                          <tr key={r.id}>
+                            <td style={{fontWeight:700}}>{r.display_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.user_email||'—'}</td>
+                            <td style={{color:'#ff6b6b',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{r.penalty_points}</td>
+                            <td style={{color:'var(--muted)',fontSize:12}}>{r.status}</td>
+                            <td style={{fontWeight:800}}>{r.is_active?'✅':'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right'}}>{r.source||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.message||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right'}}>{r.created_at?String(r.created_at).slice(0,10):'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: تدقيق النزاهة (متكررون) ── */}
+              {activeReport==='integrity' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>المخالفون المتكررون — توقعات متأخرة في ≥ جولتين · مؤشّر إخلال محتمل بالنزاهة</span>
+                    <button onClick={exportIntegrityCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>الاسم</th><th>الإيميل</th><th>جولات متأثرة</th><th>توقعات متأخرة</th><th>إجمالي النقاط المتأخرة</th><th>أقصى تأخير</th><th>متكرر</th></tr></thead>
+                      <tbody>
+                        {rptIntegrity.length===0 ? (
+                          <tr><td colSpan={7} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                        ) : rptIntegrity.map((r)=>(
+                          <tr key={r.user_id} style={r.is_repeat_offender?{background:'rgba(255,107,107,.06)'}:undefined}>
+                            <td style={{fontWeight:700}}>{r.is_repeat_offender?'🚩 ':''}{r.display_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.user_email||'—'}</td>
+                            <td style={{fontWeight:900,color:r.rounds_affected>=2?'#ff6b6b':'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.rounds_affected}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.late_predictions}</td>
+                            <td style={{color:'var(--gold)',fontWeight:800,fontVariantNumeric:'tabular-nums'}}>{r.total_late_points}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,fontVariantNumeric:'tabular-nums'}}>{r.max_delay_seconds}ث</td>
+                            <td style={{fontWeight:800}}>{r.is_repeat_offender?'🚩':'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: نشاط الـ Feed ── */}
+              {activeReport==='social' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>تفاعل المستخدمين عبر social_feed · أكثر الأعضاء نشاطاً</span>
+                    <button onClick={exportSocialCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>الاسم</th><th>الإيميل</th><th>الأنشطة</th><th>مشاركات</th><th>ربح نقاط</th><th>خسارة نقاط</th><th>دعوات</th><th>ليجات</th><th>آخر نشاط</th></tr></thead>
+                      <tbody>
+                        {rptSocial.length===0 ? (
+                          <tr><td colSpan={9} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                        ) : rptSocial.map((r)=>(
+                          <tr key={r.user_id}>
+                            <td style={{fontWeight:700}}>{r.display_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.user_email||'—'}</td>
+                            <td style={{fontWeight:900,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{r.total_activities}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.shares}</td>
+                            <td style={{color:'#5effa8',fontVariantNumeric:'tabular-nums'}}>{r.points_earned_events}</td>
+                            <td style={{color:'#ff6b6b',fontVariantNumeric:'tabular-nums'}}>{r.points_lost_events}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.invites}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.league_joins}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right'}}>{r.last_activity?String(r.last_activity).slice(0,10):'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: خلصت لكن مفتوحة ── */}
+              {activeReport==='finished_open' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>ماتشات لها نتيجة فعلية لكن ما زالت is_open=true (يجب إغلاقها) · 0 = سليم</span>
+                    <button onClick={exportFinishedOpenCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>الجولة</th><th>المستضيف</th><th>الضيف</th><th>النتيجة</th><th>تاريخ الماتش</th><th>الحالة</th></tr></thead>
+                      <tbody>
+                        {rptFinishedOpen.length===0 ? (
+                          <tr><td colSpan={6} style={{textAlign:'center',color:'#5effa8',padding:40}}>✅ لا توجد ماتشات معلّقة — كله سليم</td></tr>
+                        ) : rptFinishedOpen.map((r)=>(
+                          <tr key={r.id} style={{background:'rgba(255,107,107,.06)'}}>
+                            <td style={{fontWeight:800,color:'var(--gold)',fontSize:12}}>{roundLabels[r.round]||r.round}</td>
+                            <td style={{fontWeight:700}}>{r.home_team_name||'—'}</td>
+                            <td style={{fontWeight:700}}>{r.away_team_name||'—'}</td>
+                            <td style={{fontWeight:900,color:'var(--text)',fontVariantNumeric:'tabular-nums'}}>{r.actual_home_score} - {r.actual_away_score}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right'}}>{r.match_date?String(r.match_date).slice(0,16).replace('T',' '):'—'}</td>
+                            <td style={{color:'#ff6b6b',fontWeight:800}}>🔓 مفتوح</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+
+              {/* ── تقرير: دورة الجوائز ── */}
+              {activeReport==='prize_lifecycle' && (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>مراحل الجوائز (prize_phases) ومدى تسجيل الفائزين · 🚩 = الفترة انتهت ويحتاج رصد فائزين</span>
+                    <button onClick={exportPrizeLifecycleCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>المرحلة</th><th>البداية</th><th>النهاية</th><th>الحالة</th><th>متوقع</th><th>مسجّل</th><th>الجائزة</th><th>المتابعة</th></tr></thead>
+                      <tbody>
+                        {rptPrizeLifecycle.length===0 ? (
+                          <tr><td colSpan={8} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد مراحل</td></tr>
+                        ) : rptPrizeLifecycle.map((r)=>(
+                          <tr key={r.id} style={r.needs_winners?{background:'rgba(255,107,107,.06)'}:undefined}>
+                            <td style={{fontWeight:700}}>{r.needs_winners?'🚩 ':''}{r.name||'—'}{r.is_cumulative?' (تراكمي)':''}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right'}}>{r.start_date?String(r.start_date).slice(0,10):'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right'}}>{r.end_date?String(r.end_date).slice(0,10):'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12}}>{r.status}</td>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.expected_winners}</td>
+                            <td style={{fontWeight:900,color:r.incomplete_winners?'#ff6b6b':'#5effa8',fontVariantNumeric:'tabular-nums'}}>{r.recorded_winners}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.prize_label||'—'}</td>
+                            <td style={{fontWeight:800,fontSize:11}}>{r.needs_winners?'🚩 يحتاج رصد':(r.incomplete_winners?'⚠️ ناقص':(r.period_ended?'✅ مكتمل':'⏳ جارٍ'))}</td>
                           </tr>
                         ))}
                       </tbody>
