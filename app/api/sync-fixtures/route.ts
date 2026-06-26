@@ -83,6 +83,8 @@ export async function GET(request: NextRequest) {
       const isFinished = ['FT', 'AET', 'PEN'].includes(status);
 
       const wentExtraTime = status === 'AET' || status === 'PEN';
+      // ترجيح منفصل: الماتش انتهى بركلات الترجيح بس لو status = PEN.
+      const wentPenaltyShootout = status === 'PEN';
       const bothTeamsScored = goalsHome !== null && goalsAway !== null
         ? goalsHome > 0 && goalsAway > 0
         : false;
@@ -124,11 +126,31 @@ export async function GET(request: NextRequest) {
             redCard = true;
           }
 
-          if (
-            (ev.type === 'Goal' && (ev.detail === 'Penalty' || ev.detail === 'Missed Penalty')) ||
-            (ev.type === 'Var' && typeof ev.detail === 'string' && ev.detail.toLowerCase().includes('penalty'))
-          ) {
+          // ضربة الجزاء: نفصل الجون/التنفيذ الفعلي عن قرارات الـ VAR.
+          // 1) جون أو ضربة جزاء فعلية اتنفّذت داخل اللعب => تأكيد قاطع.
+          if (ev.type === 'Goal' && (ev.detail === 'Penalty' || ev.detail === 'Missed Penalty')) {
             penalty = true;
+          }
+
+          // 2) قرار VAR متعلّق بضربة جزاء: نحسب التأكيد فقط، ونتجاهل الإلغاء.
+          //    الـ API بيرجّع detail زي: "Penalty confirmed" / "Penalty cancelled"
+          //    / "Penalty Disallowed" / "Penalty awarded" / "No penalty" ... إلخ.
+          if (ev.type === 'Var' && typeof ev.detail === 'string') {
+            const detail = ev.detail.toLowerCase();
+            if (detail.includes('penalty')) {
+              const isCancellation =
+                detail.includes('cancel') ||
+                detail.includes('disallow') ||
+                detail.includes('overturn') ||
+                detail.includes('no penalty') ||
+                detail.includes('not given') ||
+                detail.includes('not awarded') ||
+                detail.includes('reversed') ||
+                detail.includes('removed');
+              if (!isCancellation) {
+                penalty = true;
+              }
+            }
           }
 
           if (ev.type === 'Goal' && ev.detail !== 'Own Goal') {
@@ -167,6 +189,7 @@ export async function GET(request: NextRequest) {
           round: match.league.round,
           is_open: !isFinished,
           went_extra_time: wentExtraTime,
+          went_penalty_shootout: wentPenaltyShootout,
           both_teams_scored: bothTeamsScored,
           scorers_json: scorersJson,
           scorers_ids_json: scorersIdsJson,
@@ -204,6 +227,7 @@ export async function GET(request: NextRequest) {
             match_date: match.fixture.date,
             round: match.league.round,
             went_extra_time: wentExtraTime,
+            went_penalty_shootout: wentPenaltyShootout,
             both_teams_scored: bothTeamsScored,
             red_card_in_match: redCard,
             penalty_in_match: penalty,
@@ -234,6 +258,7 @@ export async function GET(request: NextRequest) {
             match_date: match.fixture.date,
             round: match.league.round,
             went_extra_time: wentExtraTime,
+            went_penalty_shootout: wentPenaltyShootout,
             both_teams_scored: bothTeamsScored,
             scorers_json: scorersJson,
             scorers_ids_json: scorersIdsJson,

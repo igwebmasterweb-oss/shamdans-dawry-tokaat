@@ -507,7 +507,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
   // ✅ الإشعارات (جرس الداش بورد) — نفس منطق صفحة ليجاتي
   const [showNotif, setShowNotif] = useState(false);
-  const { notifications, unreadCount, markRead } = useNotifications();
+  const { notifications, unreadCount, markRead, markNonInviteRead } = useNotifications();
   const getPenaltyPoints = (userId?: string | null) =>
     userId ? Number(penaltyMap[userId] || 0) : 0;
 
@@ -633,7 +633,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
         supabase.auth.getSession(),
         fetch('/api/fixtures').then(res => res.json()),
         supabase.from('fixtures').select(
-  'api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,scorers_json,went_extra_time,red_card_in_match,penalty_in_match,both_teams_scored,home_team_name,away_team_name,home_team_id,away_team_id'
+  'api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,scorers_json,went_extra_time,went_penalty_shootout,red_card_in_match,penalty_in_match,both_teams_scored,home_team_name,away_team_name,home_team_id,away_team_id'
 ),
         supabase.from('predictions').select('*').eq('user_id', userId),
         supabase.from('user_points').select('referral_count,total_points,referral_points,bonus_points,profile_completed').eq('user_id', userId).maybeSingle(),
@@ -732,6 +732,7 @@ const userNameMap: Record<string, string> = {};
           first_scorer:      sb?.first_scorer      ?? '',
           scorers_json:      sb?.scorers_json      ?? null,
           went_extra_time:   sb?.went_extra_time   ?? false,
+          went_penalty_shootout: sb?.went_penalty_shootout ?? false,
           red_card_in_match: sb?.red_card_in_match ?? false,
           penalty_in_match:  sb?.penalty_in_match  ?? false,
           both_teams_scored: sb?.both_teams_scored ?? false,
@@ -1121,6 +1122,7 @@ if (refreshPointsError) throw refreshPointsError;
       firstScorer:          ex?.predicted_first_scorer ?? '',
       firstScorerId:        ex?.predicted_first_scorer_id ?? null,
       extraTime:            ex?.predicted_extra_time  ?? false,
+      penaltyShootout:      ex?.predicted_penalty_shootout ?? false,
       predicted_red_card:   ex?.predicted_red_card    ?? false,
       predicted_penalty:    ex?.predicted_penalty     ?? false,
     };
@@ -1232,6 +1234,7 @@ const submitPrediction = async (match: any) => {
       predicted_first_scorer: form.firstScorer || null,
       predicted_first_scorer_id: resolvedFirstScorerId,
       predicted_extra_time: form.extraTime,
+      predicted_penalty_shootout: form.penaltyShootout ?? false,
       predicted_red_card: form.predicted_red_card ?? false,
       predicted_penalty: form.predicted_penalty ?? false,
       submitted_at: new Date().toISOString(),
@@ -1246,6 +1249,7 @@ const submitPrediction = async (match: any) => {
           predicted_first_scorer: form.firstScorer || null,
           predicted_first_scorer_id: resolvedFirstScorerId,
           predicted_extra_time:   form.extraTime,
+          predicted_penalty_shootout: form.penaltyShootout ?? false,
           predicted_red_card:     form.predicted_red_card ?? false,
           predicted_penalty:      form.predicted_penalty ?? false,
           submitted_at:           new Date().toISOString(),
@@ -1681,6 +1685,7 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
   const redCardInMatch = (pred.red_card_in_match ?? mx?.red_card_in_match) === true;
   const penaltyInMatch = (pred.penalty_in_match ?? mx?.penalty_in_match) === true;
   const wentExtraTime  = (pred.went_extra_time ?? mx?.went_extra_time) === true;
+  const wentPenaltyShootout = (pred.went_penalty_shootout ?? mx?.went_penalty_shootout) === true;
 
   const predHome = pred.predicted_home_score;
   const predAway = pred.predicted_away_score;
@@ -1726,12 +1731,18 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
     items.push({ icon: '🥅', label: 'ضربة جزاء غلط', pts: -1 });
   }
 
-  // 6️⃣ وقت إضافي — +2 لو توقعه وحصل، -1 لو توقعه وماحصلش
-  // (جاهز للعرض — يظهر بس لو العضو اختاره؛ هيتفعّل بعد إضافته في فورم التوقع + update-results للأدوار الإقصائية)
+  // 6️⃣ وقت إضافي — +3 لو توقعه وحصل، -1 لو توقعه وماحصلش (مطابق update-results)
   if (pred.predicted_extra_time === true && wentExtraTime) {
-    items.push({ icon: '⏱️', label: 'وقت إضافي صح', pts: 2 });
+    items.push({ icon: '⏱️', label: 'وقت إضافي صح', pts: 3 });
   } else if (pred.predicted_extra_time === true && !wentExtraTime) {
     items.push({ icon: '⏱️', label: 'وقت إضافي غلط', pts: -1 });
+  }
+
+  // 7️⃣ ركلات الترجيح — +3 لو توقعها وحصلت، -1 لو توقعها وماحصلتش (مطابق update-results)
+  if (pred.predicted_penalty_shootout === true && wentPenaltyShootout) {
+    items.push({ icon: '🥅', label: 'ركلات ترجيح صح', pts: 3 });
+  } else if (pred.predicted_penalty_shootout === true && !wentPenaltyShootout) {
+    items.push({ icon: '🥅', label: 'ركلات ترجيح غلط', pts: -1 });
   }
 
   const total = items.reduce((s, i) => s + i.pts, 0);
@@ -1915,7 +1926,7 @@ const myFilteredPredictionsSorted = [...predictions]
             </Link>
             {/* ✅ جرس الإشعارات — يعرض الإعلانات ودعوات الليج (قبول/رفض) */}
             <button
-              onClick={() => setShowNotif(true)}
+              onClick={() => { setShowNotif(true); markNonInviteRead(); }}
               style={{ position: 'relative', padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(217,178,95,.3)', background: 'rgba(217,178,95,.08)', color: '#f2d79e', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               🔔 الإشعارات
@@ -2476,6 +2487,7 @@ const myFilteredPredictionsSorted = [...predictions]
           { pts: '+3',  text: 'توقع اسم أول هدّاف في الماتش', color: '#7db1ff' },
           { pts: '+1',  text: 'لو توقعك لأول هدّاف غلط بس اللاعب سجل عموماً في الماتش', color: '#7db1ff' },
           { pts: '+3',  text: 'توقع إن الماتش يروح لوقت إضافي (بداية من دور الـ 32)', color: '#c084fc' },
+          { pts: '+3',  text: 'توقع إن الماتش ينتهي بركلات الترجيح (بداية من دور الـ 32)', color: '#c084fc' },
           { pts: '+3',  text: 'توقعك الصح إن هيكون فيه كارت أحمر في الماتش (أيوة)', color: '#f97316' },
           { pts: '+3',  text: 'توقعك الصح إن هيكون فيه ضربة جزاء في الماتش (أيوة)', color: '#f97316' },
         ].map((item, i) => (
@@ -2485,7 +2497,7 @@ const myFilteredPredictionsSorted = [...predictions]
           </div>
         ))}
         <div style={{ marginTop: 12, background: 'rgba(255,80,80,.06)', border: '1px solid rgba(255,80,80,.15)', borderRadius: 12, padding: '10px 14px', fontSize: 12, color: '#ff9e9e', lineHeight: 1.8 }}>
-          ⚠️ لو توقعت غلط في حوار الكارت الأحمر أو ضربة الجزاء أو الوقت الإضافي، هتتخصم منك نقطة (-1). فركّز كويس في توقعاتك!
+          ⚠️ لو توقعت غلط في حوار الكارت الأحمر أو ضربة الجزاء أو الوقت الإضافي أو ركلات الترجيح، هتتخصم منك نقطة (-1). فركّز كويس في توقعاتك!
         </div>
         <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)', lineHeight: 1.8, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
           📌 تقدر تعدّل توقعاتك براحتك طول ما الماتش لسه مبدأش، بس أول ما صفارة البداية تضرب، باب التوقعات هيتقفل ومش هتقدر تعدل توقعك تاني.
@@ -3104,20 +3116,39 @@ const myFilteredPredictionsSorted = [...predictions]
 اكسب 3 نقاط اضافية لكل توقع صحيح هنا 👇</span>
                             </div>
                             <div style={{ fontSize: 12, color: '#fdba74', background: 'rgba(251,146,60,.08)', border: '1px solid rgba(251,146,60,.2)', borderRadius: 10, padding: '8px 12px', marginBottom: 12 }}>
-                              ⚠️ خد بالك، لو توقعت كارت أحمر أو ضربة جزاء بشكل غلط هتتخصم منك نقطة (-1) 😉
+                              ⚠️ خد بالك، لو توقعت أي حاجة من دول بشكل غلط هتتخصم منك نقطة (-1) 😉
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                               {[
                                 { key: 'predicted_red_card', label: '🟥 بطاقة حمراء؟' },
                                 { key: 'predicted_penalty',  label: '⚽ ركلة جزاء؟' },
-                                // ⏱️ الوقت الإضافي — يظهر بس في الأدوار الإقصائية (مش Group Stage)
-                                ...(/group stage/i.test(String(match.league?.round || match.round || '')) ? [] : [{ key: 'extraTime', label: '⏱️ وقت إضافي؟' }]),
+                                // ⏱️🥅 الوقت الإضافي والترجيح — يظهروا بس في الأدوار الإقصائية (بداية من دور الـ 32)
+                                //    whitelist أأمن من إخفاء group stage: نطابق أسماء أدوار خروج المغلوب في API-Football.
+                                ...(/round of (32|16)|quarter|semi|final|3rd place|third place|play.?off/i.test(String(match.league?.round || match.round || '')) ? [
+                                  { key: 'extraTime', label: '⏱️ وقت إضافي؟' },
+                                  { key: 'penaltyShootout', label: '🥅 انتهى بركلات الترجيح؟' },
+                                ] : []),
                               ].map(({ key, label }) => (
                                 <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', borderRadius: 12, background: form[key] ? 'rgba(217,178,95,.08)' : 'var(--surface-3)', border: `1px solid ${form[key] ? 'rgba(217,178,95,.25)' : 'var(--line)'}`, transition: 'all .2s' }}>
                                   <input
                                     type="checkbox"
                                     checked={form[key] ?? false}
-                                    onChange={e => setForm(match.fixture.id, { [key]: e.target.checked })}
+                                    onChange={e => {
+                                      const checked = e.target.checked;
+                                      // ركلات الترجيح تستلزم وقت إضافي: اختيارها يفعّل الوقت الإضافي تلقائياً،
+                                      // وإلغاء الوقت الإضافي يلغي الترجيح كمان.
+                                      if (key === 'penaltyShootout') {
+                                        setForm(match.fixture.id, checked
+                                          ? { penaltyShootout: true, extraTime: true }
+                                          : { penaltyShootout: false });
+                                      } else if (key === 'extraTime') {
+                                        setForm(match.fixture.id, checked
+                                          ? { extraTime: true }
+                                          : { extraTime: false, penaltyShootout: false });
+                                      } else {
+                                        setForm(match.fixture.id, { [key]: checked });
+                                      }
+                                    }}
                                     style={{ width: 17, height: 17, accentColor: 'var(--gold)', flexShrink: 0 }}
                                   />
                                   <span style={{ fontSize: 13, fontWeight: 700, color: form[key] ? '#ffe3a6' : 'var(--muted)' }}>{label}</span>

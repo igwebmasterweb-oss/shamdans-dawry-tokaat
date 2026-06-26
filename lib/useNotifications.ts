@@ -79,9 +79,22 @@ export function useNotifications() {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   }, []);
 
+  // ✅ تعليم الإشعارات غير التفاعلية كمقروءة (بتتنادي عند فتح الإشعارات)
+  //    بنستثني دعوات الليج غير المقروءة عشان تفضل أزرار القبول/الرفض ظاهرة.
+  const markNonInviteRead = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase.from('notifications').update({ is_read: true })
+      .eq('user_id', user.id).eq('is_read', false).neq('type', 'invite');
+    if (error) return;
+    setNotifications(prev =>
+      prev.map(n => (n.type !== 'invite' ? { ...n, is_read: true } : n))
+    );
+  }, []);
+
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  return { notifications, unreadCount, loading, markRead, markAllRead, refetch: fetchNotifications };
+  return { notifications, unreadCount, loading, markRead, markAllRead, markNonInviteRead, refetch: fetchNotifications };
 }
 
 // ── Helper: إرسال إشعار (بيتاستخدم من أي action) ──────────────

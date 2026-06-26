@@ -165,6 +165,7 @@ type FixtureResult = {
   scorers_json: any[] | null;
   scorers_ids_json: number[] | null;
   went_extra_time: boolean;
+  went_penalty_shootout: boolean;
   red_card_in_match: boolean;
   penalty_in_match: boolean;
   both_teams_scored: boolean;
@@ -180,6 +181,7 @@ type PredictionRow = {
   predicted_first_scorer: string | null;
   predicted_first_scorer_id: number | null;
   predicted_extra_time: boolean;
+  predicted_penalty_shootout: boolean;
   predicted_red_card: boolean;
   predicted_penalty: boolean;
   predicted_both_teams: boolean;
@@ -291,6 +293,24 @@ function calculatePredictionPoints(pred: PredictionRow, fixture: FixtureResult) 
     points -= 1;
   }
 
+  // ⏱️ الوقت الإضافي — +3 لو توقّعه وحصل، −1 لو توقّعه وماحصلش.
+  //    ملاحظة: went_extra_time = true لو status كان AET أو PEN.
+  if (fixture.went_extra_time === true && pred.predicted_extra_time === true) {
+    points += 3;
+  }
+  if (fixture.went_extra_time === false && pred.predicted_extra_time === true) {
+    points -= 1;
+  }
+
+  // 🥅 ركلات الترجيح — +3 لو توقّعها وحصلت، −1 لو توقّعها وماحصلتش.
+  //    went_penalty_shootout = true بس لو status = PEN (الماتش انتهى بالترجيح).
+  if (fixture.went_penalty_shootout === true && pred.predicted_penalty_shootout === true) {
+    points += 3;
+  }
+  if (fixture.went_penalty_shootout === false && pred.predicted_penalty_shootout === true) {
+    points -= 1;
+  }
+
   return {
     points,
     actual_home_score: actualHome,
@@ -323,7 +343,7 @@ export async function GET(request: NextRequest) {
     let fixturesQuery = supabaseAdmin
       .from('fixtures')
       .select(
-        'api_fixture_id, actual_home_score, actual_away_score, first_scorer, first_scorer_id, scorers_json, scorers_ids_json, went_extra_time, red_card_in_match, penalty_in_match, both_teams_scored, round'
+        'api_fixture_id, actual_home_score, actual_away_score, first_scorer, first_scorer_id, scorers_json, scorers_ids_json, went_extra_time, went_penalty_shootout, red_card_in_match, penalty_in_match, both_teams_scored, round'
       )
       .not('actual_home_score', 'is', null);
 
@@ -360,7 +380,7 @@ export async function GET(request: NextRequest) {
       let predsQuery = supabaseAdmin
         .from('predictions')
         .select(
-          'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_first_scorer_id, predicted_extra_time, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
+          'id, user_id, fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_first_scorer_id, predicted_extra_time, predicted_penalty_shootout, predicted_red_card, predicted_penalty, predicted_both_teams, home_team, away_team'
         )
         .in('fixture_id', fixtureIds)
         .gt('id', lastId)

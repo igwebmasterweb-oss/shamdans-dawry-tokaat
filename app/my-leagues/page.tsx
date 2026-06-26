@@ -55,7 +55,7 @@ export default function MyLeaguesPage() {
   const [memberModalLoading, setMemberModalLoading] = useState(false);
   const [memberModalError, setMemberModalError] = useState('');
   const router = useRouter();
-  const { notifications, unreadCount, markRead } = useNotifications();
+  const { notifications, unreadCount, markRead, markNonInviteRead } = useNotifications();
 
   const toBool = (v: any) => v === true || v === 'true' || v === 1;
 
@@ -415,9 +415,9 @@ export default function MyLeaguesPage() {
             {showCreate ? '✕ إلغاء' : '＋ إنشاء ليج'}
           </button>
 
-          {/* ✅ FIX: markAllRead عند فتح modal + badge يدعم 9+ */}
+          {/* ✅ FIX: markNonInviteRead عند فتح modal (الإعلانات تتعلّم إنها اتقرت) + badge يدعم 9+ */}
           <button
-            onClick={() => { setShowNotif(true); }}
+            onClick={() => { setShowNotif(true); markNonInviteRead(); }}
             className="nav-pill"
             style={{ position: 'relative' }}
           >
