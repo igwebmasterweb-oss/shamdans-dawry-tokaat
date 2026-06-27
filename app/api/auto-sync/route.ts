@@ -186,7 +186,12 @@ export async function GET(request: Request) {
             penalty = true;
           }
 
-          if (ev.type === 'Goal' && ev.detail !== 'Own Goal') {
+          // ⚠️ ضربة الجزاء الضائعة بتيجي من الـ API كـ type='Goal' مع detail='Missed Penalty'
+          //    — دي مش هدف فعلي، فلازم نستبعدها من أول هدّاف ومن قائمة الهدّافين.
+          //    (نفس منطق sync-fixtures — لازم يفضلوا متطابقين.)
+          const isMissedPenalty = ev.type === 'Goal' && ev.detail === 'Missed Penalty';
+
+          if (ev.type === 'Goal' && ev.detail !== 'Own Goal' && !isMissedPenalty) {
             const scorerName = ev.player?.name
               ? normalizeScorerName(ev.player.name)
               : null;
