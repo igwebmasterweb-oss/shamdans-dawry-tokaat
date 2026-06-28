@@ -13,12 +13,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
     }
 
+    // ✅ سناب شوت يومي: نستخدم تاريخ اليوم (UTC) كمفتاح، مش يوم الإثنين
+    // (الـ Monday-snapping كان بيخلّي كل أيام الأسبوع تكتب على نفس الصف فيتجمّد السجل)
     const now = new Date();
-    const day = now.getUTCDay();
-    const diffToMonday = (day + 6) % 7;
-    const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    monday.setUTCDate(monday.getUTCDate() - diffToMonday);
-    const isoDate = monday.toISOString().slice(0, 10);
+    const isoDate = now.toISOString().slice(0, 10);
 
     const { data: pointsRows, error: pointsErr } = await supabase
       .from('historical_rankings_source_v1')
