@@ -10,6 +10,7 @@ interface Profile {
   id: string;
   full_name: string | null;
   phone: string | null;
+  email?: string | null;
   profile_completed: boolean;
   bonus_points_awarded: boolean;
   bonus_points?: number;
@@ -733,7 +734,7 @@ const userNameMap: Record<string, string> = {};
           display_name: profileData.full_name || '',
           phone:        profileData.phone || '',
           facebook_url: profileData.facebook_url || fbMeta || '',
-          email:        sessionData?.session?.user?.email || '',
+          email:        profileData.email || sessionData?.session?.user?.email || '',
         });
       }
 
@@ -1083,6 +1084,7 @@ const quickJoinLeague = async () => {
         id:                   user.id,
         full_name:            profileForm.display_name.trim(),
         phone:                profileForm.phone.trim() || null,
+        email:                emailValue,
         facebook_url:         fbUrl,
         profile_completed:    true,
         bonus_points_awarded: currentProfile?.bonus_points_awarded ?? false,
