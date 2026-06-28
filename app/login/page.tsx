@@ -71,7 +71,7 @@ function LoginContent() {
 
       const { data: existingProfile, error: profileError } = await supabase
         .from('profiles')
-        .select('id, full_name, avatar_url, profile_completed, bonus_points, bonus_points_awarded, facebook_id, facebook_url, facebook_bonus_awarded, google_id, google_bonus_awarded, referral_code')
+        .select('id, full_name, phone, email, avatar_url, profile_completed, bonus_points, bonus_points_awarded, facebook_id, facebook_url, facebook_bonus_awarded, google_id, google_bonus_awarded, referral_code')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -92,8 +92,17 @@ function LoginContent() {
         update.full_name = hasName ? metaName : user.email?.split('@')[0] || '';
       if ((!existingProfile.avatar_url || existingProfile.avatar_url.trim() === '') && metaAvatar)
         update.avatar_url = metaAvatar;
-      if (!alreadyCompleted && hasName && hasEmail) update.profile_completed = true;
+      // ✅ البونص زي ما هو (اسم + إيميل) — ما نلمسش حاجة شغالة
       if (hasName && hasEmail && !alreadyHasPoints) {update.bonus_points_awarded = true;}
+      // ✅ profile_completed = true فقط لو الأربعة موجودين (اسم + تليفون + إيميل + فيسبوك).
+      // additive فقط: ما بنرجّعش أي حد متعلّم حاليًا لـ false.
+      if (!alreadyCompleted) {
+        const finalName  = (update.full_name ?? existingProfile.full_name ?? '').toString().trim();
+        const finalPhone = (existingProfile.phone ?? '').toString().trim();
+        const finalEmail = (existingProfile.email ?? user.email ?? '').toString().trim();
+        const finalFb    = (update.facebook_url ?? existingProfile.facebook_url ?? '').toString().trim();
+        if (finalName && finalPhone && finalEmail && finalFb) update.profile_completed = true;
+      }
       if (!alreadyHasReferral) update.referral_code = generateReferralCode();
 
       if (provider === 'facebook') {
