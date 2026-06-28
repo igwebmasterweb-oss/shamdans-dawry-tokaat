@@ -529,6 +529,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
     'Group Stage - 1': 'الجولة الأولى',
     'Group Stage - 2': 'الجولة الثانية',
     'Group Stage - 3': 'الجولة الثالثة',
+    'Round of 32':     'دور الـ 32',
     'Round of 16':     'دور الـ 16',
     'Quarter-finals':  'ربع النهائي',
     'Semi-finals':     'نصف النهائي',
@@ -536,7 +537,22 @@ const [profileCompleted, setProfileCompleted] = useState(false);
     'Final':           'النهائي',
   };
 
+  // الترتيب الرسمي لكل الأدوار (لترتيب التابات وتحديد القادمة)
+  const ROUND_ORDER = [
+    'Group Stage - 1', 'Group Stage - 2', 'Group Stage - 3',
+    'Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', '3rd Place Final', 'Final',
+  ];
+
+  // الأدوار اللي عندها ماتشات فعلًا (متاحة للتوقع)
   const rounds = [...new Set(matches.map((m: any) => m.league?.round).filter(Boolean))] as string[];
+
+  // الأدوار القادمة (معلنة لكن لسه مفيش ماتشات — placeholder "قريبًا")
+  const upcomingRounds = ROUND_ORDER.filter((r) => !rounds.includes(r));
+  // كل الأدوار بالترتيب الرسمي (المتاح أولًا ثم أي دور غير معروف في الآخر)
+  const displayRounds = [
+    ...ROUND_ORDER.filter((r) => rounds.includes(r)),
+    ...rounds.filter((r) => !ROUND_ORDER.includes(r)),
+  ];
 
   useEffect(() => {
     if (!myRoundFilter && activeRound) setMyRoundFilter(activeRound);
@@ -633,7 +649,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
         supabase.auth.getSession(),
         fetch('/api/fixtures').then(res => res.json()),
         supabase.from('fixtures').select(
-  'api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,scorers_json,went_extra_time,went_penalty_shootout,red_card_in_match,penalty_in_match,both_teams_scored,home_team_name,away_team_name,home_team_id,away_team_id'
+  'api_fixture_id,is_open,actual_home_score,actual_away_score,first_scorer,first_scorer_id,scorers_json,scorers_ids_json,went_extra_time,went_penalty_shootout,red_card_in_match,penalty_in_match,both_teams_scored,home_team_name,away_team_name,home_team_id,away_team_id'
 ),
         supabase.from('predictions').select('*').eq('user_id', userId),
         supabase.from('user_points').select('referral_count,total_points,referral_points,bonus_points,profile_completed').eq('user_id', userId).maybeSingle(),
@@ -730,7 +746,9 @@ const userNameMap: Record<string, string> = {};
           actual_home_score: sb?.actual_home_score ?? null,
           actual_away_score: sb?.actual_away_score ?? null,
           first_scorer:      sb?.first_scorer      ?? '',
+          first_scorer_id:   sb?.first_scorer_id   ?? null,
           scorers_json:      sb?.scorers_json      ?? null,
+          scorers_ids_json:  sb?.scorers_ids_json  ?? null,
           went_extra_time:   sb?.went_extra_time   ?? false,
           went_penalty_shootout: sb?.went_penalty_shootout ?? false,
           red_card_in_match: sb?.red_card_in_match ?? false,
@@ -1706,14 +1724,20 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
   const predScorerId =
     pred.predicted_first_scorer_id != null ? Number(pred.predicted_first_scorer_id) : null;
 
+  // كل أسماء الهدافين في الماتش (للـ fallback بالاسم، مطابق للباك إند)
+  const allScorerNames: string[] = extractScorersList(mx?.scorers_json, actualFirstScorer);
+
   const isFirstById = predScorerId !== null && actualFirstScorerId !== null && predScorerId === actualFirstScorerId;
   const scoredById  = predScorerId !== null && scorerIds.includes(predScorerId);
   const isFirstByName =
     !!predScorerName && !!actualFirstScorer && normScorer(predScorerName) === normScorer(actualFirstScorer);
+  // سجّل في الماتش بالاسم (لو الـ ID مش متوفر/مش مطابق لكن الاسم موجود ضمن الهدافين)
+  const scoredByName =
+    !!predScorerName && allScorerNames.some((nm) => normScorer(nm) === normScorer(predScorerName));
 
   if (isFirstById || isFirstByName) {
     items.push({ icon: '⚽', label: 'أول هداف صح', pts: 3 });
-  } else if (scoredById) {
+  } else if (scoredById || scoredByName) {
     items.push({ icon: '⚽', label: 'سجّل هدف (مش الأول)', pts: 1 });
   }
 
@@ -1825,6 +1849,8 @@ const myFilteredPredictionsSorted = [...predictions]
         .tab-btn.active { background:linear-gradient(90deg,rgba(217,178,95,.18),rgba(217,178,95,.06)); border-color:rgba(217,178,95,.3); color:#fff1ce; }
         .round-btn { padding:8px 16px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); cursor:pointer; font-family:'Cairo',sans-serif; font-size:13px; font-weight:700; transition:all .2s; }
         .round-btn.active { color:#fff1ce; border-color:rgba(217,178,95,.3); background:rgba(217,178,95,.12); }
+        .round-btn.upcoming { color:var(--muted); border-style:dashed; border-color:rgba(217,178,95,.28); background:rgba(217,178,95,.05); cursor:default; opacity:.85; }
+        .round-btn.upcoming .soon-badge { display:inline-block; margin-inline-start:6px; font-size:10px; font-weight:800; color:#d9b25f; background:rgba(217,178,95,.14); border:1px solid rgba(217,178,95,.3); border-radius:999px; padding:1px 7px; }
         .match-card { background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015)); border:1px solid var(--line); border-radius:24px; padding:20px; margin-bottom:14px; box-shadow:var(--shadow); }
         .pill-open   { font-size:12px; padding:6px 12px; border-radius:999px; font-weight:700; border:1px solid rgba(39,176,110,.25); background:rgba(39,176,110,.12); color:#94f0c0; }
         .pill-closed { font-size:12px; padding:6px 12px; border-radius:999px; font-weight:700; border:1px solid var(--line); background:var(--surface-3); color:var(--muted); }
@@ -2089,7 +2115,7 @@ const myFilteredPredictionsSorted = [...predictions]
                       }}
                     >
                       <option value="">كل الجولات</option>
-                      {rounds.map(r => (
+                      {displayRounds.map(r => (
                         <option key={r} value={r}>{roundLabels[r] || r}</option>
                       ))}
                     </select>
@@ -2894,9 +2920,14 @@ const myFilteredPredictionsSorted = [...predictions]
         {activeTab === 'predict' && (
           <div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-              {rounds.map(r => (
+              {displayRounds.map(r => (
                 <button key={r} className={`round-btn${activeRound === r ? ' active' : ''}`} onClick={() => setActiveRound(r)}>
                   {roundLabels[r] || r} ({matches.filter(m => m.league.round === r).length})
+                </button>
+              ))}
+              {upcomingRounds.map(r => (
+                <button key={r} className="round-btn upcoming" disabled title="جولة جديدة بجوائز إضافية — تظهر بعد تأهل الفرق">
+                  {roundLabels[r] || r}<span className="soon-badge">قريبًا</span>
                 </button>
               ))}
             </div>
@@ -3225,7 +3256,7 @@ const myFilteredPredictionsSorted = [...predictions]
                     outline: 'none'
                   }}
                 >
-                  {rounds.map((round: string) => (
+                  {displayRounds.map((round: string) => (
                     <option key={round} value={round}>{roundLabels[round] || round}</option>
                   ))}
                 </select>
@@ -3414,7 +3445,7 @@ const myFilteredPredictionsSorted = [...predictions]
             const roundMatches = matches.filter((m: any) => m.league?.round === r);
             return roundMatches.length > 0 && roundMatches.every((m: any) => m.actual_home_score !== null && m.actual_home_score !== undefined);
           });
-          const selectableRounds = [activeRound, ...rounds.filter(r => r !== activeRound)].filter(Boolean);
+          const selectableRounds = displayRounds;
           const effectiveRound = leaderRoundFilter;
 
           return (
@@ -3443,6 +3474,11 @@ const myFilteredPredictionsSorted = [...predictions]
                     {selectableRounds.map(r => (
                       <option key={r} value={r}>
                         {roundLabels[r] || r}{r === activeRound ? ' (الحالية)' : ''}
+                      </option>
+                    ))}
+                    {upcomingRounds.map(r => (
+                      <option key={r} value={r} disabled>
+                        {roundLabels[r] || r} — قريبًا 🔒
                       </option>
                     ))}
                   </select>
