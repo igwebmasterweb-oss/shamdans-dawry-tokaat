@@ -1795,7 +1795,15 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
   ).length;
   const medals      = ['🥇', '🥈', '🥉'];
   const displayName = profile?.full_name || user?.email?.split('@')[0];
-  const profileIncomplete = !profile?.profile_completed;
+  // ✅ الرسالة تظهر لو ناقص أي حقل من الأربعة (اسم + تليفون + إيميل + فيسبوك)،
+  // مستقلة عن profile_completed — عشان ننبّه اللي ناقصهم حقل بدون ما نخسّرهم نقاط
+  const _pf = (v: any) => String(v ?? '').trim() !== '';
+  const profileMissing: string[] = [];
+  if (!_pf(profile?.full_name)) profileMissing.push('الاسم');
+  if (!_pf(profile?.phone)) profileMissing.push('التليفون');
+  if (!_pf(profile?.email)) profileMissing.push('الإيميل');
+  if (!_pf(profile?.facebook_url)) profileMissing.push('رابط فيسبوك');
+  const profileIncomplete = profileMissing.length > 0;
 const myPredictionsSorted = [...predictions].sort((a: any, b: any) => {
   const aFinished = a.actual_home_score !== null && a.actual_home_score !== undefined;
   const bFinished = b.actual_home_score !== null && b.actual_home_score !== undefined;
@@ -1947,7 +1955,7 @@ const myFilteredPredictionsSorted = [...predictions]
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => setShowProfileModal(true)} style={{ padding: '8px 14px', borderRadius: 12, cursor: 'pointer', border: profileIncomplete ? '1px solid rgba(217,178,95,.35)' : '1px solid var(--line)', background: profileIncomplete ? 'rgba(217,178,95,.08)' : 'var(--surface-2)', color: profileIncomplete ? '#f2d79e' : 'var(--text)', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              {profileIncomplete ? '🎁 أكمل ملفك +5 نقاط' : `✏️ ${displayName}`}
+              {profileIncomplete ? '⚠️ أكمل بياناتك' : `✏️ ${displayName}`}
             </button>
             <Link href="/my-leagues" style={{ padding: '8px 14px', borderRadius: 12, border: '1px solid rgba(59,130,246,.3)', background: 'rgba(59,130,246,.08)', color: '#93c5fd', fontSize: 13, fontWeight: 700, fontFamily: 'Cairo, sans-serif', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               🏆 ليجاتي
@@ -1998,7 +2006,7 @@ const myFilteredPredictionsSorted = [...predictions]
         </div>
       ) : profileIncomplete ? (
         <div onClick={() => setShowProfileModal(true)} style={{ background: 'linear-gradient(90deg,rgba(217,178,95,.1),rgba(217,178,95,.04))', borderBottom: '1px solid rgba(217,178,95,.18)', padding: '10px 20px', cursor: 'pointer', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#f2d79e', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          🎁 أكمل ملفك الشخصي (اسم + تليفون) واحصل على 5 نقاط مجاناً! <strong>اضغط هنا</strong>
+          ⚠️ لضمان أحقيتك في الجوائز أكمل النواقص ({profileMissing.join('، ')}) — <strong>اضغط هنا</strong>
         </div>
       ) : upcomingAlert ? (
         <div className="alert-banner pulse" style={{ background: 'rgba(59,130,246,.08)', borderBottom: '1px solid rgba(59,130,246,.2)', padding: '10px 20px', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#93c5fd', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -2892,10 +2900,10 @@ const myFilteredPredictionsSorted = [...predictions]
               <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 800, color: '#ffe3a6', marginBottom: 2 }}>
-                  أكمل بيانات بروفايلك لتفعيل المميزات بالكامل
+                  لضمان أحقيتك في الجوائز لا بد من إكمال بيانات بروفايلك
                 </div>
                 <div style={{ fontSize: 12, color: '#f6ddb0', lineHeight: 1.8 }}>
-                  كمّل الاسم ورقم الموبايل ورابط الفيسبوك والبريد الإلكتروني من نافذة البروفايل، وسيختفي هذا التنبيه تلقائيًا بعد الإكمال.
+                  الناقص عندك: <strong>{profileMissing.join('، ')}</strong>. كمّله من نافذة البروفايل، وسيختفي هذا التنبيه تلقائيًا بعد الإكمال.
                 </div>
               </div>
             </div>
