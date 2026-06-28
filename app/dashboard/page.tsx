@@ -579,10 +579,15 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const loadData = async (userId: string) => {
     setLoadError(false);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const hasSessionEmail = !!session?.user?.email?.trim();
-      const pendingRef = typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingRef') : null;
-      if (pendingRef && hasSessionEmail) {
+      // ✅ نقرأ كود الإحالة من الـ URL أولاً ثم sessionStorage (zay pendingLeague).
+      // مهم: رحلة OAuth (فيسبوك/جوجل) بتعمل redirect خارجي وأحيانًا بيضيع معاها sessionStorage،
+      // لكن ?ref= بيفضل في الـ URL (buildRedirectUrl بيضيفه). فالقراءة من الاتنين تضمن عدم فقدان الإحالة.
+      const pendingRef =
+        (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('ref') : null) ||
+        (typeof window !== 'undefined' ? window.sessionStorage.getItem('pendingRef') : null);
+      // ✅ الربط يتم لأي مستخدم عنده pendingRef — بما فيهم مستخدمي فيسبوك (auth.email = NULL).
+      // الدالة process_referral آمنة بدون إيميل ومحمية من التكرار عبر referred_by IS NOT NULL.
+      if (pendingRef) {
         const { error: refErr } = await supabase.rpc('process_referral', {
           p_referred_id: userId,
           p_referral_code: pendingRef,
