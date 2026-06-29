@@ -1156,6 +1156,16 @@ if (refreshPointsError) throw refreshPointsError;
   const setForm = (fixtureId: number, patch: any) =>
     setPredForms(prev => ({ ...prev, [fixtureId]: { ...getForm({ fixture: { id: fixtureId } }), ...patch } }));
 
+  // 🥅 تعديل النتيجة مع إلغاء ركلات الترجيح تلقائياً لو النتيجة بقت فيها فائز (مش متعادلة).
+  // الترجيح مابيحصلش إلا بتعادل، فمنع توقع متناقض (فائز + ترجيح). الوقت الإضافي يفضل زي ما هو.
+  const setScore = (fixtureId: number, patch: { homeScore?: number; awayScore?: number }) => {
+    const cur = getForm({ fixture: { id: fixtureId } });
+    const nextHome = patch.homeScore ?? cur.homeScore ?? 0;
+    const nextAway = patch.awayScore ?? cur.awayScore ?? 0;
+    const extra = nextHome !== nextAway ? { penaltyShootout: false } : {};
+    setForm(fixtureId, { ...patch, ...extra });
+  };
+
 // 🔧 تطبيع الاسم: حذف الأكسنت + توحيد الحالة + حذف المسافات الزائدة
 // (نفس فلسفة namesReferToSamePlayer في الباك إند لضمان الاتساق)
 const normalizeScorerName = (s: string | null | undefined): string => {
@@ -1242,6 +1252,10 @@ const submitPrediction = async (match: any) => {
   setSubmitting(match.fixture.id);
   const form = getForm(match);
 
+  // 🥅 حماية منطقية: ركلات الترجيح مابتحصلش إلا بتعادل. لو النتيجة المتوقعة فيها فائز
+  // نلغي الترجيح قبل الحفظ (منع توقع متناقض حتى لو الـ UI اتجاوز). الوقت الإضافي يفضل زي ما هو.
+  const penaltyShootoutSafe = ((form.homeScore || 0) === (form.awayScore || 0)) ? (form.penaltyShootout ?? false) : false;
+
   try {
     const ex = predictions.find((p: any) => p.fixture_id === match.fixture.id);
     const resolvedFirstScorerId = form.firstScorerId ?? (
@@ -1259,7 +1273,7 @@ const submitPrediction = async (match: any) => {
       predicted_first_scorer: form.firstScorer || null,
       predicted_first_scorer_id: resolvedFirstScorerId,
       predicted_extra_time: form.extraTime,
-      predicted_penalty_shootout: form.penaltyShootout ?? false,
+      predicted_penalty_shootout: penaltyShootoutSafe,
       predicted_red_card: form.predicted_red_card ?? false,
       predicted_penalty: form.predicted_penalty ?? false,
       submitted_at: new Date().toISOString(),
@@ -1274,7 +1288,7 @@ const submitPrediction = async (match: any) => {
           predicted_first_scorer: form.firstScorer || null,
           predicted_first_scorer_id: resolvedFirstScorerId,
           predicted_extra_time:   form.extraTime,
-          predicted_penalty_shootout: form.penaltyShootout ?? false,
+          predicted_penalty_shootout: penaltyShootoutSafe,
           predicted_red_card:     form.predicted_red_card ?? false,
           predicted_penalty:      form.predicted_penalty ?? false,
           submitted_at:           new Date().toISOString(),
@@ -3141,18 +3155,18 @@ const myFilteredPredictionsSorted = [...predictions]
                             <div className="score-input-box" style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '12px 16px' }}>
                               <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 8, textAlign: 'center' }}>{match.teams.home.name}</div>
                               <div className="score-input-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                                <button className="score-btn" onClick={() => setForm(match.fixture.id, { homeScore: Math.max(0, (form.homeScore || 0) - 1) })}>−</button>
+                                <button className="score-btn" onClick={() => setScore(match.fixture.id, { homeScore: Math.max(0, (form.homeScore || 0) - 1) })}>−</button>
                                 <span className="score-val">{form.homeScore || 0}</span>
-                                <button className="score-btn plus" onClick={() => setForm(match.fixture.id, { homeScore: (form.homeScore || 0) + 1 })}>+</button>
+                                <button className="score-btn plus" onClick={() => setScore(match.fixture.id, { homeScore: (form.homeScore || 0) + 1 })}>+</button>
                               </div>
                             </div>
                             <div style={{ textAlign: 'center', color: 'var(--muted)', fontWeight: 800, fontSize: 16 }}>VS<br /><span style={{ fontSize: 10 }}>—</span></div>
                             <div className="score-input-box" style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '12px 16px' }}>
                               <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, marginBottom: 8, textAlign: 'center' }}>{match.teams.away.name}</div>
                               <div className="score-input-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                                <button className="score-btn" onClick={() => setForm(match.fixture.id, { awayScore: Math.max(0, (form.awayScore || 0) - 1) })}>−</button>
+                                <button className="score-btn" onClick={() => setScore(match.fixture.id, { awayScore: Math.max(0, (form.awayScore || 0) - 1) })}>−</button>
                                 <span className="score-val">{form.awayScore || 0}</span>
-                                <button className="score-btn plus" onClick={() => setForm(match.fixture.id, { awayScore: (form.awayScore || 0) + 1 })}>+</button>
+                                <button className="score-btn plus" onClick={() => setScore(match.fixture.id, { awayScore: (form.awayScore || 0) + 1 })}>+</button>
                               </div>
                             </div>
                           </div>
@@ -3190,13 +3204,20 @@ const myFilteredPredictionsSorted = [...predictions]
                                   { key: 'extraTime', label: '⏱️ وقت إضافي؟' },
                                   { key: 'penaltyShootout', label: '🥅 انتهى بركلات الترجيح؟' },
                                 ] : []),
-                              ].map(({ key, label }) => (
-                                <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 12px', borderRadius: 12, background: form[key] ? 'rgba(217,178,95,.08)' : 'var(--surface-3)', border: `1px solid ${form[key] ? 'rgba(217,178,95,.25)' : 'var(--line)'}`, transition: 'all .2s' }}>
+                              ].map(({ key, label }) => {
+                                // 🥅 ركلات الترجيح مابتحصلش إلا بتعادل مستمر — لو المستخدم متوقّع فائز
+                                // (نتيجة مش متعادلة) نعطّل خيار الترجيح ونمنع اختياره (تناقض منطقي).
+                                const isDraw = (form.homeScore || 0) === (form.awayScore || 0);
+                                const penaltyDisabled = key === 'penaltyShootout' && !isDraw;
+                                return (
+                                <label key={key} title={penaltyDisabled ? 'ركلات الترجيح متاحة فقط لو توقعت تعادل' : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: penaltyDisabled ? 'not-allowed' : 'pointer', opacity: penaltyDisabled ? .45 : 1, padding: '10px 12px', borderRadius: 12, background: form[key] ? 'rgba(217,178,95,.08)' : 'var(--surface-3)', border: `1px solid ${form[key] ? 'rgba(217,178,95,.25)' : 'var(--line)'}`, transition: 'all .2s' }}>
                                   <input
                                     type="checkbox"
+                                    disabled={penaltyDisabled}
                                     checked={form[key] ?? false}
                                     onChange={e => {
                                       const checked = e.target.checked;
+                                      if (key === 'penaltyShootout' && penaltyDisabled) return;
                                       // ركلات الترجيح تستلزم وقت إضافي: اختيارها يفعّل الوقت الإضافي تلقائياً،
                                       // وإلغاء الوقت الإضافي يلغي الترجيح كمان.
                                       if (key === 'penaltyShootout') {
@@ -3215,8 +3236,14 @@ const myFilteredPredictionsSorted = [...predictions]
                                   />
                                   <span style={{ fontSize: 13, fontWeight: 700, color: form[key] ? '#ffe3a6' : 'var(--muted)' }}>{label}</span>
                                 </label>
-                              ))}
+                                );
+                              })}
                             </div>
+                            {(form.homeScore || 0) !== (form.awayScore || 0) && /round of (32|16)|quarter|semi|final|3rd place|third place|play.?off/i.test(String(match.league?.round || match.round || '')) && (
+                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+                                ℹ️ ركلات الترجيح متاحة فقط لو توقعت تعادل. لو متوقّع فوز فريق، تقدر تختار «وقت إضافي» بس.
+                              </div>
+                            )}
                           </div>
 
                           {msg && <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 12, background: msg.startsWith('✅') ? 'rgba(39,176,110,.1)' : 'rgba(201,58,47,.1)', color: msg.startsWith('✅') ? '#5effa8' : '#ff9e9e', fontSize: 13, fontWeight: 700, textAlign: 'center' }}>{msg}</div>}
