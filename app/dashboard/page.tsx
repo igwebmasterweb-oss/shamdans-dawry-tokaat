@@ -409,9 +409,11 @@ function MatchStatsLines({
   awayName?: string;
   compact?: boolean;
 }) {
-  const hasH2h = !!h2h && (h2h.total || 0) > 0;
+  // ⚔️ سطر H2H يظهر دايماً طالما وصلت بيانات (h2h موجود)؛ لو total=0 نكتب “أول لقاء”
+  const hasH2hData = !!h2h;
+  const h2hHasHistory = !!h2h && (h2h.total || 0) > 0;
   const hasCommunity = !!community && (community.total || 0) > 0;
-  if (!hasH2h && !hasCommunity) return null;
+  if (!hasH2hData && !hasCommunity) return null;
 
   const fs = compact ? 10.5 : 11.5;
   const labelFs = compact ? 9.5 : 10.5;
@@ -427,17 +429,26 @@ function MatchStatsLines({
 
   return (
     <div style={{ display: 'grid', gap: 7, marginTop: 8 }}>
-      {hasH2h && (
+      {hasH2hData && (
         <div style={{ padding: compact ? '7px 9px' : '8px 11px', borderRadius: 11, background: 'rgba(34,197,94,.06)', border: '1px solid rgba(34,197,94,.18)', display: 'grid', gap: 5 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: labelFs, fontWeight: 800, color: '#86efac', whiteSpace: 'nowrap' }}>⚔️ آخر {h2h!.total} مواجهات</span>
-            <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span title="فوز المضيف" style={{ color: '#86efac' }}>🏠 {h2h!.home_pct}%</span>
-              <span title="تعادل" style={{ color: '#cbd5e1' }}>🤝 {h2h!.draw_pct}%</span>
-              <span title="فوز الضيف" style={{ color: '#fca5a5' }}>✈️ {h2h!.away_pct}%</span>
-            </span>
-          </div>
-          <Bar h={h2h!.home_pct} d={h2h!.draw_pct} a={h2h!.away_pct} />
+          {h2hHasHistory ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: labelFs, fontWeight: 800, color: '#86efac', whiteSpace: 'nowrap' }}>⚔️ آخر {h2h!.total} مواجهات</span>
+                <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span title="فوز المضيف" style={{ color: '#86efac' }}>🏠 {h2h!.home_pct}%</span>
+                  <span title="تعادل" style={{ color: '#cbd5e1' }}>🤝 {h2h!.draw_pct}%</span>
+                  <span title="فوز الضيف" style={{ color: '#fca5a5' }}>✈️ {h2h!.away_pct}%</span>
+                </span>
+              </div>
+              <Bar h={h2h!.home_pct} d={h2h!.draw_pct} a={h2h!.away_pct} />
+            </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontSize: labelFs, fontWeight: 800, color: '#86efac', whiteSpace: 'nowrap' }}>⚔️ مواجهات سابقة</span>
+              <span style={{ fontSize: fs, fontWeight: 700, color: 'var(--muted)' }}>أول لقاء بين الفريقين</span>
+            </div>
+          )}
         </div>
       )}
       {hasCommunity && (
