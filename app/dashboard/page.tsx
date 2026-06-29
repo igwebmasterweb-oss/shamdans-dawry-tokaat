@@ -394,6 +394,69 @@ function PointsBreakdown({ items, total }: { items: { icon: string; label: strin
   );
 }
 
+// 📊 سطرين جماليين: نسبة H2H (آخر 10 مواجهات) + نسبة توقع الأعضاء
+type StatTriple = { home_pct: number; draw_pct: number; away_pct: number; total: number } | undefined;
+function MatchStatsLines({
+  h2h,
+  community,
+  homeName,
+  awayName,
+  compact = false,
+}: {
+  h2h: StatTriple;
+  community: StatTriple;
+  homeName?: string;
+  awayName?: string;
+  compact?: boolean;
+}) {
+  const hasH2h = !!h2h && (h2h.total || 0) > 0;
+  const hasCommunity = !!community && (community.total || 0) > 0;
+  if (!hasH2h && !hasCommunity) return null;
+
+  const fs = compact ? 10.5 : 11.5;
+  const labelFs = compact ? 9.5 : 10.5;
+
+  // شريط نسب ثلاثي (مضيف / تعادل / ضيف) بألوان وأيقونات
+  const Bar = ({ h, d, a }: { h: number; d: number; a: number }) => (
+    <div style={{ display: 'flex', height: 7, borderRadius: 999, overflow: 'hidden', background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
+      <div style={{ width: `${h}%`, background: 'linear-gradient(90deg,#22c55e,#16a34a)' }} />
+      <div style={{ width: `${d}%`, background: 'rgba(148,163,184,.55)' }} />
+      <div style={{ width: `${a}%`, background: 'linear-gradient(90deg,#ef4444,#dc2626)' }} />
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'grid', gap: 7, marginTop: 8 }}>
+      {hasH2h && (
+        <div style={{ padding: compact ? '7px 9px' : '8px 11px', borderRadius: 11, background: 'rgba(34,197,94,.06)', border: '1px solid rgba(34,197,94,.18)', display: 'grid', gap: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: labelFs, fontWeight: 800, color: '#86efac', whiteSpace: 'nowrap' }}>⚔️ آخر {h2h!.total} مواجهات</span>
+            <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span title="فوز المضيف" style={{ color: '#86efac' }}>🏠 {h2h!.home_pct}%</span>
+              <span title="تعادل" style={{ color: '#cbd5e1' }}>🤝 {h2h!.draw_pct}%</span>
+              <span title="فوز الضيف" style={{ color: '#fca5a5' }}>✈️ {h2h!.away_pct}%</span>
+            </span>
+          </div>
+          <Bar h={h2h!.home_pct} d={h2h!.draw_pct} a={h2h!.away_pct} />
+        </div>
+      )}
+      {hasCommunity && (
+        <div style={{ padding: compact ? '7px 9px' : '8px 11px', borderRadius: 11, background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.18)', display: 'grid', gap: 5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>👥 توقع الأعضاء</span>
+            <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span title="فوز المضيف" style={{ color: '#86efac' }}>🏠 {community!.home_pct}%</span>
+              <span title="تعادل" style={{ color: '#cbd5e1' }}>🤝 {community!.draw_pct}%</span>
+              <span title="فوز الضيف" style={{ color: '#fca5a5' }}>✈️ {community!.away_pct}%</span>
+            </span>
+          </div>
+          <Bar h={community!.home_pct} d={community!.draw_pct} a={community!.away_pct} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const extractScorersList = (raw: any, fallbackFirst?: string | null) => {
     const names: string[] = [];
@@ -506,6 +569,9 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [myRoundFilter, setMyRoundFilter]     = useState('');
   const [leaderRoundFilter, setLeaderRoundFilter] = useState('');
   const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
+  // 📊 نسب H2H (آخر 10 مواجهات) ونسب توقع الأعضاء — مفهرسة بـ fixtureId
+  const [h2hStats, setH2hStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number }>>({});
+  const [communityStats, setCommunityStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number }>>({});
   // ✅ الإشعارات (جرس الداش بورد) — نفس منطق صفحة ليجاتي
   const [showNotif, setShowNotif] = useState(false);
   const { notifications, unreadCount, markRead, markNonInviteRead } = useNotifications();
@@ -521,6 +587,52 @@ const [profileCompleted, setProfileCompleted] = useState(false);
       });
     });
   }, []);
+
+  // 📊 جلب نسب توقع الأعضاء (طلب واحد مجمّع) + نسب H2H لكل ماتش ظاهر
+  useEffect(() => {
+    if (!matches || matches.length === 0) return;
+
+    const fixtureIds = Array.from(
+      new Set(
+        matches
+          .map((m: any) => Number(m?.fixture?.id))
+          .filter((n: number) => Number.isFinite(n))
+      )
+    );
+    if (fixtureIds.length === 0) return;
+
+    let cancelled = false;
+
+    // نسب توقع الأعضاء — طلب واحد لكل الماتشات
+    fetch(`/api/community-prediction?ids=${fixtureIds.join(',')}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled || !d?.results) return;
+        const mapped: Record<number, any> = {};
+        for (const k of Object.keys(d.results)) mapped[Number(k)] = d.results[k];
+        setCommunityStats((prev) => ({ ...prev, ...mapped }));
+      })
+      .catch(() => {});
+
+    // نسب H2H — طلب لكل ماتش (له فريقين)
+    matches.forEach((m: any) => {
+      const fid = Number(m?.fixture?.id);
+      const homeId = Number(m?.teams?.home?.id);
+      const awayId = Number(m?.teams?.away?.id);
+      if (!Number.isFinite(fid) || !Number.isFinite(homeId) || !Number.isFinite(awayId)) return;
+      fetch(`/api/h2h?home=${homeId}&away=${awayId}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (cancelled || !d) return;
+          setH2hStats((prev) => ({ ...prev, [fid]: d }));
+        })
+        .catch(() => {});
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [matches]);
 
   const router = useRouter();
   const animatedPoints = useCountUp(0);
@@ -2212,6 +2324,14 @@ const myFilteredPredictionsSorted = [...predictions]
                           </div>
                         )}
                         <div style={{ alignSelf: 'flex-end', padding: '3px 9px', borderRadius: 999, background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.22)', color: '#93c5fd', fontSize: 10, fontWeight: 800, lineHeight: 1.6 }}>بدأت المباراة</div>
+                        {/* 📊 نسبة H2H + نسبة توقع الأعضاء */}
+                        <MatchStatsLines
+                          h2h={h2hStats[currentFixtureId]}
+                          community={communityStats[currentFixtureId]}
+                          homeName={currentMatch?.teams?.home?.name}
+                          awayName={currentMatch?.teams?.away?.name}
+                          compact
+                        />
                       </div>
 
                       {/* ✅ النص الشمال: التوقع زي ما هو */}
@@ -3137,6 +3257,17 @@ const myFilteredPredictionsSorted = [...predictions]
                           </div>
                         </div>
                       )}
+                      {/* 📊 نسبة H2H + نسبة توقع الأعضاء — للماتشات المغلقة/المحسومة (المفتوحة تظهر جوّا الفورم) */}
+                      {!match.is_open && (
+                        <div style={{ marginBottom: 12 }}>
+                          <MatchStatsLines
+                            h2h={h2hStats[match.fixture.id]}
+                            community={communityStats[match.fixture.id]}
+                            homeName={match?.teams?.home?.name}
+                            awayName={match?.teams?.away?.name}
+                          />
+                        </div>
+                      )}
                       {/* 🧮 بريك داون النقاط الموحّد (للماتشات المحسومة) */}
                       {existing && hasResult && (() => {
                         const bd = computeBreakdown({ ...existing, actual_home_score: match.actual_home_score, actual_away_score: match.actual_away_score });
@@ -3149,7 +3280,14 @@ const myFilteredPredictionsSorted = [...predictions]
 
                       {match.is_open && (
                         <div>
-                          <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 12 }}>توقّع النتيجة</div>
+                          {/* 📊 نسبة H2H + نسبة توقع الأعضاء — تظهر للعضو وهو بيتوقع */}
+                          <MatchStatsLines
+                            h2h={h2hStats[match.fixture.id]}
+                            community={communityStats[match.fixture.id]}
+                            homeName={match?.teams?.home?.name}
+                            awayName={match?.teams?.away?.name}
+                          />
+                          <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 12, marginTop: 12 }}>توقّع النتيجة</div>
 
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, marginBottom: 10, alignItems: 'center' }}>
                             <div className="score-input-box" style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 18, padding: '12px 16px' }}>
