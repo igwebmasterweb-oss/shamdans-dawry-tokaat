@@ -155,6 +155,9 @@ export async function GET(request: Request) {
         const goalsHome = match.goals?.home ?? null;
         const goalsAway = match.goals?.away ?? null;
         const wentExtraTime = status === 'AET' || status === 'PEN';
+        // 🥅 ترجيح منفصل: الماتش انتهى بركلات الترجيح بس لو status = PEN.
+        //    (كان ناقص هنا — فالعمود كان بيفضل false ويظلم متوقعي الترجيح.)
+        const wentPenaltyShootout = status === 'PEN';
         const bothTeamsScored =
           goalsHome !== null && goalsAway !== null
             ? goalsHome > 0 && goalsAway > 0
@@ -226,6 +229,8 @@ export async function GET(request: Request) {
             scorers_json: allScorers,
             scorers_ids_json: scorersIdsJson,
             went_extra_time: wentExtraTime,
+            went_penalty_shootout: wentPenaltyShootout,
+            status,
             both_teams_scored: bothTeamsScored,
             red_card_in_match: redCard,
             penalty_in_match: penalty,
