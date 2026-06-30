@@ -395,19 +395,23 @@ function PointsBreakdown({ items, total }: { items: { icon: string; label: strin
 }
 
 // 📊 سطرين جماليين: نسبة H2H (آخر 10 مواجهات) + نسبة توقع الأعضاء
-type StatTriple = { home_pct: number; draw_pct: number; away_pct: number; total: number } | undefined;
+type Scoreline = { home: number; away: number; count: number; pct: number };
+type StatTriple = { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: Scoreline[] } | undefined;
 function MatchStatsLines({
   h2h,
   community,
   homeName,
   awayName,
   compact = false,
+  onPickScore,
 }: {
   h2h: StatTriple;
   community: StatTriple;
   homeName?: string;
   awayName?: string;
   compact?: boolean;
+  // لو ممرّرة (الماتش مفتوح) → الضغط على نتيجة يملا خانات التوقع. لو غير ممرّرة → عرض فقط.
+  onPickScore?: (home: number, away: number) => void;
 }) {
   // ⚔️ سطر H2H يظهر دايماً طالما وصلت بيانات (h2h موجود)؛ لو total=0 نكتب “أول لقاء”
   const hasH2hData = !!h2h;
@@ -462,6 +466,44 @@ function MatchStatsLines({
             </span>
           </div>
           <Bar h={community!.home_pct} d={community!.draw_pct} a={community!.away_pct} />
+
+          {/* 🎯 أعلى 3 نتايج توقّعها الأعضاء — لو الماتش مفتوح الضغط يملا خانات التوقع */}
+          {Array.isArray(community!.top_scorelines) && community!.top_scorelines.length > 0 && (
+            <div style={{ display: 'grid', gap: 5, marginTop: 3 }}>
+              <div style={{ fontSize: labelFs, fontWeight: 700, color: '#93c5fd', opacity: 0.9 }}>
+                🎯 أكثر النتايج توقّعاً{onPickScore ? ' — اضغط للاختيار' : ''}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {community!.top_scorelines.map((s, i) => {
+                  const clickable = !!onPickScore;
+                  const inner = (
+                    <>
+                      <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{s.home}–{s.away}</span>
+                      <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd' }}>{s.pct}%</span>
+                    </>
+                  );
+                  const baseStyle: React.CSSProperties = {
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: compact ? '4px 8px' : '5px 10px', borderRadius: 9,
+                    background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.28)',
+                  };
+                  return clickable ? (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => onPickScore!(s.home, s.away)}
+                      title="اضغط لتعيين هذه النتيجة توقّعك"
+                      style={{ ...baseStyle, cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
+                    >
+                      {inner}
+                    </button>
+                  ) : (
+                    <div key={i} style={baseStyle}>{inner}</div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -582,7 +624,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
   // 📊 نسب H2H (آخر 10 مواجهات) ونسب توقع الأعضاء — مفهرسة بـ fixtureId
   const [h2hStats, setH2hStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number }>>({});
-  const [communityStats, setCommunityStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number }>>({});
+  const [communityStats, setCommunityStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: { home: number; away: number; count: number; pct: number }[] }>>({});
   // ✅ الإشعارات (جرس الداش بورد) — نفس منطق صفحة ليجاتي
   const [showNotif, setShowNotif] = useState(false);
   const { notifications, unreadCount, markRead, markNonInviteRead } = useNotifications();
@@ -3291,12 +3333,13 @@ const myFilteredPredictionsSorted = [...predictions]
 
                       {match.is_open && (
                         <div>
-                          {/* 📊 نسبة H2H + نسبة توقع الأعضاء — تظهر للعضو وهو بيتوقع */}
+                          {/* 📊 نسبة H2H + نسبة توقع الأعضاء — تظهر للعضو وهو بيتوقع. الضغط على نتيجة يملا الخانات */}
                           <MatchStatsLines
                             h2h={h2hStats[match.fixture.id]}
                             community={communityStats[match.fixture.id]}
                             homeName={match?.teams?.home?.name}
                             awayName={match?.teams?.away?.name}
+                            onPickScore={(h, a) => setScore(match.fixture.id, { homeScore: h, awayScore: a })}
                           />
                           <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 12, marginTop: 12 }}>توقّع النتيجة</div>
 
