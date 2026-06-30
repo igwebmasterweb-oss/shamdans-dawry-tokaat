@@ -745,6 +745,7 @@ const loadLeaderboard = useCallback(async () => {
       const redCardInMatch = mx?.red_card_in_match ?? false;
       const penaltyInMatch = mx?.penalty_in_match ?? false;
       const wentExtraTime = mx?.went_extra_time ?? false;
+      const wentPenaltyShootout = mx?.went_penalty_shootout ?? false;
       const bothTeamsScored = mx?.both_teams_scored ?? false;
 
       const isExact =
@@ -800,10 +801,10 @@ const loadLeaderboard = useCallback(async () => {
       }
 
       if (pr.predicted_penalty && penaltyInMatch) {
-        items.push({ icon: '🥅', label: 'ركلة جزاء صح', pts: 3 });
+        items.push({ icon: '⚽', label: 'ضربة جزاء في الماتش صح', pts: 3 });
       }
       if (!penaltyInMatch && pr.predicted_penalty) {
-        items.push({ icon: '🥅', label: 'ركلة جزاء غلط', pts: -1 });
+        items.push({ icon: '⚽', label: 'ضربة جزاء في الماتش غلط', pts: -1 });
       }
 
       if (pr.predicted_extra_time && wentExtraTime) {
@@ -811,6 +812,13 @@ const loadLeaderboard = useCallback(async () => {
       }
       if (!wentExtraTime && pr.predicted_extra_time) {
         items.push({ icon: '⏱️', label: 'وقت إضافي غلط', pts: -1 });
+      }
+
+      if (pr.predicted_penalty_shootout && wentPenaltyShootout) {
+        items.push({ icon: '🎯', label: 'الماتش راح لركلات الترجيح صح', pts: 3 });
+      }
+      if (!wentPenaltyShootout && pr.predicted_penalty_shootout) {
+        items.push({ icon: '🎯', label: 'الماتش راح لركلات الترجيح غلط', pts: -1 });
       }
 
       if (pr.predicted_both_teams && bothTeamsScored) {

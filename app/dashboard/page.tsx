@@ -1892,11 +1892,11 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
     items.push({ icon: '🟥', label: 'كرت أحمر غلط', pts: -1 });
   }
 
-  // 5️⃣ ضربة جزاء — +3 لو توقعها وحصلت، -1 لو توقعها وماحصلتش
+  // 5️⃣ ضربة جزاء في الماتش (penalty_in_match) — +3 لو توقعها وحصلت، -1 لو توقعها وماحصلتش
   if (pred.predicted_penalty === true && penaltyInMatch) {
-    items.push({ icon: '🥅', label: 'ضربة جزاء صح', pts: 3 });
+    items.push({ icon: '⚽', label: 'ضربة جزاء في الماتش صح', pts: 3 });
   } else if (pred.predicted_penalty === true && !penaltyInMatch) {
-    items.push({ icon: '🥅', label: 'ضربة جزاء غلط', pts: -1 });
+    items.push({ icon: '⚽', label: 'ضربة جزاء في الماتش غلط', pts: -1 });
   }
 
   // 6️⃣ وقت إضافي — +3 لو توقعه وحصل، -1 لو توقعه وماحصلش (مطابق update-results)
@@ -1906,11 +1906,11 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
     items.push({ icon: '⏱️', label: 'وقت إضافي غلط', pts: -1 });
   }
 
-  // 7️⃣ ركلات الترجيح — +3 لو توقعها وحصلت، -1 لو توقعها وماحصلتش (مطابق update-results)
+  // 7️⃣ ركلات الترجيح (went_penalty_shootout) — +3 لو توقعها وحصلت، -1 لو توقعها وماحصلتش (مطابق update-results)
   if (pred.predicted_penalty_shootout === true && wentPenaltyShootout) {
-    items.push({ icon: '🥅', label: 'ركلات ترجيح صح', pts: 3 });
+    items.push({ icon: '🎯', label: 'الماتش راح لركلات الترجيح صح', pts: 3 });
   } else if (pred.predicted_penalty_shootout === true && !wentPenaltyShootout) {
-    items.push({ icon: '🥅', label: 'ركلات ترجيح غلط', pts: -1 });
+    items.push({ icon: '🎯', label: 'الماتش راح لركلات الترجيح غلط', pts: -1 });
   }
 
   const total = items.reduce((s, i) => s + i.pts, 0);
