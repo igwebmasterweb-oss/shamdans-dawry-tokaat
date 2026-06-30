@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     }
 
     const API_KEY = process.env.FOOTBALL_API_KEY || '';
+    const debug = searchParams.get('debug') === '1';
 
     const res = await fetch(
       `https://v3.football.api-sports.io/fixtures/headtohead?h2h=${home}-${away}&last=10`,
@@ -26,7 +27,8 @@ export async function GET(req: NextRequest) {
 
     if (!res.ok) {
       return NextResponse.json(
-        { home_wins: 0, away_wins: 0, draws: 0, total: 0, home_pct: 0, draw_pct: 0, away_pct: 0, error: 'API request failed' },
+        { home_wins: 0, away_wins: 0, draws: 0, total: 0, home_pct: 0, draw_pct: 0, away_pct: 0, error: 'API request failed',
+          ...(debug ? { _debug: { keyLen: API_KEY.length, httpStatus: res.status } } : {}) },
         { status: 200 }
       );
     }
@@ -82,6 +84,7 @@ export async function GET(req: NextRequest) {
       home_pct: pct(homeWins),
       draw_pct: pct(draws),
       away_pct: pct(awayWins),
+      ...(debug ? { _debug: { keyLen: API_KEY.length, apiResults: data?.results ?? null, apiErrors: data?.errors ?? null, respLen: matches.length } } : {}),
     });
   } catch (error: any) {
     return NextResponse.json(
