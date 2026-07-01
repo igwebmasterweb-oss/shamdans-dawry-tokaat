@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabaseAdmin
       .from('predictions')
-      .select('fixture_id, predicted_home_score, predicted_away_score')
+      .select('fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_first_scorer_id')
       .in('fixture_id', fixtureIds);
 
     if (error) {
@@ -39,9 +39,12 @@ export async function GET(req: NextRequest) {
     const agg: Record<number, { home: number; draw: number; away: number; total: number }> = {};
     // تجميع النتايج المحددة (scoreline) لكل fixture: المفتاح "home-away"
     const scoreAgg: Record<number, Record<string, { home: number; away: number; count: number }>> = {};
+    // تجميع أول هداف متوقَّع لكل fixture: المفتاح اسم اللاعب (بعد trim)
+    const scorerAgg: Record<number, Record<string, { name: string; player_id: number | null; count: number }>> = {};
     for (const id of fixtureIds) {
       agg[id] = { home: 0, draw: 0, away: 0, total: 0 };
       scoreAgg[id] = {};
+      scorerAgg[id] = {};
     }
 
     for (const row of data || []) {
@@ -60,6 +63,19 @@ export async function GET(req: NextRequest) {
       const key = `${h}-${a}`;
       if (!scoreAgg[fid][key]) scoreAgg[fid][key] = { home: Number(h), away: Number(a), count: 0 };
       scoreAgg[fid][key].count++;
+
+      // تجميع أول هداف متوقَّع (لو موجود)
+      const rawName = typeof row.predicted_first_scorer === 'string' ? row.predicted_first_scorer.trim() : '';
+      if (rawName) {
+        const sKey = rawName.toLowerCase();
+        if (!scorerAgg[fid][sKey]) {
+          scorerAgg[fid][sKey] = { name: rawName, player_id: row.predicted_first_scorer_id ?? null, count: 0 };
+        }
+        scorerAgg[fid][sKey].count++;
+        if (scorerAgg[fid][sKey].player_id == null && row.predicted_first_scorer_id != null) {
+          scorerAgg[fid][sKey].player_id = row.predicted_first_scorer_id;
+        }
+      }
     }
 
     const results: Record<number, any> = {};
@@ -67,15 +83,27 @@ export async function GET(req: NextRequest) {
       const { home, draw, away, total } = agg[id];
       const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
 
-      // أعلى 3 نتايج توقعاً (الأكثر تكراراً)
+      // أعلى 5 نتايج توقعاً (الأكثر تكراراً)
       const top_scorelines = Object.values(scoreAgg[id])
         .sort((x, y) => y.count - x.count)
-        .slice(0, 3)
+        .slice(0, 5)
         .map((s) => ({
           home: s.home,
           away: s.away,
           count: s.count,
           pct: total > 0 ? Math.round((s.count / total) * 100) : 0,
+        }));
+
+      // أعلى 3 هدافين متوقَّعين (الأكثر تكراراً) — النسبة من إجمالي مَن اختاروا هدافاً
+      const scorerTotal = Object.values(scorerAgg[id]).reduce((acc, s) => acc + s.count, 0);
+      const top_scorers = Object.values(scorerAgg[id])
+        .sort((x, y) => y.count - x.count)
+        .slice(0, 3)
+        .map((s) => ({
+          name: s.name,
+          player_id: s.player_id,
+          count: s.count,
+          pct: scorerTotal > 0 ? Math.round((s.count / scorerTotal) * 100) : 0,
         }));
 
       results[id] = {
@@ -84,6 +112,7 @@ export async function GET(req: NextRequest) {
         away_pct: pct(away),
         total,
         top_scorelines,
+        top_scorers,
       };
     }
 

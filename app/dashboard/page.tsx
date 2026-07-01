@@ -43,6 +43,7 @@ function PlayerSelect({
     team_id?: number | null;
     team_side?: 'home' | 'away' | null;
     position: string | null;
+    number: number | null;
   }[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState('');
@@ -59,7 +60,7 @@ function PlayerSelect({
     async function load() {
       const squadQuery = supabase
         .from('team_players')
-        .select('player_id, player_name, team_name, team_id, position')
+        .select('player_id, player_name, team_name, team_id, position, number')
         .order('team_name')
         .order('player_name');
 
@@ -75,6 +76,7 @@ function PlayerSelect({
         team_id?: number | null;
         team_side?: 'home' | 'away' | null;
         position: string | null;
+        number: number | null;
       }[] = (squadData || []).map((p: any) => ({
         player_name: p.player_name,
         player_id: p.player_id ?? null,
@@ -86,6 +88,7 @@ function PlayerSelect({
           ? 'away'
           : null,
         position: p.position ?? null,
+        number: (p.number ?? null) === null ? null : Number(p.number),
       }));
 
       setPlayers(playersData);
@@ -132,6 +135,79 @@ function PlayerSelect({
       p.team_side === 'away' ||
       (awayTeamId && p.team_id === awayTeamId) ||
       p.team_name === awayTeam
+  );
+
+  // ترتيب المراكز: مهاجم → وسط → دفاع → حارس
+  type PlayerRow = (typeof filtered)[number];
+  const POS_ORDER: Record<string, number> = { Attacker: 0, Midfielder: 1, Defender: 2, Goalkeeper: 3 };
+  const POS_LABEL: Record<string, string> = { Attacker: 'الهجوم', Midfielder: 'الوسط', Defender: 'الدفاع', Goalkeeper: 'حراسة المرمى' };
+  // تجميع اللاعبين حسب المركز مع الحفاظ على الترتيب (وداخل كل مجموعة حسب رقم القميص)
+  const groupByPosition = (list: PlayerRow[]): { pos: string | null; label: string; rows: PlayerRow[] }[] => {
+    const order = ['Attacker', 'Midfielder', 'Defender', 'Goalkeeper'];
+    const groups: { pos: string | null; label: string; rows: PlayerRow[] }[] = [];
+    for (const pos of order) {
+      const rows = list
+        .filter(p => p.position === pos)
+        .sort((a, b) => (a.number ?? 999) - (b.number ?? 999));
+      if (rows.length) groups.push({ pos, label: POS_LABEL[pos], rows });
+    }
+    // أي مركز غير معروف
+    const others = list
+      .filter(p => !p.position || !(p.position in POS_ORDER))
+      .sort((a, b) => (a.number ?? 999) - (b.number ?? 999));
+    if (others.length) groups.push({ pos: null, label: 'أخرى', rows: others });
+    return groups;
+  };
+
+  // زر لاعب واحد (يعرض رقم القميص بدل حرف المركز)
+  const renderPlayerBtn = (p: PlayerRow) => (
+    <button
+      key={`${p.team_name}-${p.player_name}-${p.player_id ?? p.number ?? ''}`}
+      type="button"
+      onClick={() => {
+        onChange({ player_name: p.player_name, player_id: p.player_id ?? null });
+        setOpen(false);
+        setSearch('');
+      }}
+      style={{
+        width: '100%',
+        padding: '9px 14px',
+        background: value === p.player_name ? 'rgba(217,178,95,.12)' : 'transparent',
+        border: 'none',
+        color: value === p.player_name ? '#ffe3a6' : 'var(--text)',
+        fontFamily: 'Cairo, sans-serif',
+        fontSize: 13,
+        fontWeight: 600,
+        textAlign: 'right',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        direction: 'rtl',
+      }}
+    >
+      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--muted)', minWidth: 26, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+        {p.number != null ? p.number : (p.position?.[0] ?? '')}
+      </span>
+      {p.player_name}
+    </button>
+  );
+
+  // عرض فريق كامل مقسّم لمجموعات مراكز
+  const renderTeamSection = (teamName: string, list: PlayerRow[], color: string) => (
+    <>
+      <div style={{ padding: '8px 14px 4px', fontSize: 11, color, fontWeight: 700 }}>
+        {teamName}
+      </div>
+      {groupByPosition(list).map(g => (
+        <div key={`${teamName}-${g.pos ?? 'other'}`}>
+          <div style={{ padding: '4px 14px 2px', fontSize: 10, fontWeight: 700, color: 'var(--muted)', opacity: 0.85, letterSpacing: '0.03em' }}>
+            {g.label}
+          </div>
+          {g.rows.map(renderPlayerBtn)}
+        </div>
+      ))}
+    </>
   );
 
   return (
@@ -208,85 +284,9 @@ function PlayerSelect({
             />
           </div>
 
-          {homePlayers.length > 0 && (
-            <>
-              <div style={{ padding: '8px 14px 4px', fontSize: 11, color: 'var(--gold)', fontWeight: 700 }}>
-                {homeTeam}
-              </div>
-              {homePlayers.map(p => (
-                <button
-                  key={`${p.team_name}-${p.player_name}`}
-                  type="button"
-                  onClick={() => {
-                    onChange({ player_name: p.player_name, player_id: p.player_id ?? null });
-                    setOpen(false);
-                    setSearch('');
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '9px 14px',
-                    background: value === p.player_name ? 'rgba(217,178,95,.12)' : 'transparent',
-                    border: 'none',
-                    color: value === p.player_name ? '#ffe3a6' : 'var(--text)',
-                    fontFamily: 'Cairo, sans-serif',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    textAlign: 'right',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    direction: 'rtl',
-                  }}
-                >
-                  <span style={{ fontSize: 10, color: 'var(--muted)', minWidth: 22 }}>
-                    {p.position?.[0] ?? ''}
-                  </span>
-                  {p.player_name}
-                </button>
-              ))}
-            </>
-          )}
+          {homePlayers.length > 0 && renderTeamSection(homeTeam, homePlayers, 'var(--gold)')}
 
-          {awayPlayers.length > 0 && (
-            <>
-              <div style={{ padding: '8px 14px 4px', fontSize: 11, color: '#7db1ff', fontWeight: 700 }}>
-                {awayTeam}
-              </div>
-              {awayPlayers.map(p => (
-                <button
-                  key={`${p.team_name}-${p.player_name}`}
-                  type="button"
-                  onClick={() => {
-                    onChange({ player_name: p.player_name, player_id: p.player_id ?? null });
-                    setOpen(false);
-                    setSearch('');
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '9px 14px',
-                    background: value === p.player_name ? 'rgba(217,178,95,.12)' : 'transparent',
-                    border: 'none',
-                    color: value === p.player_name ? '#ffe3a6' : 'var(--text)',
-                    fontFamily: 'Cairo, sans-serif',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    textAlign: 'right',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    direction: 'rtl',
-                  }}
-                >
-                  <span style={{ fontSize: 10, color: 'var(--muted)', minWidth: 22 }}>
-                    {p.position?.[0] ?? ''}
-                  </span>
-                  {p.player_name}
-                </button>
-              ))}
-            </>
-          )}
+          {awayPlayers.length > 0 && renderTeamSection(awayTeam, awayPlayers, '#7db1ff')}
 
           {filtered.length === 0 && (
             <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
@@ -396,23 +396,36 @@ function PointsBreakdown({ items, total }: { items: { icon: string; label: strin
 
 // 📊 سطرين جماليين: نسبة H2H (آخر 10 مواجهات) + نسبة توقع الأعضاء
 type Scoreline = { home: number; away: number; count: number; pct: number };
-type StatTriple = { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: Scoreline[] } | undefined;
+type ScorerPick = { name: string; player_id?: number | null; count: number; pct: number };
+type StatTriple = { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: Scoreline[]; top_scorers?: ScorerPick[] } | undefined;
 function MatchStatsLines({
   h2h,
   community,
   homeName,
   awayName,
+  homeLogo,
+  awayLogo,
   compact = false,
   onPickScore,
+  onPickScorer,
 }: {
   h2h: StatTriple;
   community: StatTriple;
   homeName?: string;
   awayName?: string;
+  homeLogo?: string | null;
+  awayLogo?: string | null;
   compact?: boolean;
   // لو ممرّرة (الماتش مفتوح) → الضغط على نتيجة يملا خانات التوقع. لو غير ممرّرة → عرض فقط.
   onPickScore?: (home: number, away: number) => void;
+  // لو ممرّرة (الماتش مفتوح) → الضغط على هداف يختاره في التوقع.
+  onPickScorer?: (name: string, playerId: number | null) => void;
 }) {
+  // علم الفريق (بديل 🏠/✈️) — لو مفيش شعار نرجع للأيقونة القديمة
+  const TeamFlag = ({ logo, fallback, title: t }: { logo?: string | null; fallback: string; title: string }) =>
+    logo
+      ? <img src={logo} alt={t} title={t} width={compact ? 14 : 16} height={compact ? 14 : 16} style={{ objectFit: 'contain', borderRadius: 3, verticalAlign: 'middle', flex: '0 0 auto' }} />
+      : <span title={t}>{fallback}</span>;
   // ⚔️ سطر H2H يظهر دايماً طالما وصلت بيانات (h2h موجود)؛ لو total=0 نكتب “أول لقاء”
   const hasH2hData = !!h2h;
   const h2hHasHistory = !!h2h && (h2h.total || 0) > 0;
@@ -460,14 +473,14 @@ function MatchStatsLines({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>👥 توقع الأعضاء</span>
             <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span title="فوز المضيف" style={{ color: '#86efac' }}>🏠 {community!.home_pct}%</span>
+              <span title="فوز المضيف" style={{ color: '#86efac', display: 'inline-flex', alignItems: 'center', gap: 3 }}><TeamFlag logo={homeLogo} fallback="🏠" title={homeName || 'المضيف'} /> {community!.home_pct}%</span>
               <span title="تعادل" style={{ color: '#cbd5e1' }}>🤝 {community!.draw_pct}%</span>
-              <span title="فوز الضيف" style={{ color: '#fca5a5' }}>✈️ {community!.away_pct}%</span>
+              <span title="فوز الضيف" style={{ color: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: 3 }}><TeamFlag logo={awayLogo} fallback="✈️" title={awayName || 'الضيف'} /> {community!.away_pct}%</span>
             </span>
           </div>
           <Bar h={community!.home_pct} d={community!.draw_pct} a={community!.away_pct} />
 
-          {/* 🎯 أعلى 3 نتايج توقّعها الأعضاء — لو الماتش مفتوح الضغط يملا خانات التوقع */}
+          {/* 🎯 أكثر النتايج توقّعاً (حتى 5) — لو الماتش مفتوح الضغط يملا خانات التوقع */}
           {Array.isArray(community!.top_scorelines) && community!.top_scorelines.length > 0 && (
             <div style={{ display: 'grid', gap: 5, marginTop: 3 }}>
               <div style={{ fontSize: labelFs, fontWeight: 700, color: '#93c5fd', opacity: 0.9 }}>
@@ -493,6 +506,44 @@ function MatchStatsLines({
                       type="button"
                       onClick={() => onPickScore!(s.home, s.away)}
                       title="اضغط لتعيين هذه النتيجة توقّعك"
+                      style={{ ...baseStyle, cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
+                    >
+                      {inner}
+                    </button>
+                  ) : (
+                    <div key={i} style={baseStyle}>{inner}</div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ⚽ أكثر الهدافين توقّعاً (توقّع أول هداف) — لو الماتش مفتوح الضغط يختاره */}
+          {Array.isArray(community!.top_scorers) && community!.top_scorers.length > 0 && (
+            <div style={{ display: 'grid', gap: 5, marginTop: 3 }}>
+              <div style={{ fontSize: labelFs, fontWeight: 700, color: '#93c5fd', opacity: 0.9 }}>
+                ⚽ أكثر الهدافين توقّعاً{onPickScorer ? ' — اضغط للاختيار' : ''}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {community!.top_scorers!.map((sc, i) => {
+                  const clickable = !!onPickScorer;
+                  const inner = (
+                    <>
+                      <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)' }}>{sc.name}</span>
+                      <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd' }}>{sc.pct}%</span>
+                    </>
+                  );
+                  const baseStyle: React.CSSProperties = {
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: compact ? '4px 8px' : '5px 10px', borderRadius: 9,
+                    background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.28)',
+                  };
+                  return clickable ? (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => onPickScorer!(sc.name, sc.player_id ?? null)}
+                      title="اضغط لاختيار هذا اللاعب كأول هداف"
                       style={{ ...baseStyle, cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
                     >
                       {inner}
@@ -624,7 +675,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
   // 📊 نسب H2H (آخر 10 مواجهات) ونسب توقع الأعضاء — مفهرسة بـ fixtureId
   const [h2hStats, setH2hStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number }>>({});
-  const [communityStats, setCommunityStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: { home: number; away: number; count: number; pct: number }[] }>>({});
+  const [communityStats, setCommunityStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: { home: number; away: number; count: number; pct: number }[]; top_scorers?: { name: string; player_id?: number | null; count: number; pct: number }[] }>>({});
   // ✅ الإشعارات (جرس الداش بورد) — نفس منطق صفحة ليجاتي
   const [showNotif, setShowNotif] = useState(false);
   const { notifications, unreadCount, markRead, markNonInviteRead } = useNotifications();
@@ -1959,6 +2010,109 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
   return { items, total };
 };
 
+  // PredVsActual: بوكس موحّد — كل اختيارات العضو (سطر لكل واحد) + الفعلي بمقابل ✅/❌
+  const PredVsActual = ({ pred }: { pred: any }) => {
+    const mx = matches.find((m: any) => m.fixture?.id === (pred.fixture_id || pred.api_fixture_id));
+    const actualHomeRaw = pred.actual_home_score ?? mx?.actual_home_score ?? null;
+    const hasResult = actualHomeRaw !== null && actualHomeRaw !== undefined;
+    const actualHome = actualHomeRaw;
+    const actualAway = pred.actual_away_score ?? mx?.actual_away_score ?? null;
+    const actualFirstScorer = pred.first_scorer_actual ?? mx?.first_scorer ?? null;
+    const actualScorers = extractScorersList(mx?.scorers_json, actualFirstScorer);
+    const redCardInMatch = (pred.red_card_in_match ?? mx?.red_card_in_match) === true;
+    const penaltyInMatch = (pred.penalty_in_match ?? mx?.penalty_in_match) === true;
+    const wentExtraTime  = (pred.went_extra_time ?? mx?.went_extra_time) === true;
+    const wentPenaltyShootout = (pred.went_penalty_shootout ?? mx?.went_penalty_shootout) === true;
+    const bothTeamsScored = (pred.both_teams_scored ?? mx?.both_teams_scored) === true;
+
+    const predScorer = pred.predicted_first_scorer || null;
+    const scorerCorrect =
+      !!predScorer && !!actualFirstScorer && normScorer(predScorer) === normScorer(actualFirstScorer);
+    const yesNo = (v: boolean) => (v ? 'نعم' : 'لا');
+
+    type Row = { icon: string; label: string; predText: string; actualText: string; correct: boolean | null };
+    const rows: Row[] = [];
+
+    const predHome = pred.predicted_home_score;
+    const predAway = pred.predicted_away_score;
+    const exactScore = hasResult && predHome === actualHome && predAway === actualAway;
+    rows.push({
+      icon: '🔢', label: 'النتيجة',
+      predText: (predHome ?? '?') + ' – ' + (predAway ?? '?'),
+      actualText: hasResult ? actualHome + ' – ' + actualAway : '—',
+      correct: hasResult ? exactScore : null,
+    });
+
+    if (predScorer) {
+      rows.push({
+        icon: '⚽', label: 'أول هداف',
+        predText: predScorer,
+        actualText: hasResult ? (actualFirstScorer || '—') : '—',
+        correct: hasResult ? scorerCorrect : null,
+      });
+    }
+
+    const boolRows: { key: string; icon: string; label: string; actual: boolean }[] = [
+      { key: 'predicted_penalty',          icon: '⚽', label: 'ضربة جزاء في الماتش', actual: penaltyInMatch },
+      { key: 'predicted_red_card',         icon: '🟥', label: 'كرت أحمر',              actual: redCardInMatch },
+      { key: 'predicted_extra_time',       icon: '⏱️', label: 'وقت إضافي',             actual: wentExtraTime },
+      { key: 'predicted_penalty_shootout', icon: '🎯', label: 'ركلات الترجيح',        actual: wentPenaltyShootout },
+      { key: 'predicted_both_teams',       icon: '🥅', label: 'الفريقين سجّلوا',      actual: bothTeamsScored },
+    ];
+    for (const br of boolRows) {
+      if (pred[br.key] === true) {
+        rows.push({
+          icon: br.icon, label: br.label,
+          predText: 'نعم',
+          actualText: hasResult ? yesNo(br.actual) : '—',
+          correct: hasResult ? br.actual === true : null,
+        });
+      }
+    }
+
+    const rowStyle: React.CSSProperties = {
+      display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, lineHeight: 1.5, padding: '3px 0',
+    };
+
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+        <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
+          <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقّعه</div>
+          <div style={{ display: 'grid', gap: 2 }}>
+            {rows.map((r, i) => (
+              <div key={i} style={{ ...rowStyle, borderBottom: i === rows.length - 1 ? 'none' : '1px dashed var(--line)' }}>
+                <span style={{ flex: '0 0 auto' }}>{r.icon}</span>
+                <span style={{ color: 'var(--muted)', flex: '0 0 auto' }}>{r.label}:</span>
+                <span style={{ color: 'var(--text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.predText}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ padding: '10px 12px', borderRadius: 12, background: hasResult ? 'rgba(39,176,110,.07)' : 'var(--surface-3)', border: hasResult ? '1px solid rgba(39,176,110,.2)' : '1px solid var(--line)' }}>
+          <div style={{ color: hasResult ? '#94f0c0' : 'var(--muted)', fontSize: 10, fontWeight: 800, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>الفعلي</div>
+          {hasResult ? (
+            <div style={{ display: 'grid', gap: 2 }}>
+              {rows.map((r, i) => (
+                <div key={i} style={{ ...rowStyle, borderBottom: i === rows.length - 1 ? 'none' : '1px dashed var(--line)' }}>
+                  <span style={{ flex: '0 0 auto', fontSize: 13 }}>{r.correct === null ? '•' : r.correct ? '✅' : '❌'}</span>
+                  <span style={{ color: 'var(--text)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{r.actualText}</span>
+                </div>
+              ))}
+              {actualScorers.length > 0 && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.6 }}>
+                  <div style={{ opacity: 0.8, marginBottom: 2 }}>الهدافون ({actualScorers.length})</div>
+                  {actualScorers.map((s, si) => <div key={si}>⚽ {s}</div>)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const roundsWithPred = new Set(
     predictions.map((p: any) => {
       const m = matches.find((m: any) => m.fixture.id === p.fixture_id);
@@ -2383,6 +2537,8 @@ const myFilteredPredictionsSorted = [...predictions]
                           community={communityStats[currentFixtureId]}
                           homeName={currentMatch?.teams?.home?.name}
                           awayName={currentMatch?.teams?.away?.name}
+                          homeLogo={currentMatch?.teams?.home?.logo}
+                          awayLogo={currentMatch?.teams?.away?.logo}
                           compact
                         />
                       </div>
@@ -2508,41 +2664,8 @@ const myFilteredPredictionsSorted = [...predictions]
                               </div>
                             )}
 
-                            {/* N5: 50/50 grid - توقعه | الفعلي */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                              {/* Left: توقعه */}
-                              <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
-                                <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعه</div>
-                                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                                  {pred.predicted_home_score} — {pred.predicted_away_score}
-                                </div>
-                                {pred.predicted_first_scorer && (
-                                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {pred.predicted_first_scorer}</div>
-                                )}
-                              </div>
-                              {/* Right: الفعلي */}
-                              <div style={{ padding: '10px 12px', borderRadius: 12, background: hasResult ? 'rgba(39,176,110,.07)' : 'var(--surface-3)', border: hasResult ? '1px solid rgba(39,176,110,.2)' : '1px solid var(--line)' }}>
-                                <div style={{ color: hasResult ? '#94f0c0' : 'var(--muted)', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>الفعلي</div>
-                                {hasResult ? (
-                                  <>
-                                    <div style={{ fontSize: 18, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
-                                      {pred.actual_home_score} — {pred.actual_away_score}
-                                    </div>
-                                    {(() => {
-                                      const matchInfo = matches.find((m: any) => m.fixture.id === (pred.fixture_id || pred.api_fixture_id));
-                                      const scorers = extractScorersList(matchInfo?.scorers_json, pred.first_scorer_actual);
-                                      return scorers.length > 0 ? (
-                                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}><div style={{ color: 'var(--muted)', opacity: 0.8, marginBottom: 2 }}>الهدافون ({scorers.length})</div>
-                                          {scorers.map((s, si) => <div key={si} style={{ display: 'block' }}>⚽ {s}</div>)}
-                                        </div>
-                                      ) : null;
-                                    })()}
-                                  </>
-                                ) : (
-                                  <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
-                                )}
-                              </div>
-                            </div>
+                            {/* بوكس موحّد: كل اختيارات العضو + الفعلي ✅/❌ */}
+                            <PredVsActual pred={pred} />
 
                             {/* 🧮 بريك داون النقاط الموحّد — يوضح للعضو كل بند جاب كام نقطة */}
                             {hasResult && (() => {
@@ -3274,41 +3397,9 @@ const myFilteredPredictionsSorted = [...predictions]
 
                   {!isCollapsed && (
                     <>
-                      {/* N7: 50/50 grid replacing gold box */}
+                      {/* بوكس موحّد: كل اختيارات العضو + الفعلي ✅/❌ */}
                       {existing && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                          {/* توقعي */}
-                          <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
-                            <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعي</div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                              {existing.predicted_home_score} — {existing.predicted_away_score}
-                            </div>
-                            {existing.predicted_first_scorer && (
-                              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>⚽ {existing.predicted_first_scorer}</div>
-                            )}
-                          </div>
-                          {/* الفعلي */}
-                          <div style={{ padding: '10px 12px', borderRadius: 12, background: hasResult ? 'rgba(39,176,110,.07)' : 'var(--surface-3)', border: hasResult ? '1px solid rgba(39,176,110,.2)' : '1px solid var(--line)' }}>
-                            <div style={{ color: hasResult ? '#94f0c0' : 'var(--muted)', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>الفعلي</div>
-                            {hasResult ? (
-                              <>
-                                <div style={{ fontSize: 18, fontWeight: 800, color: '#94f0c0', fontVariantNumeric: 'tabular-nums' }}>
-                                  {match.actual_home_score} — {match.actual_away_score}
-                                </div>
-                                {(() => {
-                                  const scorers = extractScorersList(match.scorers_json, match.first_scorer);
-                                  return scorers.length > 0 ? (
-                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5, lineHeight: 1.6 }}><div style={{ color: 'var(--muted)', opacity: 0.8, marginBottom: 2 }}>الهدافون ({scorers.length})</div>
-                                      {scorers.map((s, si) => <div key={si} style={{ display: 'block' }}>⚽ {s}</div>)}
-                                    </div>
-                                  ) : null;
-                                })()}
-                              </>
-                            ) : (
-                              <div style={{ fontSize: 14, color: 'var(--muted)', fontWeight: 600 }}>لم تُحسم بعد</div>
-                            )}
-                          </div>
-                        </div>
+                        <PredVsActual pred={{ ...existing, fixture_id: match.fixture.id, actual_home_score: match.actual_home_score, actual_away_score: match.actual_away_score }} />
                       )}
                       {/* 📊 نسبة H2H + نسبة توقع الأعضاء — للماتشات المغلقة/المحسومة (المفتوحة تظهر جوّا الفورم) */}
                       {!match.is_open && (
@@ -3318,6 +3409,8 @@ const myFilteredPredictionsSorted = [...predictions]
                             community={communityStats[match.fixture.id]}
                             homeName={match?.teams?.home?.name}
                             awayName={match?.teams?.away?.name}
+                            homeLogo={match?.teams?.home?.logo}
+                            awayLogo={match?.teams?.away?.logo}
                           />
                         </div>
                       )}
@@ -3339,7 +3432,10 @@ const myFilteredPredictionsSorted = [...predictions]
                             community={communityStats[match.fixture.id]}
                             homeName={match?.teams?.home?.name}
                             awayName={match?.teams?.away?.name}
+                            homeLogo={match?.teams?.home?.logo}
+                            awayLogo={match?.teams?.away?.logo}
                             onPickScore={(h, a) => setScore(match.fixture.id, { homeScore: h, awayScore: a })}
+                            onPickScorer={(name, pid) => setForm(match.fixture.id, { firstScorer: name, firstScorerId: pid })}
                           />
                           <div style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 700, marginBottom: 12, marginTop: 12 }}>توقّع النتيجة</div>
 
@@ -3597,47 +3693,8 @@ const myFilteredPredictionsSorted = [...predictions]
         </div>
       )}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 10,
-          marginBottom: 12,
-        }}
-      >
-        <div style={{ padding: '10px 12px', borderRadius: 12, background: 'var(--surface-3)', border: '1px solid var(--line)' }}>
-          <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>توقعي</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-            {p.predicted_home_score} — {p.predicted_away_score}
-          </div>
-          {p.predicted_first_scorer && (
-            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span>⚽</span>
-              <span>{p.predicted_first_scorer}</span>
-            </div>
-          )}
-        </div>
-
-        <div style={{ padding: '10px 12px', borderRadius: 12, background: hasResult ? 'rgba(39,176,110,.07)' : 'var(--surface-3)', border: '1px solid var(--line)' }}>
-          <div style={{ color: hasResult ? '#94f0c0' : 'var(--muted)', fontSize: 10, fontWeight: 800, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>الفعلي</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-            {hasResult ? `${p.actual_home_score} — ${p.actual_away_score}` : '—'}
-          </div>
-          {hasResult && (() => {
-            const scorers = extractScorersList(matchInfo?.scorers_json, matchInfo?.first_scorer || p.first_scorer_actual || p.first_scorer);
-            return scorers.length > 0 ? (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>الهدافون ({scorers.length})</div>
-                {scorers.map((s, si) => (
-                  <div key={si} style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span>⚽</span><span>{s}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null;
-          })()}
-        </div>
-      </div>
+      {/* بوكس موحّد: كل اختيارات العضو + الفعلي ✅/❌ */}
+      <PredVsActual pred={p} />
 
       {/* 🧮 بريك داون النقاط الموحّد */}
       {hasResult && (() => {
