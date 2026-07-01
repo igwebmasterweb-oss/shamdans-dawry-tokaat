@@ -346,7 +346,7 @@ function useCountUp(target: number, duration = 800) {
 // 🎨 مكوّن موحّد لعرض بريك داون النقاط (شارات جمالية)
 // يتستخدم في كل أماكن عرض التوقعات: مودال العضو + تاب التوقعات + تاب توقعاتي
 // ════════════════════════════════════════════════════════════════════
-function PointsBreakdown({ items, total }: { items: { icon: string; label: string; pts: number }[]; total: number }) {
+function PointsBreakdown({ items, total, accuracy }: { items: { icon: string; label: string; pts: number }[]; total: number; accuracy?: { correct: number; total: number; pct: number } }) {
   if (!items || items.length === 0) {
     return (
       <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, padding: '8px 0' }}>
@@ -388,8 +388,22 @@ function PointsBreakdown({ items, total }: { items: { icon: string; label: strin
         border: '1px solid rgba(217,178,95,.22)',
       }}>
         <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)' }}>إجمالي نقاط الماتش</span>
-        <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
-          {total} نقطة
+        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {accuracy && accuracy.total > 0 && (
+            <span
+              title={`دقة توقعك في هذا الماتش: ${accuracy.correct} من ${accuracy.total} بند`}
+              style={{
+                fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 999,
+                border: '1px solid rgba(192,132,252,.3)', background: 'rgba(192,132,252,.12)',
+                color: '#d8b4fe', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+              }}
+            >
+              🎯 دقة {accuracy.pct}% ({accuracy.correct}/{accuracy.total})
+            </span>
+          )}
+          <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
+            {total} نقطة
+          </span>
         </span>
       </div>
     </div>
@@ -455,9 +469,9 @@ function MatchStatsLines({
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: labelFs, fontWeight: 800, color: '#86efac', whiteSpace: 'nowrap' }}>⚔️ آخر {h2h!.total} مواجهات</span>
                 <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span title="فوز المضيف" style={{ color: '#86efac' }}>🏠 {h2h!.home_pct}%</span>
+                  <span title="فوز المضيف" style={{ color: '#86efac', display: 'inline-flex', alignItems: 'center', gap: 3 }}><TeamFlag logo={homeLogo} fallback="🏠" title={homeName || 'المضيف'} /> {h2h!.home_pct}%</span>
                   <span title="تعادل" style={{ color: '#cbd5e1' }}>🤝 {h2h!.draw_pct}%</span>
-                  <span title="فوز الضيف" style={{ color: '#fca5a5' }}>✈️ {h2h!.away_pct}%</span>
+                  <span title="فوز الضيف" style={{ color: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: 3 }}><TeamFlag logo={awayLogo} fallback="✈️" title={awayName || 'الضيف'} /> {h2h!.away_pct}%</span>
                 </span>
               </div>
               <Bar h={h2h!.home_pct} d={h2h!.draw_pct} a={h2h!.away_pct} />
@@ -1879,51 +1893,10 @@ const myDisplayedTotal =
   const accuracyPct    = resolvedPreds.length > 0
   ? Math.round((correctPreds.length / resolvedPreds.length) * 100) : 0;
 
-// ✅ دقة التوقع — تحسب على الجزء الأساسي بس (أقصى 13 للماتش: سكور 10 + هداف 3)
-// الإكسترا (كارت/بنلطي/وقت إضافي/الفريقين) والخصومات ما تدخلش في دقة التوقع
+// ✅ دقة التوقع الجديدة = مجموع البنود الصح ÷ مجموع البنود اللي ليها نتيجة فعلية
+// (الحسبة نفسها في computeMatchAccuracy تحت) — الإجمالي محسوب بعد تعريف الدالة.
 const normScorer = (name: string | null | undefined): string =>
   (name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-
-const BASE_MAX_PER_MATCH = 13; // 10 (سكور مظبوط) + 3 (هداف صح)
-
-// تحسب نقاط الأساسي لتوقع واحد بنفس منطق الأدمن (بدون إكسترا)
-const calcBasePoints = (pr: any): number => {
-  if (pr.actual_home_score === null || pr.actual_home_score === undefined) return 0;
-  let pts = 0;
-
-  // 1️⃣ النتيجة/السكور (10 أو 5 — مش الاتنين مع بعض)
-  const isExact =
-    pr.predicted_home_score === pr.actual_home_score &&
-    pr.predicted_away_score === pr.actual_away_score;
-  if (isExact) {
-    pts += 10;
-  } else {
-    const homeWin = pr.actual_home_score > pr.actual_away_score;
-    const awayWin = pr.actual_away_score > pr.actual_home_score;
-    const isDraw  = pr.actual_home_score === pr.actual_away_score;
-    const pHomeWin = pr.predicted_home_score > pr.predicted_away_score;
-    const pAwayWin = pr.predicted_away_score > pr.predicted_home_score;
-    const pDraw    = pr.predicted_home_score === pr.predicted_away_score;
-    if ((homeWin && pHomeWin) || (awayWin && pAwayWin) || (isDraw && pDraw)) pts += 5;
-  }
-
-  // 2️⃣ أول هداف (الهداف الفعلي من جدول الماتشات)
-  const mx = matches.find((m: any) => m.fixture?.id === pr.fixture_id);
-  const actualFirstScorer = mx?.first_scorer ?? '';
-  const scorerByName =
-    !!pr.predicted_first_scorer && !!actualFirstScorer &&
-    normScorer(pr.predicted_first_scorer) === normScorer(actualFirstScorer);
-  if (scorerByName) pts += 3;
-
-  // الحد الأقصى للأساسي 13 (ومفيش سالب لأن الأساسي ما فيهوش خصومات)
-  return Math.min(BASE_MAX_PER_MATCH, Math.max(0, pts));
-};
-
-// بسط النسبة = مجموع نقاط الأساسي لكل الماتشات المنتهية
-const basePointsTotal = resolvedPreds.reduce((s: number, pr: any) => s + calcBasePoints(pr), 0);
-const maxPossible    = resolvedPreds.length * BASE_MAX_PER_MATCH; // × 13
-const efficiencyPct  = maxPossible > 0
-  ? Math.min(100, Math.round((basePointsTotal / maxPossible) * 100)) : 0;
 
 // ════════════════════════════════════════════════════════════════════
 // 🧮 بريك داون نقاط التوقع لماتش واحد — مطابق 100% لمنطق update-results
@@ -2026,6 +1999,80 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
   return { items, total };
 };
 
+// ════════════════════════════════════════════════════════════════════
+// 🎯 دقة توقع الماتش — نسبة اختيارات العضو الصح من البنود اللي ليها نتيجة فعلية
+// المقام = عدد البنود المحسومة فعليًا في الماتش (اللي ليها نتيجة).
+// البسط  = عدد البنود اللي العضو خمّنها صح.
+// البنود: الاتجاه | السكور بالظبط | أول هداف (لو اختاره) | بنلطي | كارت أحمر
+//        | وقت إضافي | ركلات ترجيح | الفريقين سجّلوا  (بندين منفصلين للنتيجة)
+// ════════════════════════════════════════════════════════════════════
+const computeMatchAccuracy = (pred: any): { correct: number; total: number; pct: number } => {
+  const actualHome = pred.actual_home_score;
+  const actualAway = pred.actual_away_score;
+  if (actualHome === null || actualHome === undefined || actualAway === null || actualAway === undefined) {
+    return { correct: 0, total: 0, pct: 0 };
+  }
+
+  const mx = matches.find((m: any) => m.fixture?.id === (pred.fixture_id || pred.api_fixture_id));
+  const actualFirstScorer = pred.first_scorer_actual ?? mx?.first_scorer ?? null;
+  const redCardInMatch      = (pred.red_card_in_match ?? mx?.red_card_in_match) === true;
+  const penaltyInMatch      = (pred.penalty_in_match ?? mx?.penalty_in_match) === true;
+  const wentExtraTime       = (pred.went_extra_time ?? mx?.went_extra_time) === true;
+  const wentPenaltyShootout = (pred.went_penalty_shootout ?? mx?.went_penalty_shootout) === true;
+  const bothTeamsScored     = (pred.both_teams_scored ?? mx?.both_teams_scored) === true;
+
+  const predHome = pred.predicted_home_score;
+  const predAway = pred.predicted_away_score;
+  const actualWinner = actualHome > actualAway ? 'home' : actualAway > actualHome ? 'away' : 'draw';
+  const predWinner   = predHome > predAway ? 'home' : predAway > predHome ? 'away' : 'draw';
+
+  let correct = 0;
+  let total = 0;
+
+  // 1️⃣ الاتجاه (بند منفصل)
+  total++;
+  if (actualWinner === predWinner) correct++;
+
+  // 2️⃣ السكور بالظبط (بند منفصل)
+  total++;
+  if (predHome === actualHome && predAway === actualAway) correct++;
+
+  // 3️⃣ أول هداف — يُحسب فقط لو العضو اختار هداف والماتش ليه هداف فعلي
+  const predScorer = pred.predicted_first_scorer || null;
+  if (predScorer && actualFirstScorer) {
+    total++;
+    if (normScorer(predScorer) === normScorer(actualFirstScorer)) correct++;
+  }
+
+  // 4️⃣-8️⃣ البنود البوليانية — كلها محسومة فعليًا في الماتش
+  const boolChecks: { pred: any; actual: boolean }[] = [
+    { pred: pred.predicted_penalty,          actual: penaltyInMatch },
+    { pred: pred.predicted_red_card,         actual: redCardInMatch },
+    { pred: pred.predicted_extra_time,       actual: wentExtraTime },
+    { pred: pred.predicted_penalty_shootout, actual: wentPenaltyShootout },
+    { pred: pred.predicted_both_teams,       actual: bothTeamsScored },
+  ];
+  for (const b of boolChecks) {
+    total++;
+    if ((b.pred === true) === b.actual) correct++;
+  }
+
+  const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+  return { correct, total, pct };
+};
+
+// 📊 إجمالي دقة التوقع العام = مجموع البنود الصح ÷ مجموع البنود المحسومة
+// (عبر كل الماتشات اللي ليها نتيجة) — مطابق لبوكس الدقة داخل كل ماتش.
+const accuracyAgg = resolvedPreds.reduce(
+  (acc: { correct: number; total: number }, pr: any) => {
+    const a = computeMatchAccuracy(pr);
+    return { correct: acc.correct + a.correct, total: acc.total + a.total };
+  },
+  { correct: 0, total: 0 }
+);
+const efficiencyPct = accuracyAgg.total > 0
+  ? Math.round((accuracyAgg.correct / accuracyAgg.total) * 100) : 0;
+
   // PredVsActual: بوكس موحّد — كل اختيارات العضو (سطر لكل واحد) + الفعلي بمقابل ✅/❌
   const PredVsActual = ({ pred }: { pred: any }) => {
     const mx = matches.find((m: any) => m.fixture?.id === (pred.fixture_id || pred.api_fixture_id));
@@ -2075,15 +2122,15 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
       { key: 'predicted_penalty_shootout', icon: '🎯', label: 'ركلات الترجيح',        actual: wentPenaltyShootout },
       { key: 'predicted_both_teams',       icon: '🥅', label: 'الفريقين سجّلوا',      actual: bothTeamsScored },
     ];
+    // 🔹 نعرض كل اختيارات العضو (نعم/لا) — مش بس اللي قال فيها نعم
     for (const br of boolRows) {
-      if (pred[br.key] === true) {
-        rows.push({
-          icon: br.icon, label: br.label,
-          predText: 'نعم',
-          actualText: hasResult ? yesNo(br.actual) : '—',
-          correct: hasResult ? br.actual === true : null,
-        });
-      }
+      const predYes = pred[br.key] === true;
+      rows.push({
+        icon: br.icon, label: br.label,
+        predText: predYes ? 'نعم' : 'لا',
+        actualText: hasResult ? yesNo(br.actual) : '—',
+        correct: hasResult ? predYes === (br.actual === true) : null,
+      });
     }
 
     const rowStyle: React.CSSProperties = {
@@ -2686,9 +2733,10 @@ const myFilteredPredictionsSorted = [...predictions]
                             {/* 🧮 بريك داون النقاط الموحّد — يوضح للعضو كل بند جاب كام نقطة */}
                             {hasResult && (() => {
                               const bd = computeBreakdown(pred);
+                              const acc = computeMatchAccuracy(pred);
                               return (
                                 <div style={{ marginBottom: 12 }}>
-                                  <PointsBreakdown items={bd.items} total={bd.total} />
+                                  <PointsBreakdown items={bd.items} total={bd.total} accuracy={acc} />
                                 </div>
                               );
                             })()}
@@ -3058,7 +3106,7 @@ const myFilteredPredictionsSorted = [...predictions]
           {[
             { label: 'توقعاتي',    value: predictions.length,                                        color: '#8ae0b3', icon: '⚽' },
             { label: 'المتسابقون', value: totalParticipants, color: '#7db1ff', icon: '👥' },
-           { label: 'دقة التوقع', value: maxPossible > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: maxPossible > 0 ? `${basePointsTotal} من ${maxPossible} نقطة` : '' },
+           { label: 'دقة التوقع', value: accuracyAgg.total > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: accuracyAgg.total > 0 ? `${accuracyAgg.correct} من ${accuracyAgg.total} بند صح` : '' },
             { label: 'الجولات',    value: streakCount > 0 ? `${streakCount} 🔥` : '—',               color: '#f97316', icon: '📅' },
           ].map((s: any) => (
            
@@ -3204,7 +3252,7 @@ const myFilteredPredictionsSorted = [...predictions]
             { id: 'predict', label: openUnpredictedCount > 0 ? `⚽ التوقعات (${openUnpredictedCount})` : '⚽ التوقعات' },
             { id: 'my',      label: '📋 توقعاتي' },
             { id: 'leaders', label: '🏆 الصدارة' },
-            { id: 'bracket', label: '🌳 الشجرة' },
+            { id: 'bracket', label: '👑 طريق البطل' },
             { id: 'history', label: '📈 السجل التاريخي' },
             { id: 'feed',    label: '🌍 نشاط اللاعبين' },
           ] as const).map(({ id, label }) => (
@@ -3433,10 +3481,12 @@ const myFilteredPredictionsSorted = [...predictions]
                       )}
                       {/* 🧮 بريك داون النقاط الموحّد (للماتشات المحسومة) */}
                       {existing && hasResult && (() => {
-                        const bd = computeBreakdown({ ...existing, actual_home_score: match.actual_home_score, actual_away_score: match.actual_away_score });
+                        const bdPred = { ...existing, actual_home_score: match.actual_home_score, actual_away_score: match.actual_away_score };
+                        const bd = computeBreakdown(bdPred);
+                        const acc = computeMatchAccuracy(bdPred);
                         return (
                           <div style={{ marginBottom: 12 }}>
-                            <PointsBreakdown items={bd.items} total={bd.total} />
+                            <PointsBreakdown items={bd.items} total={bd.total} accuracy={acc} />
                           </div>
                         );
                       })()}
@@ -3716,9 +3766,10 @@ const myFilteredPredictionsSorted = [...predictions]
       {/* 🧮 بريك داون النقاط الموحّد */}
       {hasResult && (() => {
         const bd = computeBreakdown(p);
+        const acc = computeMatchAccuracy(p);
         return (
           <div style={{ marginBottom: 10 }}>
-            <PointsBreakdown items={bd.items} total={bd.total} />
+            <PointsBreakdown items={bd.items} total={bd.total} accuracy={acc} />
           </div>
         );
       })()}
