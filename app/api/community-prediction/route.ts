@@ -26,13 +26,29 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ results: {} }, { status: 200 });
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('predictions')
-      .select('fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_first_scorer_id')
-      .in('fixture_id', fixtureIds);
+    // PostgREST بيقص النتايج عند 1000 صف افتراضيًا — نجيب كل الصفوف بالـpagination
+    // عشان النسب المجمّعة تبقى مطابقة للداتا بيز مهما زاد عدد التوقعات
+    const PAGE = 1000;
+    const data: Array<{
+      fixture_id: number | null;
+      predicted_home_score: number | null;
+      predicted_away_score: number | null;
+      predicted_first_scorer: string | null;
+      predicted_first_scorer_id: number | null;
+    }> = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data: page, error } = await supabaseAdmin
+        .from('predictions')
+        .select('fixture_id, predicted_home_score, predicted_away_score, predicted_first_scorer, predicted_first_scorer_id')
+        .in('fixture_id', fixtureIds)
+        .range(from, from + PAGE - 1);
 
-    if (error) {
-      return NextResponse.json({ results: {}, error: error.message }, { status: 200 });
+      if (error) {
+        return NextResponse.json({ results: {}, error: error.message }, { status: 200 });
+      }
+      if (!page || page.length === 0) break;
+      data.push(...page);
+      if (page.length < PAGE) break;
     }
 
     // تجميع لكل fixture
