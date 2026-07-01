@@ -2019,7 +2019,6 @@ const computeMatchAccuracy = (pred: any): { correct: number; total: number; pct:
   const penaltyInMatch      = (pred.penalty_in_match ?? mx?.penalty_in_match) === true;
   const wentExtraTime       = (pred.went_extra_time ?? mx?.went_extra_time) === true;
   const wentPenaltyShootout = (pred.went_penalty_shootout ?? mx?.went_penalty_shootout) === true;
-  const bothTeamsScored     = (pred.both_teams_scored ?? mx?.both_teams_scored) === true;
 
   const predHome = pred.predicted_home_score;
   const predAway = pred.predicted_away_score;
@@ -2050,7 +2049,6 @@ const computeMatchAccuracy = (pred: any): { correct: number; total: number; pct:
     { pred: pred.predicted_red_card,         actual: redCardInMatch },
     { pred: pred.predicted_extra_time,       actual: wentExtraTime },
     { pred: pred.predicted_penalty_shootout, actual: wentPenaltyShootout },
-    { pred: pred.predicted_both_teams,       actual: bothTeamsScored },
   ];
   for (const b of boolChecks) {
     total++;
@@ -2120,7 +2118,6 @@ const efficiencyPct = accuracyAgg.total > 0
       { key: 'predicted_red_card',         icon: '🟥', label: 'كرت أحمر',              actual: redCardInMatch },
       { key: 'predicted_extra_time',       icon: '⏱️', label: 'وقت إضافي',             actual: wentExtraTime },
       { key: 'predicted_penalty_shootout', icon: '🎯', label: 'ركلات الترجيح',        actual: wentPenaltyShootout },
-      { key: 'predicted_both_teams',       icon: '🥅', label: 'الفريقين سجّلوا',      actual: bothTeamsScored },
     ];
     // 🔹 نعرض كل اختيارات العضو (نعم/لا) — مش بس اللي قال فيها نعم
     for (const br of boolRows) {
