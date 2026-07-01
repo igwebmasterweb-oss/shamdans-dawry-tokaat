@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 // ✅ نظام الإشعارات المركزي (نفس المستخدم في صفحة ليجاتي)
 import { useNotifications, sendNotification, getNotificationText } from '../../lib/useNotifications';
+// 🏆 هيكل شجرة البطولة الثابت
+import BracketTree from './BracketTree';
 
 interface Profile {
   id: string;
@@ -629,7 +631,7 @@ export default function Dashboard() {
   const [totalParticipants, setTotalParticipants] = useState(0);
   const [loading, setLoading]               = useState(true);
   const [loadError, setLoadError]           = useState(false);
-  const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'roundleaders' | 'feed' | 'history'>('predict');
+  const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'roundleaders' | 'feed' | 'history' | 'bracket'>('predict');
   const [activeRound, setActiveRound]       = useState('');
   const [roundLeaderboardRows, setRoundLeaderboardRows] = useState<any[]>([]);
   const [roundLeaderLoading, setRoundLeaderLoading] = useState(false);
@@ -670,6 +672,9 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [reviewNotice, setReviewNotice]     = useState<any | null>(null);
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
+  // 🏆 شجرة البطولة (knockout bracket) — تُجلب لحظيًا من /api/bracket
+  const [bracketRounds, setBracketRounds] = useState<Record<string, any[]> | null>(null);
+  const [bracketLoading, setBracketLoading] = useState(false);
   const [myRoundFilter, setMyRoundFilter]     = useState('');
   const [leaderRoundFilter, setLeaderRoundFilter] = useState('');
   const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
@@ -691,6 +696,17 @@ const [profileCompleted, setProfileCompleted] = useState(false);
       });
     });
   }, []);
+
+  // 🏆 جلب أدوار الإقصاء لحظيًا أول ما يُفتح تاب الشجرة (مرة واحدة)
+  useEffect(() => {
+    if (activeTab !== 'bracket' || bracketRounds !== null || bracketLoading) return;
+    setBracketLoading(true);
+    fetch('/api/bracket')
+      .then(r => r.json())
+      .then(d => setBracketRounds(d?.rounds || {}))
+      .catch(() => setBracketRounds({}))
+      .finally(() => setBracketLoading(false));
+  }, [activeTab, bracketRounds, bracketLoading]);
 
   // 📊 جلب نسب توقع الأعضاء (طلب واحد مجمّع) + نسب H2H لكل ماتش ظاهر
   useEffect(() => {
@@ -3188,6 +3204,7 @@ const myFilteredPredictionsSorted = [...predictions]
             { id: 'predict', label: openUnpredictedCount > 0 ? `⚽ التوقعات (${openUnpredictedCount})` : '⚽ التوقعات' },
             { id: 'my',      label: '📋 توقعاتي' },
             { id: 'leaders', label: '🏆 الصدارة' },
+            { id: 'bracket', label: '🌳 الشجرة' },
             { id: 'history', label: '📈 السجل التاريخي' },
             { id: 'feed',    label: '🌍 نشاط اللاعبين' },
           ] as const).map(({ id, label }) => (
@@ -3937,6 +3954,19 @@ const myFilteredPredictionsSorted = [...predictions]
                 <div style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{timeAgo(item.created_at)}</div>
               </div>
             ))}
+          </div>
+        )}
+
+        {activeTab === 'bracket' && (
+          <div>
+            {bracketLoading && bracketRounds === null ? (
+              <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🌳</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>جارٍ تحميل الشجرة…</div>
+              </div>
+            ) : (
+              <BracketTree rounds={bracketRounds} />
+            )}
           </div>
         )}
       </div>
