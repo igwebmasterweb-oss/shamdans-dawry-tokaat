@@ -99,28 +99,46 @@ export async function GET(req: NextRequest) {
       const { home, draw, away, total } = agg[id];
       const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
 
-      // أعلى 5 نتايج توقعاً (الأكثر تكراراً)
-      const top_scorelines = Object.values(scoreAgg[id])
-        .sort((x, y) => y.count - x.count)
-        .slice(0, 5)
-        .map((s) => ({
+      // أعلى 4 نتايج توقعاً + تجميع الباقي في "أخرى" (بحيث المجموع = كل التوقعات)
+      const scorelinesSorted = Object.values(scoreAgg[id]).sort((x, y) => y.count - x.count);
+      const top_scorelines: Array<{ home: number | null; away: number | null; count: number; pct: number; is_others?: boolean }> =
+        scorelinesSorted.slice(0, 4).map((s) => ({
           home: s.home,
           away: s.away,
           count: s.count,
           pct: total > 0 ? Math.round((s.count / total) * 100) : 0,
         }));
+      const scorelinesRest = scorelinesSorted.slice(4).reduce((acc, s) => acc + s.count, 0);
+      if (scorelinesRest > 0) {
+        top_scorelines.push({
+          home: null,
+          away: null,
+          count: scorelinesRest,
+          pct: total > 0 ? Math.round((scorelinesRest / total) * 100) : 0,
+          is_others: true,
+        });
+      }
 
-      // أعلى 3 هدافين متوقَّعين (الأكثر تكراراً) — النسبة من إجمالي مَن اختاروا هدافاً
+      // أعلى 4 هدافين متوقَّعين + تجميع الباقي في "أخرى" — النسبة من إجمالي مَن اختاروا هدافاً
       const scorerTotal = Object.values(scorerAgg[id]).reduce((acc, s) => acc + s.count, 0);
-      const top_scorers = Object.values(scorerAgg[id])
-        .sort((x, y) => y.count - x.count)
-        .slice(0, 3)
-        .map((s) => ({
+      const scorersSorted = Object.values(scorerAgg[id]).sort((x, y) => y.count - x.count);
+      const top_scorers: Array<{ name: string; player_id: number | null; count: number; pct: number; is_others?: boolean }> =
+        scorersSorted.slice(0, 4).map((s) => ({
           name: s.name,
           player_id: s.player_id,
           count: s.count,
           pct: scorerTotal > 0 ? Math.round((s.count / scorerTotal) * 100) : 0,
         }));
+      const scorersRest = scorersSorted.slice(4).reduce((acc, s) => acc + s.count, 0);
+      if (scorersRest > 0) {
+        top_scorers.push({
+          name: 'أخرى',
+          player_id: null,
+          count: scorersRest,
+          pct: scorerTotal > 0 ? Math.round((scorersRest / scorerTotal) * 100) : 0,
+          is_others: true,
+        });
+      }
 
       results[id] = {
         home_pct: pct(home),

@@ -411,8 +411,8 @@ function PointsBreakdown({ items, total, accuracy }: { items: { icon: string; la
 }
 
 // 📊 سطرين جماليين: نسبة H2H (آخر 10 مواجهات) + نسبة توقع الأعضاء
-type Scoreline = { home: number; away: number; count: number; pct: number };
-type ScorerPick = { name: string; player_id?: number | null; count: number; pct: number };
+type Scoreline = { home: number | null; away: number | null; count: number; pct: number; is_others?: boolean };
+type ScorerPick = { name: string; player_id?: number | null; count: number; pct: number; is_others?: boolean };
 type StatTriple = { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: Scoreline[]; top_scorers?: ScorerPick[] } | undefined;
 function MatchStatsLines({
   h2h,
@@ -496,7 +496,7 @@ function MatchStatsLines({
           </div>
           <Bar h={community!.home_pct} d={community!.draw_pct} a={community!.away_pct} />
 
-          {/* 🎯 أكثر النتايج توقّعاً (حتى 5) — لو الماتش مفتوح الضغط يملا خانات التوقع */}
+          {/* 🎯 أكثر النتايج توقّعاً (حتى 4 + "أخرى" تجمع الباقي) — لو الماتش مفتوح الضغط يملا خانات التوقع */}
           {Array.isArray(community!.top_scorelines) && community!.top_scorelines.length > 0 && (
             <div style={{ display: 'grid', gap: 5, marginTop: 3 }}>
               <div style={{ fontSize: labelFs, fontWeight: 700, color: '#93c5fd', opacity: 0.9 }}>
@@ -504,23 +504,25 @@ function MatchStatsLines({
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {community!.top_scorelines.map((s, i) => {
-                  const clickable = !!onPickScore;
+                  const isOthers = !!s.is_others || s.home === null || s.away === null;
+                  const clickable = !!onPickScore && !isOthers;
                   const inner = (
                     <>
-                      <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{s.home}–{s.away}</span>
+                      <span style={{ fontSize: fs, fontWeight: 800, color: isOthers ? 'var(--muted)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{isOthers ? 'أخرى' : `${s.home}–${s.away}`}</span>
                       <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd' }}>{s.pct}%</span>
                     </>
                   );
                   const baseStyle: React.CSSProperties = {
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: compact ? '4px 8px' : '5px 10px', borderRadius: 9,
-                    background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.28)',
+                    background: isOthers ? 'rgba(148,163,184,.10)' : 'rgba(59,130,246,.10)',
+                    border: isOthers ? '1px solid rgba(148,163,184,.28)' : '1px solid rgba(59,130,246,.28)',
                   };
                   return clickable ? (
                     <button
                       key={i}
                       type="button"
-                      onClick={() => onPickScore!(s.home, s.away)}
+                      onClick={() => onPickScore!(s.home as number, s.away as number)}
                       title="اضغط لتعيين هذه النتيجة توقّعك"
                       style={{ ...baseStyle, cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
                     >
@@ -542,17 +544,19 @@ function MatchStatsLines({
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {community!.top_scorers!.map((sc, i) => {
-                  const clickable = !!onPickScorer;
+                  const isOthers = !!sc.is_others;
+                  const clickable = !!onPickScorer && !isOthers;
                   const inner = (
                     <>
-                      <span style={{ fontSize: fs, fontWeight: 800, color: 'var(--text)' }}>{sc.name}</span>
+                      <span style={{ fontSize: fs, fontWeight: 800, color: isOthers ? 'var(--muted)' : 'var(--text)' }}>{sc.name}</span>
                       <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd' }}>{sc.pct}%</span>
                     </>
                   );
                   const baseStyle: React.CSSProperties = {
                     display: 'flex', alignItems: 'center', gap: 6,
                     padding: compact ? '4px 8px' : '5px 10px', borderRadius: 9,
-                    background: 'rgba(59,130,246,.10)', border: '1px solid rgba(59,130,246,.28)',
+                    background: isOthers ? 'rgba(148,163,184,.10)' : 'rgba(59,130,246,.10)',
+                    border: isOthers ? '1px solid rgba(148,163,184,.28)' : '1px solid rgba(59,130,246,.28)',
                   };
                   return clickable ? (
                     <button
@@ -694,7 +698,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
   // 📊 نسب H2H (آخر 10 مواجهات) ونسب توقع الأعضاء — مفهرسة بـ fixtureId
   const [h2hStats, setH2hStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number }>>({});
-  const [communityStats, setCommunityStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: { home: number; away: number; count: number; pct: number }[]; top_scorers?: { name: string; player_id?: number | null; count: number; pct: number }[] }>>({});
+  const [communityStats, setCommunityStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: { home: number | null; away: number | null; count: number; pct: number; is_others?: boolean }[]; top_scorers?: { name: string; player_id?: number | null; count: number; pct: number; is_others?: boolean }[] }>>({});
   // ✅ الإشعارات (جرس الداش بورد) — نفس منطق صفحة ليجاتي
   const [showNotif, setShowNotif] = useState(false);
   const { notifications, unreadCount, markRead, markNonInviteRead } = useNotifications();
@@ -3250,8 +3254,8 @@ const myFilteredPredictionsSorted = [...predictions]
             { id: 'my',      label: '📋 توقعاتي' },
             { id: 'leaders', label: '🏆 الصدارة' },
             { id: 'bracket', label: '👑 طريق البطل' },
-            { id: 'history', label: '📈 السجل التاريخي' },
-            { id: 'feed',    label: '🌍 نشاط اللاعبين' },
+            { id: 'history', label: '📈 المسار' },
+            { id: 'feed',    label: '🌍 النشاط' },
           ] as const).map(({ id, label }) => (
             <button key={id} className={`tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)} style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{label}</button>
           ))}
