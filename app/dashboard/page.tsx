@@ -1907,7 +1907,7 @@ const normScorer = (name: string | null | undefined): string =>
 // بيرجّع بنود (أيقونة + وصف + نقاط) عشان العضو يفهم النقط جت منين.
 // المجموع لازم يساوي pred.points المحفوظة بالظبط (مفيش لخبطة).
 // البنود: اتجاه صح +5 | نتيجة بالظبط +5 | أول هداف +3 | سجّل هدف +1
-//        | كرت أحمر +3/-1 | ضربة جزاء +3/-1
+//        | كارت أحمر +3/-1 | ضربة جزاء +3/-1
 // (مفيش وقت إضافي ومفيش "الفريقين سجلا" لأنهم مش في نظام الحساب الرسمي)
 // ════════════════════════════════════════════════════════════════════
 const computeBreakdown = (pred: any): { items: { icon: string; label: string; pts: number }[]; total: number } => {
@@ -1971,11 +1971,11 @@ const computeBreakdown = (pred: any): { items: { icon: string; label: string; pt
     items.push({ icon: '⚽', label: 'سجّل هدف (مش الأول)', pts: 1 });
   }
 
-  // 4️⃣ كرت أحمر — +3 لو توقعه وحصل، -1 لو توقعه وماحصلش
+  // 4️⃣ كارت أحمر — +3 لو توقعه وحصل، -1 لو توقعه وماحصلش
   if (pred.predicted_red_card === true && redCardInMatch) {
-    items.push({ icon: '🟥', label: 'كرت أحمر صح', pts: 3 });
+    items.push({ icon: '🟥', label: 'كارت أحمر صح', pts: 3 });
   } else if (pred.predicted_red_card === true && !redCardInMatch) {
-    items.push({ icon: '🟥', label: 'كرت أحمر غلط', pts: -1 });
+    items.push({ icon: '🟥', label: 'كارت أحمر غلط', pts: -1 });
   }
 
   // 5️⃣ ضربة جزاء في الماتش (penalty_in_match) — +3 لو توقعها وحصلت، -1 لو توقعها وماحصلتش
@@ -2075,6 +2075,46 @@ const accuracyAgg = resolvedPreds.reduce(
 const efficiencyPct = accuracyAgg.total > 0
   ? Math.round((accuracyAgg.correct / accuracyAgg.total) * 100) : 0;
 
+// ════════════════════════════════════════════════════════════════════
+// 🏆 أقصى نقاط واقعية ممكنة لماتش محسوم — لو العضو خمّن كل الأحداث اللي
+// حصلت فعلًا صح. مطابق لسقف نقاط computeBreakdown (بدون البنود السالبة).
+//   اتجاه +5 | نتيجة بالظبط +5 | أول هداف +3 (لو الماتش ليه هداف فعلي)
+//   + 3 لكل حدث بولياني حصل فعلًا: كارت أحمر/بنلتي/وقت إضافي/ركلات ترجيح
+// ════════════════════════════════════════════════════════════════════
+const computeMatchMaxPoints = (pred: any): number => {
+  const actualHome = pred.actual_home_score;
+  const actualAway = pred.actual_away_score;
+  if (actualHome === null || actualHome === undefined || actualAway === null || actualAway === undefined) {
+    return 0;
+  }
+  const mx = matches.find((m: any) => m.fixture?.id === (pred.fixture_id || pred.api_fixture_id));
+  const actualFirstScorer   = pred.first_scorer_actual ?? mx?.first_scorer ?? null;
+  const redCardInMatch      = (pred.red_card_in_match ?? mx?.red_card_in_match) === true;
+  const penaltyInMatch      = (pred.penalty_in_match ?? mx?.penalty_in_match) === true;
+  const wentExtraTime       = (pred.went_extra_time ?? mx?.went_extra_time) === true;
+  const wentPenaltyShootout = (pred.went_penalty_shootout ?? mx?.went_penalty_shootout) === true;
+
+  let max = 5 + 5; // الاتجاه + النتيجة بالظبط
+  if (actualFirstScorer) max += 3; // أول هداف (الماتش ليه هداف فعلي)
+  if (redCardInMatch)      max += 3;
+  if (penaltyInMatch)      max += 3;
+  if (wentExtraTime)       max += 3;
+  if (wentPenaltyShootout) max += 3;
+  return max;
+};
+
+// 🏅 نقاطك الفعلية (من الماتشات المحسومة) ÷ أقصى نقاط واقعية ممكنة
+const resolvedActualPoints = resolvedPreds.reduce(
+  (sum: number, pr: any) => sum + (Number(pr?.points) || 0),
+  0
+);
+const maxPossiblePoints = resolvedPreds.reduce(
+  (sum: number, pr: any) => sum + computeMatchMaxPoints(pr),
+  0
+);
+const pointsEfficiencyPct = maxPossiblePoints > 0
+  ? Math.round((resolvedActualPoints / maxPossiblePoints) * 100) : 0;
+
   // PredVsActual: بوكس موحّد — كل اختيارات العضو (سطر لكل واحد) + الفعلي بمقابل ✅/❌
   const PredVsActual = ({ pred }: { pred: any }) => {
     const mx = matches.find((m: any) => m.fixture?.id === (pred.fixture_id || pred.api_fixture_id));
@@ -2119,7 +2159,7 @@ const efficiencyPct = accuracyAgg.total > 0
 
     const boolRows: { key: string; icon: string; label: string; actual: boolean }[] = [
       { key: 'predicted_penalty',          icon: '⚽', label: 'ضربة جزاء في الماتش', actual: penaltyInMatch },
-      { key: 'predicted_red_card',         icon: '🟥', label: 'كرت أحمر',              actual: redCardInMatch },
+      { key: 'predicted_red_card',         icon: '🟥', label: 'كارت أحمر',              actual: redCardInMatch },
       { key: 'predicted_extra_time',       icon: '⏱️', label: 'وقت إضافي',             actual: wentExtraTime },
       { key: 'predicted_penalty_shootout', icon: '🎯', label: 'ركلات الترجيح',        actual: wentPenaltyShootout },
     ];
@@ -3107,7 +3147,7 @@ const myFilteredPredictionsSorted = [...predictions]
           {[
             { label: 'توقعاتي',    value: predictions.length,                                        color: '#8ae0b3', icon: '⚽' },
             { label: 'المتسابقون', value: totalParticipants, color: '#7db1ff', icon: '👥' },
-           { label: 'دقة التوقع', value: accuracyAgg.total > 0 ? `${efficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: accuracyAgg.total > 0 ? `${accuracyAgg.correct} من ${accuracyAgg.total} بند صح` : '' },
+           { label: 'دقة التوقع', value: maxPossiblePoints > 0 ? `${pointsEfficiencyPct}%` : '—', color: '#c084fc', icon: '🎯', sub: maxPossiblePoints > 0 ? `${resolvedActualPoints} من ${maxPossiblePoints} نقطة` : '' },
             { label: 'الجولات',    value: streakCount > 0 ? `${streakCount} 🔥` : '—',               color: '#f97316', icon: '📅' },
           ].map((s: any) => (
            
