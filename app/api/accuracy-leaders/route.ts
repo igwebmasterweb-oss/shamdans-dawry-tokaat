@@ -7,7 +7,9 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export const revalidate = 120;
+// dynamic: يتنفّذ عند الطلب فقط (مش وقت البناء) — الاستعلامات تقيلة وبتتجاوز مهلة الـ static generation.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // ════════════════════════════════════════════════════════════════════
 // 🎯 صدارة دقة التوقع — أفضل 25 متسابق حسب (نقاط مكتسبة ÷ أقصى نقاط ممكنة)
