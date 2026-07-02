@@ -29,6 +29,8 @@ function PlayerSelect({
   awayTeamId,
   value,
   onChange,
+  disabled = false,
+  disabledHint,
 }: {
   fixtureId: number;
   homeTeam: string;
@@ -37,6 +39,8 @@ function PlayerSelect({
   awayTeamId?: number | null;
   value: string;
   onChange: (v: { player_name: string; player_id?: number | null }) => void;
+  disabled?: boolean;
+  disabledHint?: string;
 }) {
    const [players, setPlayers] = useState<{
     player_name: string;
@@ -107,6 +111,28 @@ function PlayerSelect({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // 🔒 لو معطّل (مثلاً تعادل سلبي 0-0) — نقفل القائمة
+  useEffect(() => { if (disabled && open) setOpen(false); }, [disabled, open]);
+
+  if (disabled) {
+    return (
+      <button
+        type="button"
+        disabled
+        title={disabledHint}
+        style={{
+          flex: 1, width: '100%', padding: '8px 12px', borderRadius: 12,
+          border: '1px solid var(--line)', background: 'var(--surface-3)',
+          color: 'var(--muted)', fontFamily: 'Cairo, sans-serif', fontSize: 14,
+          fontWeight: 600, textAlign: 'right', cursor: 'not-allowed', opacity: 0.45,
+          direction: 'rtl',
+        }}
+      >
+        —
+      </button>
+    );
+  }
 
   if (loaded && players.length === 0) {
     return (
@@ -1413,7 +1439,9 @@ if (refreshPointsError) throw refreshPointsError;
     const nextHome = patch.homeScore ?? cur.homeScore ?? 0;
     const nextAway = patch.awayScore ?? cur.awayScore ?? 0;
     const extra = nextHome !== nextAway ? { penaltyShootout: false } : {};
-    setForm(fixtureId, { ...patch, ...extra });
+    // 🔒 تعادل سلبي 0-0 — مفيش أول هداف، نمسح أي هداف مختار
+    const clearScorer = (nextHome === 0 && nextAway === 0) ? { firstScorer: '', firstScorerId: null } : {};
+    setForm(fixtureId, { ...patch, ...extra, ...clearScorer });
   };
 
 // 🔧 تطبيع الاسم: حذف الأكسنت + توحيد الحالة + حذف المسافات الزائدة
@@ -3587,6 +3615,8 @@ const myFilteredPredictionsSorted = [...predictions]
   awayTeamId={match.db_away_team_id}
   value={form.firstScorer}
   onChange={val => setForm(match.fixture.id, { firstScorer: val.player_name, firstScorerId: val.player_id ?? null })}
+  disabled={(form.homeScore || 0) === 0 && (form.awayScore || 0) === 0}
+  disabledHint="التعادل السلبي (0-0) مفيهوش أول هداف"
 />
                           </div>
 
