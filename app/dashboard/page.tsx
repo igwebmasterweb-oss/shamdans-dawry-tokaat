@@ -346,7 +346,7 @@ function useCountUp(target: number, duration = 800) {
 // 🎨 مكوّن موحّد لعرض بريك داون النقاط (شارات جمالية)
 // يتستخدم في كل أماكن عرض التوقعات: مودال العضو + تاب التوقعات + تاب توقعاتي
 // ════════════════════════════════════════════════════════════════════
-function PointsBreakdown({ items, total, accuracy }: { items: { icon: string; label: string; pts: number }[]; total: number; accuracy?: { correct: number; total: number; pct: number } }) {
+function PointsBreakdown({ items, total, accuracy }: { items: { icon: string; label: string; pts: number }[]; total: number; accuracy?: { earned: number; max: number; pct: number } }) {
   if (!items || items.length === 0) {
     return (
       <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700, padding: '8px 0' }}>
@@ -389,16 +389,16 @@ function PointsBreakdown({ items, total, accuracy }: { items: { icon: string; la
       }}>
         <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)' }}>إجمالي نقاط الماتش</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {accuracy && accuracy.total > 0 && (
+          {accuracy && accuracy.max > 0 && (
             <span
-              title={`دقة توقعك في هذا الماتش: ${accuracy.correct} من ${accuracy.total} بند`}
+              title={`دقة توقعك في هذا الماتش: ${accuracy.earned} من ${accuracy.max} نقطة`}
               style={{
                 fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 999,
                 border: '1px solid rgba(192,132,252,.3)', background: 'rgba(192,132,252,.12)',
                 color: '#d8b4fe', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               }}
             >
-              🎯 دقة {accuracy.pct}% ({accuracy.correct}/{accuracy.total})
+              🎯 دقة {accuracy.pct}% ({accuracy.earned}/{accuracy.max})
             </span>
           )}
           <span style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>
@@ -2103,6 +2103,15 @@ const computeMatchMaxPoints = (pred: any): number => {
   return max;
 };
 
+// 🎯 دقة الماتش بالنقاط = نقاط الماتش الفعلية ÷ أقصى نقاط واقعية للماتش (للبادج داخل كل ماتش)
+const computeMatchPointsAccuracy = (pred: any): { earned: number; max: number; pct: number } => {
+  const max = computeMatchMaxPoints(pred);
+  if (max <= 0) return { earned: 0, max: 0, pct: 0 };
+  const earned = computeBreakdown(pred).total;
+  const pct = Math.round((earned / max) * 100);
+  return { earned, max, pct };
+};
+
 // 🏅 نقاطك الفعلية (من الماتشات المحسومة) ÷ أقصى نقاط واقعية ممكنة
 const resolvedActualPoints = resolvedPreds.reduce(
   (sum: number, pr: any) => sum + (Number(pr?.points) || 0),
@@ -2774,7 +2783,7 @@ const myFilteredPredictionsSorted = [...predictions]
                             {/* 🧮 بريك داون النقاط الموحّد — يوضح للعضو كل بند جاب كام نقطة */}
                             {hasResult && (() => {
                               const bd = computeBreakdown(pred);
-                              const acc = computeMatchAccuracy(pred);
+                              const acc = computeMatchPointsAccuracy(pred);
                               return (
                                 <div style={{ marginBottom: 12 }}>
                                   <PointsBreakdown items={bd.items} total={bd.total} accuracy={acc} />
@@ -3524,7 +3533,7 @@ const myFilteredPredictionsSorted = [...predictions]
                       {existing && hasResult && (() => {
                         const bdPred = { ...existing, actual_home_score: match.actual_home_score, actual_away_score: match.actual_away_score };
                         const bd = computeBreakdown(bdPred);
-                        const acc = computeMatchAccuracy(bdPred);
+                        const acc = computeMatchPointsAccuracy(bdPred);
                         return (
                           <div style={{ marginBottom: 12 }}>
                             <PointsBreakdown items={bd.items} total={bd.total} accuracy={acc} />
@@ -3807,7 +3816,7 @@ const myFilteredPredictionsSorted = [...predictions]
       {/* 🧮 بريك داون النقاط الموحّد */}
       {hasResult && (() => {
         const bd = computeBreakdown(p);
-        const acc = computeMatchAccuracy(p);
+        const acc = computeMatchPointsAccuracy(p);
         return (
           <div style={{ marginBottom: 10 }}>
             <PointsBreakdown items={bd.items} total={bd.total} accuracy={acc} />
