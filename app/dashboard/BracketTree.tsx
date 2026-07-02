@@ -231,12 +231,12 @@ export default function BracketTree({ rounds }: { rounds: Rounds | null }) {
   const b = buildBracket(rounds);
 
   // الجهة اليمنى (RTL): R32 يمين → R16 → QF (indices 4-7 لـR16, 2-3 لـQF, 1 لـSF)
-  const rightR32 = b.r32.slice(8, 16);       // M81..M88
+  const rightR32 = b.r32.slice(8, 16);       // النصف اليمين (idx 8..15)
   const rightR16 = b.r16.slice(4, 8);
   const rightQF = b.qf.slice(2, 4);
   const rightSF = b.sf[1];
 
-  const leftR32 = b.r32.slice(0, 8);          // M73..M80
+  const leftR32 = b.r32.slice(0, 8);          // النصف الشمال (idx 0..7)
   const leftR16 = b.r16.slice(0, 4);
   const leftQF = b.qf.slice(0, 2);
   const leftSF = b.sf[0];
