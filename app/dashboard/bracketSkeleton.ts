@@ -26,24 +26,26 @@ export const R32_SKELETON: SkelR32[] = [
 ];
 
 // أزواج دور الـ16: كل زوج = فهرسا مباراتَي R32 (في R32_SKELETON) اللي فايزهم بيتقابلوا.
-// الشمال أول 4، اليمين آخر 4. (مؤكد من API: 73×75, 74×77, 76×78)
+// الترتيب حسب أرقام مباريات FIFA الرسمية M89..M96 (شمال = M89..M92، يمين = M93..M96).
 export const R16_PAIRS: [number, number][] = [
-  [0, 2], // M73 × M75  (SouthAfrica/Canada × Netherlands/Morocco)
-  [1, 4], // M74 × M77  (Germany/Paraguay × France/Sweden)
-  [3, 5], // M76 × M78  (Brazil/Japan × IvoryCoast/Norway)
-  [6, 7], // M79 × M80  (Mexico/Ecuador × England/CongoDR)
-  [8, 10], // M81 × M83 (USA/Bosnia × Portugal/Croatia)
-  [9, 12], // M82 × M85 (Belgium/Senegal × Switzerland/Algeria)
-  [11, 13], // M84 × M86 (Spain/Austria × Argentina/CapeVerde)
-  [14, 15], // M87 × M88 (Colombia/Ghana × Australia/Egypt)
+  [3, 5],  // M89  Brazil/Japan × IvoryCoast/Norway   (W76 × W78)
+  [0, 2],  // M90  SouthAfrica/Canada × Netherlands/Morocco (W73 × W75)
+  [1, 4],  // M91  Germany/Paraguay × France/Sweden    (W74 × W77)
+  [6, 7],  // M92  Mexico/Ecuador × England/CongoDR     (W79 × W80)
+  [10, 11],// M93  Portugal/Croatia × Spain/Austria     (W83 × W84)
+  [8, 9],  // M94  USA/Bosnia × Belgium/Senegal         (W81 × W82)
+  [13, 15],// M95  Argentina/CapeVerde × Australia/Egypt (W86 × W88)
+  [12, 14],// M96  Switzerland/Algeria × Colombia/Ghana  (W85 × W87)
 ];
 
-// أزواج ربع النهائي: فهرسا زوجَي R16 (في R16_PAIRS). الشمال [0,1],[2,3] — اليمين [4,5],[6,7].
+// أزواج ربع النهائي: فهرسا زوجَي R16 (في R16_PAIRS) حسب مباريات FIFA M97..M100.
+// M97 = W89×W90 = R16[0]×R16[1] ؛ M99 = W91×W92 = R16[2]×R16[3]
+// M98 = W93×W94 = R16[4]×R16[5] ؛ M100 = W95×W96 = R16[6]×R16[7]
 export const QF_PAIRS: [number, number][] = [
-  [0, 1], // شمال أعلى
-  [2, 3], // شمال أسفل
-  [4, 5], // يمين أعلى
-  [6, 7], // يمين أسفل
+  [0, 1], // M97 شمال أعلى
+  [2, 3], // M99 شمال أسفل
+  [4, 5], // M98 يمين أعلى
+  [6, 7], // M100 يمين أسفل
 ];
 
 // أزواج نصف النهائي: فهرسا زوجَي QF (في QF_PAIRS). الشمال = QF0×QF1، اليمين = QF2×QF3.

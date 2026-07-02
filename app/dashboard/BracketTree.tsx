@@ -74,6 +74,17 @@ function winnerTeam(s: Slot): SlotTeam | null {
   return s.winner === 'home' ? s.home : s.away;
 }
 
+// خانة الفريقين معروفين (متأهلين من الدور السابق) لكن الماتش لسه ماتلعبش/مش موجود في API.
+// بنعرض الفريقين بدون نتيجة — عشان الشجرة تربط نفسها بنفسها حتى لو API ما أنشأش الماتش بعد.
+function pendingSlot(wa: SlotTeam, wb: SlotTeam): Slot {
+  return {
+    home: { name: wa.name, id: wa.id, logo: wa.logo || logoFor(wa.id) },
+    away: { name: wb.name, id: wb.id, logo: wb.logo || logoFor(wb.id) },
+    homeScore: null, awayScore: null, wentPenalty: false, winner: null,
+    played: false, known: true,
+  };
+}
+
 // ===== كارت مباراة =====
 function TeamRow({ t, score, isWinner, pen }: { t: SlotTeam | null; score: number | null; isWinner: boolean; pen: boolean }) {
   return (
@@ -159,8 +170,10 @@ function buildBracket(rounds: Rounds | null) {
     if (wa && wb) {
       const m = findApiMatch(R16, wa.id, wa.name || '', wb.id, wb.name || '');
       if (m) return apiToSlot(m);
+      // الفريقين متأهلين بس API لسه ما أنشأش الماتش — نعرضهم متقدمين بدون نتيجة
+      return pendingSlot(wa, wb);
     }
-    // غير كده TBD (المستخدم طلب خانات فاضية للأدوار غير المحسومة)
+    // لسه الفريقين مش معروفين (الدور السابق ماخلصش) → TBD
     return emptySlot();
   });
 
@@ -171,6 +184,7 @@ function buildBracket(rounds: Rounds | null) {
     if (wa && wb) {
       const m = findApiMatch(QF, wa.id, wa.name || '', wb.id, wb.name || '');
       if (m) return apiToSlot(m);
+      return pendingSlot(wa, wb);
     }
     return emptySlot();
   });
@@ -182,6 +196,7 @@ function buildBracket(rounds: Rounds | null) {
     if (wa && wb) {
       const m = findApiMatch(SF, wa.id, wa.name || '', wb.id, wb.name || '');
       if (m) return apiToSlot(m);
+      return pendingSlot(wa, wb);
     }
     return emptySlot();
   });
@@ -193,7 +208,7 @@ function buildBracket(rounds: Rounds | null) {
     const wb = winnerTeam(sf[1]);
     if (wa && wb) {
       const m = findApiMatch(FN, wa.id, wa.name || '', wb.id, wb.name || '');
-      if (m) final = apiToSlot(m);
+      final = m ? apiToSlot(m) : pendingSlot(wa, wb);
     }
   }
 
