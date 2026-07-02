@@ -675,7 +675,7 @@ export default function Dashboard() {
   const [totalParticipants, setTotalParticipants] = useState(0);
   const [loading, setLoading]               = useState(true);
   const [loadError, setLoadError]           = useState(false);
-  const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'roundleaders' | 'feed' | 'history' | 'bracket'>('predict');
+  const [activeTab, setActiveTab]           = useState<'predict' | 'my' | 'leaders' | 'roundleaders' | 'feed' | 'history' | 'bracket' | 'elite'>('predict');
   const [activeRound, setActiveRound]       = useState('');
   const [roundLeaderboardRows, setRoundLeaderboardRows] = useState<any[]>([]);
   const [roundLeaderLoading, setRoundLeaderLoading] = useState(false);
@@ -719,6 +719,10 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   // 🏆 شجرة البطولة (knockout bracket) — تُجلب لحظيًا من /api/bracket
   const [bracketRounds, setBracketRounds] = useState<Record<string, any[]> | null>(null);
   const [bracketLoading, setBracketLoading] = useState(false);
+  // 🎯 صدارة دقة التوقع (نُخبة الدقة) — أفضل 25 على آخر 20 ماتش
+  const [eliteLeaders, setEliteLeaders] = useState<any[] | null>(null);
+  const [eliteLoading, setEliteLoading] = useState(false);
+  const [eliteWindow, setEliteWindow] = useState(0);
   const [myRoundFilter, setMyRoundFilter]     = useState('');
   const [leaderRoundFilter, setLeaderRoundFilter] = useState('');
   const [leaderModalRoundFilter, setLeaderModalRoundFilter] = useState('');
@@ -751,6 +755,17 @@ const [profileCompleted, setProfileCompleted] = useState(false);
       .catch(() => setBracketRounds({}))
       .finally(() => setBracketLoading(false));
   }, [activeTab, bracketRounds, bracketLoading]);
+
+  // 🎯 جلب صدارة دقة التوقع أول ما يُفتح تاب نُخبة الدقة (مرة واحدة)
+  useEffect(() => {
+    if (activeTab !== 'elite' || eliteLeaders !== null || eliteLoading) return;
+    setEliteLoading(true);
+    fetch('/api/accuracy-leaders')
+      .then(r => r.json())
+      .then(d => { setEliteLeaders(d?.leaders || []); setEliteWindow(d?.window || 0); })
+      .catch(() => setEliteLeaders([]))
+      .finally(() => setEliteLoading(false));
+  }, [activeTab, eliteLeaders, eliteLoading]);
 
   // 📊 جلب نسب توقع الأعضاء (طلب واحد مجمّع) + نسب H2H لكل ماتش ظاهر
   useEffect(() => {
@@ -2535,9 +2550,19 @@ const myFilteredPredictionsSorted = [...predictions]
   </div>
 
   <div className="stat-card" style={{ padding: 14, borderRadius: 18 }}>
-    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>نقاط التوقعات</div>
+    <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
+      {leaderModalRoundFilter ? `نقاط ${roundLabels[leaderModalRoundFilter] || leaderModalRoundFilter}` : 'نقاط التوقعات'}
+    </div>
     <div style={{ fontSize: 24, fontWeight: 800, color: '#ffe3a6', fontVariantNumeric: 'tabular-nums' }}>
-      {selectedLeaderPredictions.reduce((sum: number, pred: any) => sum + (pred.points || 0), 0)}
+      {selectedLeaderPredictions.reduce((sum: number, pred: any) => {
+        // لو فيه دور مختار من المينو: نجمع نقاط الدور المختار بس. الديفولت = إجمالي كل التوقعات.
+        if (leaderModalRoundFilter) {
+          const matchInfo = matches.find((m: any) => Number(m.fixture.id) === Number(pred.fixture_id || pred.api_fixture_id));
+          const predRound = pred.round || matchInfo?.league?.round;
+          if (predRound !== leaderModalRoundFilter) return sum;
+        }
+        return sum + (pred.points || 0);
+      }, 0)}
     </div>
   </div>
 
@@ -3331,7 +3356,9 @@ const myFilteredPredictionsSorted = [...predictions]
             { id: 'my',      label: '📋 توقعاتي' },
             { id: 'leaders', label: '🏆 الصدارة' },
             { id: 'bracket', label: '👑 طريق البطل' },
-            { id: 'history', label: '📈 المسار' },
+            { id: 'elite',   label: '🎯 نُخبة الدقة' },
+            // مخفي مؤقتًا — تاب "المسار" (السجل التاريخي). محفوظ للرجوع مستقبلًا.
+            // { id: 'history', label: '📈 المسار' },
             { id: 'feed',    label: '🌍 النشاط' },
           ] as const).map(({ id, label }) => (
             <button key={id} className={`tab-btn${activeTab === id ? ' active' : ''}`} onClick={() => setActiveTab(id)} style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>{label}</button>
@@ -4031,6 +4058,59 @@ const myFilteredPredictionsSorted = [...predictions]
                   );
                 })}
               </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'elite' && (
+          <div>
+            <div style={{ marginBottom: 20 }}>
+              <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>🎯 نُخبة الدقة</h2>
+              <p style={{ fontSize: 13, color: 'var(--muted)' }}>
+                أفضل 25 متسابقًا في <strong style={{ color: 'var(--gold)' }}>دقة التوقع</strong> خلال آخر {eliteWindow || 20} مباراة — الدقة = النقاط اللي كسبها ÷ أقصى نقاط ممكنة لنفس الماتشات.
+              </p>
+            </div>
+            {eliteLoading && eliteLeaders === null ? (
+              <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>⏳</div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>جارٍ حساب الدقة…</div>
+              </div>
+            ) : (eliteLeaders && eliteLeaders.length > 0) ? (
+              <>
+                {eliteLeaders.map((p: any, i: number) => {
+                  const isMe = p.user_id === user?.id;
+                  return (
+                    <button
+                      type="button"
+                      key={p.user_id || i}
+                      onClick={() => openLeaderDetails({ user_id: p.user_id, display_name: p.display_name, user_email: p.user_email })}
+                      className={`rank-item${isMe ? ' me' : ''}`}
+                      style={{ width: '100%', textAlign: 'right', cursor: 'pointer', border: 'none', font: 'inherit' }}
+                    >
+                      <div className="medal-box">{i < 3 ? medals[i] : <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--muted)' }}>#{i + 1}</span>}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          {p.display_name || '—'}
+                          {isMe && <span style={{ fontSize: 11, background: 'rgba(217,178,95,.15)', color: '#ffe3a6', borderRadius: 999, padding: '2px 8px' }}>أنت</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                          {p.earned} من {p.max} نقطة — في {p.count} توقع
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--gold)', fontVariantNumeric: 'tabular-nums' }}>{p.pct}%</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>دقة</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 60, color: 'var(--muted)' }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>🎯</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>لسة مفيش بيانات كافية</div>
+                <div style={{ fontSize: 13, marginTop: 6 }}>تظهر الصدارة بعد حسم عدد كافٍ من المباريات</div>
+              </div>
             )}
           </div>
         )}

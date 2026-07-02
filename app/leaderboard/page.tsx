@@ -350,6 +350,23 @@ const loadRoundPlayers = async (round: string) => {
     setMemberModalLoading(false);
   };
 
+  // فتح كارت تفاصيل الفائز من بوكسات إعلان الجوائز.
+  // ندوّر على اللاعب في القوائم المحمّلة؛ ولو مش موجود نبني Player مبسّط من بيانات الفائز.
+  const openWinnerDetails = (w: PrizeWinner) => {
+    const found =
+      allPlayers.find(p => p.user_id === w.user_id) ||
+      players.find(p => p.user_id === w.user_id);
+    const player: Player = found || {
+      user_id: w.user_id,
+      user_email: '',
+      display_name: (w as any).profiles?.full_name || null,
+      total_points: w.points ?? 0,
+      predictions_count: 0,
+      profile_completed: false,
+    };
+    loadMemberDetails(player);
+  };
+
   const closeMemberModal = () => {
     setSelectedPlayer(null);
     setSelectedPredictions([]);
@@ -564,9 +581,14 @@ const loadRoundPlayers = async (round: string) => {
                             {phaseWinners.map((w) => (
                               <div key={w.rank} style={{display:'flex',alignItems:'center',gap:8,marginTop:4}}>
                                 <span style={{fontSize:13}}>{medals[w.rank-1] || `#${w.rank}`}</span>
-                                <span style={{flex:1,fontSize:12,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                                <button
+                                  type="button"
+                                  onClick={() => openWinnerDetails(w)}
+                                  title="عرض تفاصيل الفائز"
+                                  style={{flex:1,minWidth:0,fontSize:12,fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textAlign:'right',background:'none',border:'none',padding:0,margin:0,cursor:'pointer',color:'var(--gold)',textDecoration:'underline',textUnderlineOffset:3,fontFamily:'Cairo, sans-serif'}}
+                                >
                                   {(w as any).profiles?.full_name || '—'}
-                                </span>
+                                </button>
                                 <span style={{fontSize:11,color:'var(--gold)',fontWeight:700,flexShrink:0}}>{w.points} نقطة</span>
                               </div>
                             ))}
@@ -619,7 +641,12 @@ const loadRoundPlayers = async (round: string) => {
                             {winner ? (
                               <div style={{marginTop:10,borderTop:'1px solid rgba(255,255,255,.07)',paddingTop:8}}>
                                 <div style={{fontSize:11,color:'var(--muted)',fontWeight:700,marginBottom:2}}>الفائز</div>
-                                <div style={{fontSize:12,fontWeight:800,color:gc.color}}>{(winner as any).profiles?.full_name || '—'}</div>
+                                <button
+                                  type="button"
+                                  onClick={() => openWinnerDetails(winner)}
+                                  title="عرض تفاصيل الفائز"
+                                  style={{fontSize:12,fontWeight:800,color:gc.color,background:'none',border:'none',padding:0,margin:0,cursor:'pointer',textDecoration:'underline',textUnderlineOffset:3,fontFamily:'Cairo, sans-serif'}}
+                                >{(winner as any).profiles?.full_name || '—'}</button>
                                 <div style={{fontSize:10,color:'var(--muted)'}}>{winner.points} نقطة</div>
                               </div>
                             ) : (
