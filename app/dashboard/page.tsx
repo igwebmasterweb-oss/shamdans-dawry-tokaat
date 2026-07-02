@@ -1834,7 +1834,29 @@ predicted_first_scorer_id: row.predicted_first_scorer_id ?? null,
 
 // ✅ توحيد مصدر الإجمالي: نجيب بيانات اللاعب الحقيقية من الترتيب العام (leaderboard)
 // عشان أي تاب (لاعبين/جولات/نشاط) يدي نفس الإجمالي الصح وما يحصلش لخبطة
-const lbRow = leaderboard.find((r: any) => String(r.user_id) === String(player?.user_id)) || {};
+let lbRow: any = leaderboard.find((r: any) => String(r.user_id) === String(player?.user_id)) || {};
+// 🎯 fallback: لو اللاعب اتفتح من مصدر مالوش صف في الترتيب المحلي (زي تاب نُخبة الدقة)
+// نجيب صفّه مباشرةً من الفيو الموحّد عشان الإجمالي وباقي البنود يظهروا صح مش صفر
+if (!lbRow.user_id && player?.user_id) {
+  const { data: uRow } = await supabase
+    .from('leaderboard_unified_v2')
+    .select('user_id, full_name, user_email, official_total_points, details_total_points, prediction_points, referral_points, profile_points, bonus_points, penalty_points, profile_completed')
+    .eq('user_id', player.user_id)
+    .maybeSingle();
+  if (uRow) {
+    lbRow = {
+      user_id: uRow.user_id,
+      totalPoints: uRow.official_total_points || 0,
+      details_total_points: uRow.details_total_points || 0,
+      prediction_points: uRow.prediction_points || 0,
+      referral_points: uRow.referral_points || 0,
+      profile_points: uRow.profile_points || 0,
+      bonus_points: uRow.bonus_points || 0,
+      penalty_points: uRow.penalty_points || 0,
+      profile_completed: uRow.profile_completed || false,
+    };
+  }
+}
 const resolvedTotal =
   lbRow.details_total_points ?? lbRow.totalPoints ??
   player?.details_total_points ?? player?.totalPoints ?? 0;
