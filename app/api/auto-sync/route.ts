@@ -6,6 +6,10 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// يشتغل عند الطلب فقط + أقصى مدة متاحة (60ث) — المزامنة + شبكة الأمان + التصحيح ما يتقطعوش.
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 // دالة sleep بسيطة لتأخير بين طلبات الـ API (لتجنب الـ rate limit)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -255,11 +259,44 @@ export async function GET(request: Request) {
       }
     }
 
+    // 🛡️ شبكة أمان جذرية: غير الماتشات اللي زامنّاها دلوقتي،
+    // ندوّر كمان على أي ماتش خلص (نتيجته محفوظة) لكن لسه فيه توقعات غير مصحّحة
+    // (أي توقع actual_home_score IS NULL). ده بيعالج أي تصحيح فشل/انقطع في run سابق،
+    // فما يفضلش أي توقع غير محسوب أبدًا (يتمسك تلقائيًا في الـ run اللي بعده كل 15 دقيقة).
+    const fixturesToGrade = new Set<number>(syncedFixtureIds);
+    try {
+      const { data: finishedFx, error: finishedErr } = await supabaseAdmin
+        .from('fixtures')
+        .select('api_fixture_id')
+        .not('actual_home_score', 'is', null)
+        .in('status', ['FT', 'AET', 'PEN']);
+
+      if (finishedErr) throw finishedErr;
+
+      for (const fx of finishedFx || []) {
+        const apiId = fx.api_fixture_id as number;
+        if (fixturesToGrade.has(apiId)) continue;
+        const { count, error: cntErr } = await supabaseAdmin
+          .from('predictions')
+          .select('id', { count: 'exact', head: true })
+          .eq('fixture_id', apiId)
+          .is('actual_home_score', null);
+
+        if (cntErr) throw cntErr;
+        if ((count || 0) > 0) {
+          fixturesToGrade.add(apiId);
+          log.push(`🔁 ماتش ${apiId} لسه فيه ${count} توقع غير مصحّح — هيتصحح دلوقتي`);
+        }
+      }
+    } catch (err: any) {
+      log.push(`⚠️ تعذّر فحص التوقعات غير المصحّحة: ${err?.message || String(err)}`);
+    }
+
     // بعد ما نثبت نتائج الماتشات المنتهية، نحسب نقاط التوقعات لكل ماتش
     // كل مباراة موجّهة بالـ fixture id فقط، مع إعادة المحاولة عند الفشل (بدون أي نداء عام على القاعدة).
     const failedPointFixtures: number[] = [];
-    if (syncedFixtureIds.length > 0) {
-      for (const apiId of syncedFixtureIds) {
+    if (fixturesToGrade.size > 0) {
+      for (const apiId of fixturesToGrade) {
         const result = await calcMatchPointsWithRetry(apiId);
 
         if (result.ok) {

@@ -6,6 +6,10 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// يشتغل عند الطلب فقط + أقصى مدة متاحة (60ث على الخطة الحالية) — معالجة أعداد توقعات كبيرة ما تتقطعش بدري.
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 const UPDATE_CHUNK_SIZE = 100;
 const FEED_CHUNK_SIZE = 200;
 const PROCESS_BATCH_SIZE = 1000;
