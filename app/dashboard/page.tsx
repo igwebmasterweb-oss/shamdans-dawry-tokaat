@@ -719,7 +719,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   // 🏆 شجرة البطولة (knockout bracket) — تُجلب لحظيًا من /api/bracket
   const [bracketRounds, setBracketRounds] = useState<Record<string, any[]> | null>(null);
   const [bracketLoading, setBracketLoading] = useState(false);
-  // 🎯 صدارة دقة التوقع (نُخبة الدقة) — أفضل 25 على آخر 20 ماتش
+  // 🎯 صدارة دقة التوقع (نُخبة الدقة) — أفضل 25 على آخر 6 ماتشات
   const [eliteLeaders, setEliteLeaders] = useState<any[] | null>(null);
   const [eliteLoading, setEliteLoading] = useState(false);
   const [eliteWindow, setEliteWindow] = useState(0);
@@ -1819,10 +1819,14 @@ predicted_first_scorer_id: row.predicted_first_scorer_id ?? null,
     actual_home_score: matchInfo?.actual_home_score ?? pred.actual_home_score ?? null,
     actual_away_score: matchInfo?.actual_away_score ?? pred.actual_away_score ?? null,
     first_scorer_actual: matchInfo?.first_scorer || null,
+    first_scorer_id: matchInfo?.first_scorer_id ?? null,
+    scorers_json: matchInfo?.scorers_json ?? null,
+    scorers_ids_json: matchInfo?.scorers_ids_json ?? null,
     red_card_in_match: matchInfo?.red_card_in_match ?? null,
     penalty_in_match: matchInfo?.penalty_in_match ?? null,
     both_teams_scored: matchInfo?.both_teams_scored ?? null,
     went_extra_time: matchInfo?.went_extra_time ?? null,
+    went_penalty_shootout: matchInfo?.went_penalty_shootout ?? null,
   };
 })
 .filter((pred: any) => pred.home_team || pred.away_team)
@@ -2106,10 +2110,20 @@ const computeMatchAccuracy = (pred: any): { correct: number; total: number; pct:
   if (predHome === actualHome && predAway === actualAway) correct++;
 
   // 3️⃣ أول هداف — يُحسب فقط لو العضو اختار هداف والماتش ليه هداف فعلي
+  // المطابقة بأولوية الـ ID ثم الاسم المُطبَّع (مطابق لمنطق update-results)
   const predScorer = pred.predicted_first_scorer || null;
+  const predScorerIdAcc =
+    pred.predicted_first_scorer_id != null ? Number(pred.predicted_first_scorer_id) : null;
+  const actualFirstScorerIdAcc =
+    (pred.first_scorer_id ?? mx?.first_scorer_id) != null
+      ? Number(pred.first_scorer_id ?? mx?.first_scorer_id)
+      : null;
   if (predScorer && actualFirstScorer) {
     total++;
-    if (normScorer(predScorer) === normScorer(actualFirstScorer)) correct++;
+    const firstById =
+      predScorerIdAcc !== null && actualFirstScorerIdAcc !== null && predScorerIdAcc === actualFirstScorerIdAcc;
+    const firstByName = normScorer(predScorer) === normScorer(actualFirstScorer);
+    if (firstById || firstByName) correct++;
   }
 
   // 4️⃣-8️⃣ البنود البوليانية — كلها محسومة فعليًا في الماتش
@@ -2204,9 +2218,21 @@ const pointsEfficiencyPct = maxPossiblePoints > 0
     const wentPenaltyShootout = (pred.went_penalty_shootout ?? mx?.went_penalty_shootout) === true;
     const bothTeamsScored = (pred.both_teams_scored ?? mx?.both_teams_scored) === true;
 
+    // ⚽ أول هداف: نطابق منطق الحساب في update-results بالظبط —
+    // أولوية للـ ID (مطابقة دقيقة)، ثم fallback بالاسم المُطبَّع.
+    // ده بيحل مشكلة الاسم المختصر مقابل الكامل (مثال: "B. Embolo" = "Breel Embolo").
     const predScorer = pred.predicted_first_scorer || null;
-    const scorerCorrect =
+    const predScorerId =
+      pred.predicted_first_scorer_id != null ? Number(pred.predicted_first_scorer_id) : null;
+    const actualFirstScorerId =
+      (pred.first_scorer_id ?? mx?.first_scorer_id) != null
+        ? Number(pred.first_scorer_id ?? mx?.first_scorer_id)
+        : null;
+    const isFirstById =
+      predScorerId !== null && actualFirstScorerId !== null && predScorerId === actualFirstScorerId;
+    const isFirstByName =
       !!predScorer && !!actualFirstScorer && normScorer(predScorer) === normScorer(actualFirstScorer);
+    const scorerCorrect = isFirstById || isFirstByName;
     const yesNo = (v: boolean) => (v ? 'نعم' : 'لا');
 
     type Row = { icon: string; label: string; predText: string; actualText: string; correct: boolean | null };
@@ -4089,7 +4115,7 @@ const myFilteredPredictionsSorted = [...predictions]
             <div style={{ marginBottom: 20 }}>
               <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 8 }}>🎯 نُخبة الدقة</h2>
               <p style={{ fontSize: 13, color: 'var(--muted)' }}>
-                أفضل 25 متسابقًا في <strong style={{ color: 'var(--gold)' }}>دقة التوقع</strong> خلال آخر {eliteWindow || 20} مباراة — الدقة = النقاط اللي كسبها ÷ أقصى نقاط ممكنة لنفس الماتشات.
+                أفضل 25 متسابقًا في <strong style={{ color: 'var(--gold)' }}>دقة التوقع</strong> خلال آخر {eliteWindow || 6} مباريات محسومة — الدقة = النقاط اللي كسبها ÷ أقصى نقاط ممكنة لنفس الماتشات.
               </p>
             </div>
             {eliteLoading && eliteLeaders === null ? (
