@@ -669,6 +669,9 @@ export default function Dashboard() {
 
   const [user, setUser]                     = useState<any>(null);
   const [profile, setProfile]               = useState<Profile | null>(null);
+  // 🔥 استطلاع دوري البريمير ليج / التشامبيونز ليج
+  const [dreamChoice, setDreamChoice]       = useState<string | null>(null); // 'ready' | 'thinking' | null
+  const [dreamSaving, setDreamSaving]       = useState(false);
   const [matches, setMatches]               = useState<any[]>([]);
   const [predictions, setPredictions]       = useState<any[]>([]);
   const [leaderboard, setLeaderboard]       = useState<any[]>([]);
@@ -956,10 +959,16 @@ const [profileCompleted, setProfileCompleted] = useState(false);
         supabase.from('user_points').select('*', { count: 'exact', head: true }),
       ]);
 
-      const [penaltyRowsResult, reviewNoticeResult] = await Promise.allSettled([
+      const [penaltyRowsResult, reviewNoticeResult, dreamSurveyResult] = await Promise.allSettled([
         supabase.from('user_penalty_notices').select('user_id, penalty_points').eq('is_active', true),
         supabase.from('user_penalty_notices').select('id, user_id, message, status, penalty_points').eq('user_id', userId).eq('is_active', true).maybeSingle(),
+        supabase.from('dream_league_survey').select('choice').eq('user_id', userId).maybeSingle(),
       ]);
+
+      // 🔥 اختيار العضو في استطلاع الدوري الجديد (لو سبق واختار)
+      if (dreamSurveyResult.status === 'fulfilled') {
+        setDreamChoice((dreamSurveyResult.value?.data as any)?.choice ?? null);
+      }
 
       const profileData    = profileRes.data;
       const profilesData   = profilesRes.data;
@@ -1274,6 +1283,29 @@ useEffect(() => {
 
 
 
+
+// 🔥 حفظ اختيار العضو في استطلاع دوري البريمير/التشامبيونز
+const saveDreamChoice = async (choice: 'ready' | 'thinking') => {
+  if (!user?.id || dreamSaving) return;
+  setDreamSaving(true);
+  try {
+    const { error } = await supabase.from('dream_league_survey').upsert({
+      user_id: user.id,
+      user_email: user.email || null,
+      full_name: profile?.full_name?.trim() || null,
+      phone: profile?.phone?.trim() || null,
+      choice,
+    }, { onConflict: 'user_id' });
+    if (error) throw error;
+    // بمجرد الاختيار يختفي الكارت
+    setDreamChoice(choice);
+  } catch (e) {
+    console.error('dream survey save failed', e);
+    alert('حصل خطأ أثناء حفظ اختيارك، حاول تاني.');
+  } finally {
+    setDreamSaving(false);
+  }
+};
 
 const quickJoinLeague = async () => {
   if (!user || !leagueCode.trim()) return;
@@ -3383,6 +3415,45 @@ const myFilteredPredictionsSorted = [...predictions]
             شارك في مسابقة حلمك وزود نقاطك — كل مشاركة وتوقع بيقرّبك من الذهب في نهاية البطولة!
           </div>
         </div>
+
+        {/* 🔥 استطلاع دوري البريمير ليج / التشامبيونز ليج — يختفي بعد اختيار العضو */}
+        {dreamChoice === null && (
+          <div style={{
+            position: 'relative',
+            overflow: 'hidden',
+            background: 'linear-gradient(135deg,rgba(56,189,248,.12),rgba(217,178,95,.10))',
+            border: '1px solid rgba(56,189,248,.32)',
+            borderRadius: 20,
+            padding: '18px 20px',
+            marginBottom: 24,
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#ffe3a6', marginBottom: 6, lineHeight: 1.7 }}>
+              جاهز تكمل معانا الرحلة دي ولا لسه بتفكر؟ 🔥
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#cfe6ff', lineHeight: 1.9, marginBottom: 14 }}>
+              إيه رأيك، تكون معانا في دوري توقعات البريمير ليج والتشامبيونز ليج؟ جاهز تشد حزامك وتدخل السباق وتكون واحد من نجوم التوقعات مع جوائز كتيرة.
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => saveDreamChoice('ready')}
+                disabled={dreamSaving}
+                style={{ flex: '1 1 160px', padding: '13px 16px', borderRadius: 14, background: 'linear-gradient(135deg,#e0bc73,#b9892d)', border: 'none', color: '#211708', fontWeight: 800, fontSize: 14, fontFamily: 'Cairo, sans-serif', cursor: dreamSaving ? 'wait' : 'pointer' }}
+              >
+                {dreamSaving ? '⏳' : 'أكيد جاهز، يلا نبدأ! 🔥'}
+              </button>
+              <button
+                onClick={() => saveDreamChoice('thinking')}
+                disabled={dreamSaving}
+                style={{ flex: '1 1 160px', padding: '13px 16px', borderRadius: 14, background: 'rgba(148,163,184,.12)', border: '1px solid rgba(148,163,184,.3)', color: '#cbd5e1', fontWeight: 700, fontSize: 14, fontFamily: 'Cairo, sans-serif', cursor: dreamSaving ? 'wait' : 'pointer' }}
+              >
+                {dreamSaving ? '⏳' : 'لسه مش مقرر، سيبني أفكر'}
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12, lineHeight: 1.8 }}>
+              💡 جاهز ومتحمس؟ كمّل بياناتك (تليفون وإيميل) عشان الدعوة الجديدة توصلك.
+            </div>
+          </div>
+        )}
 
         <div style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, padding: '16px 20px', marginBottom: 24 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gold)', marginBottom: 12 }}>🏆 انضم لليج بكود سريع</div>

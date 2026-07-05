@@ -38,9 +38,10 @@ export default function AdminPage() {
   const [rptSocial, setRptSocial]             = useState<any[]>([]);
   const [rptFinishedOpen, setRptFinishedOpen] = useState<any[]>([]);
   const [rptPrizeLifecycle, setRptPrizeLifecycle] = useState<any[]>([]);
+  const [rptDreamSurvey, setRptDreamSurvey] = useState<any[]>([]);
   const [rptLoaded, setRptLoaded]         = useState(false);
   const [rptLoading, setRptLoading]       = useState(false);
-  const [activeReport, setActiveReport]   = useState<'referrers'|'suspicious'|'inactive'|'round_completion'|'points_dist'|'league_activity'|'top_per_round'|'growth'|'bonus_audit'|'penalties'|'integrity'|'social'|'finished_open'|'prize_lifecycle'>('referrers');
+  const [activeReport, setActiveReport]   = useState<'referrers'|'suspicious'|'inactive'|'round_completion'|'points_dist'|'league_activity'|'top_per_round'|'growth'|'bonus_audit'|'penalties'|'integrity'|'social'|'finished_open'|'prize_lifecycle'|'dream_survey'>('referrers');
   const [activeRound, setActiveRound] = useState('Group Stage - 1');
   // ⑦ فلتر التوقعات بالجولة
   const [predRoundFilter, setPredRoundFilter] = useState<string>('all');
@@ -600,7 +601,7 @@ const loadLeaderboard = useCallback(async () => {
     if (rptLoaded || rptLoading) return;
     setRptLoading(true);
     try {
-      const [ov, ref, sus, inact, rc, pd, la, tpr, gr, ba, pen, integ, soc, fo, pl] = await Promise.all([
+      const [ov, ref, sus, inact, rc, pd, la, tpr, gr, ba, pen, integ, soc, fo, pl, ds] = await Promise.all([
         supabase.from('admin_report_overview_stats_v1').select('*').single(),
         supabase.from('admin_report_top_referrers_v1').select('*').order('referral_count',{ascending:false}).limit(500),
         supabase.from('admin_report_suspicious_late_points_v1').select('*').order('total_late_points',{ascending:false}).limit(500),
@@ -616,6 +617,7 @@ const loadLeaderboard = useCallback(async () => {
         supabase.from('admin_report_social_activity_v1').select('*').order('total_activities',{ascending:false}).limit(500),
         supabase.from('admin_report_finished_but_open_v1').select('*').order('match_date',{ascending:false}),
         supabase.from('admin_report_prize_lifecycle_v1').select('*').order('start_date',{ascending:true}),
+        supabase.from('admin_report_dream_survey_v1').select('*').order('updated_at',{ascending:false}).limit(2000),
       ]);
       if (ov.data) setRptOverview(ov.data);
       if (ref.data) setRptReferrers(ref.data);
@@ -632,6 +634,7 @@ const loadLeaderboard = useCallback(async () => {
       if (soc.data) setRptSocial(soc.data);
       if (fo.data) setRptFinishedOpen(fo.data);
       if (pl.data) setRptPrizeLifecycle(pl.data);
+      if (ds.data) setRptDreamSurvey(ds.data);
       setRptLoaded(true);
     } catch {
       showMsg('⚠️ تعذّر تحميل التقارير', 'error');
@@ -721,6 +724,11 @@ const loadLeaderboard = useCallback(async () => {
     ['الاسم','المفتاح','البداية','النهاية','الحالة','الفائزون المتوقعون','الجائزة','تراكمي؟','فائزون مسجلون','انتهت الفترة؟','يحتاج فائزين؟','ناقص فائزين؟'],
     rptPrizeLifecycle.map(r=>[r.name||'—', r.phase_key||'', r.start_date?String(r.start_date).slice(0,10):'', r.end_date?String(r.end_date).slice(0,10):'', r.status, r.expected_winners, r.prize_label||'', r.is_cumulative?'نعم':'لا', r.recorded_winners, r.period_ended?'نعم':'لا', r.needs_winners?'نعم':'لا', r.incomplete_winners?'نعم':'لا']),
     'prize-lifecycle'
+  );
+  const exportDreamSurveyCSV = () => exportReportCSV(
+    ['#','الاسم','التليفون','الإيميل','الاختيار','تاريخ الاختيار'],
+    rptDreamSurvey.map((r,i)=>[i+1, r.full_name||'—', r.phone||'', r.user_email||'', r.choice_label||r.choice, r.updated_at?String(r.updated_at).slice(0,16).replace('T',' '):'']),
+    'dream-league-survey'
   );
 
   // تطبيع اسم الهداف: يشيل الحركات (Muñoz→munoz) + lowercase + trim
@@ -1495,6 +1503,7 @@ const loadLeaderboard = useCallback(async () => {
                   {id:'social',           label:`💬 نشاط الـ Feed (${rptSocial.length})`},
                   {id:'finished_open',    label:`🔓 خلصت لكن مفتوحة (${rptFinishedOpen.length})`},
                   {id:'prize_lifecycle',  label:`🏅 دورة الجوائز (${rptPrizeLifecycle.length})`},
+                  {id:'dream_survey',     label:`🔥 استطلاع الدوري الجديد (${rptDreamSurvey.length})`},
                 ] as const).map(({id,label})=>(
                   <button key={id} onClick={()=>setActiveReport(id)} style={{padding:'8px 16px',borderRadius:10,border:'1px solid '+(activeReport===id?'var(--gold)':'var(--line)'),background:activeReport===id?'rgba(217,178,95,.15)':'var(--surface-2)',color:activeReport===id?'var(--gold)':'var(--muted)',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif",whiteSpace:'nowrap'}}>{label}</button>
                 ))}
@@ -1941,6 +1950,53 @@ const loadLeaderboard = useCallback(async () => {
                   </div>
                 </>
               )}
+
+              {/* ── تقرير: استطلاع الدوري الجديد (البريمير/التشامبيونز) ── */}
+              {activeReport==='dream_survey' && (() => {
+                const readyCount = rptDreamSurvey.filter((r)=>r.choice==='ready').length;
+                const thinkingCount = rptDreamSurvey.filter((r)=>r.choice==='thinking').length;
+                return (
+                <>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:12,color:'var(--muted)'}}>مين اختار إيه في استطلاع دوري توقعات البريمير ليج / التشامبيونز ليج</span>
+                    <button onClick={exportDreamSurveyCSV} className="export-btn">⬇️ تصدير CSV</button>
+                  </div>
+                  <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:16}}>
+                    <div style={{flex:'1 1 140px',background:'rgba(217,178,95,.1)',border:'1px solid rgba(217,178,95,.3)',borderRadius:14,padding:'12px 16px'}}>
+                      <div style={{fontSize:12,color:'var(--muted)',marginBottom:4}}>🔥 جاهزين</div>
+                      <div style={{fontSize:24,fontWeight:900,color:'#ffe3a6',fontVariantNumeric:'tabular-nums'}}>{readyCount}</div>
+                    </div>
+                    <div style={{flex:'1 1 140px',background:'rgba(148,163,184,.1)',border:'1px solid rgba(148,163,184,.3)',borderRadius:14,padding:'12px 16px'}}>
+                      <div style={{fontSize:12,color:'var(--muted)',marginBottom:4}}>🤔 لسه بيفكروا</div>
+                      <div style={{fontSize:24,fontWeight:900,color:'#cbd5e1',fontVariantNumeric:'tabular-nums'}}>{thinkingCount}</div>
+                    </div>
+                    <div style={{flex:'1 1 140px',background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:14,padding:'12px 16px'}}>
+                      <div style={{fontSize:12,color:'var(--muted)',marginBottom:4}}>📊 إجمالي المشاركين</div>
+                      <div style={{fontSize:24,fontWeight:900,color:'#7db1ff',fontVariantNumeric:'tabular-nums'}}>{rptDreamSurvey.length}</div>
+                    </div>
+                  </div>
+                  <div style={{overflowX:'auto'}}>
+                    <table>
+                      <thead><tr><th>#</th><th>الاسم</th><th>التليفون</th><th>الإيميل</th><th>الاختيار</th><th>التاريخ</th></tr></thead>
+                      <tbody>
+                        {rptDreamSurvey.length===0 ? (
+                          <tr><td colSpan={6} style={{textAlign:'center',color:'var(--muted)',padding:40}}>مفيش مشاركات لسه</td></tr>
+                        ) : rptDreamSurvey.map((r,i)=>(
+                          <tr key={r.user_id}>
+                            <td style={{color:'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{i+1}</td>
+                            <td style={{fontWeight:700}}>{r.full_name||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:12,direction:'ltr',textAlign:'right'}}>{r.phone||'—'}</td>
+                            <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.user_email||'—'}</td>
+                            <td><span style={{fontWeight:800,fontSize:12,color:r.choice==='ready'?'#ffe3a6':'#cbd5e1'}}>{r.choice==='ready'?'🔥 جاهز':'🤔 بيفكر'}</span></td>
+                            <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right'}}>{r.updated_at?String(r.updated_at).slice(0,16).replace('T',' '):'—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+                );
+              })()}
 
             </>
             )}
