@@ -37,6 +37,20 @@ function normalizeScorerName(name: string): string {
   return name.trim().replace(/\s+/g, ' ');
 }
 
+// 🥅 ركلات الترجيح (Penalty Shootout) بتيجي من الـ API كـ type='Goal' مع
+//    detail='Penalty'/'Missed Penalty' بعد نهاية الوقت الإضافي (elapsed>=120 و extra=null/0).
+//    دي مش أهداف حقيقية — لازم تُستبعد من أول هدّاف / قائمة الهدّافين / علم الجزاء داخل اللعب.
+//    (نفس منطق sync-fixtures — لازم يفضلوا متطابقين.)
+function isShootoutEvent(ev: any): boolean {
+  if (ev?.type !== 'Goal') return false;
+  const detail = ev?.detail;
+  const isPenLike = detail === 'Penalty' || detail === 'Missed Penalty';
+  if (!isPenLike) return false;
+  const elapsed = ev?.time?.elapsed;
+  const extra = ev?.time?.extra;
+  return typeof elapsed === 'number' && elapsed >= 120 && (extra === null || extra === undefined || extra === 0);
+}
+
 // استدعاء update-results لمباراة واحدة محددة بالـ fixture id فقط، مع إعادة المحاولة.
 // مهم: دايمًا موجّه بـ ?fixture=apiId ولا يمسّ القاعدة كلها إطلاقًا — الحِمل محصور بمباراة واحدة.
 async function calcMatchPointsWithRetry(
@@ -180,6 +194,9 @@ export async function GET(request: Request) {
         apiCalls++;
 
         for (const ev of evData.response || []) {
+          // ⛔ تجاهل أحداث ركلات الترجيح تماماً — مش أهداف ولا ضربة جزاء داخل اللعب.
+          if (isShootoutEvent(ev)) continue;
+
           if (ev.type === 'Card' && ev.detail === 'Red Card') {
             redCard = true;
           }

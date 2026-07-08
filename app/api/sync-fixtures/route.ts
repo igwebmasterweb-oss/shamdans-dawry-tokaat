@@ -19,6 +19,20 @@ function normalizeScorerName(name: string): string {
   return name.trim().replace(/\s+/g, ' ');
 }
 
+// 🥅 ركلات الترجيح (Penalty Shootout) بتيجي من الـ API كـ type='Goal'
+//    مع detail='Penalty' أو 'Missed Penalty' لكن بتحصل بعد نهاية الوقت الإضافي
+//    (time.elapsed >= 120 و time.extra = null/0). دي مش أهداف حقيقية، فلازم
+//    نستبعدها تماماً من أول هدّاف / قائمة الهدّافين / علم ضربة الجزاء داخل اللعب.
+function isShootoutEvent(ev: any): boolean {
+  if (ev?.type !== 'Goal') return false;
+  const detail = ev?.detail;
+  const isPenLike = detail === 'Penalty' || detail === 'Missed Penalty';
+  if (!isPenLike) return false;
+  const elapsed = ev?.time?.elapsed;
+  const extra = ev?.time?.extra;
+  return typeof elapsed === 'number' && elapsed >= 120 && (extra === null || extra === undefined || extra === 0);
+}
+
 async function saveLineups(apiId: number, dbId: string, homeTeamId: number) {
   await sleep(250);
   const luData = await apiFetch(`/fixtures/lineups?fixture=${apiId}`);
@@ -122,6 +136,9 @@ export async function GET(request: NextRequest) {
         scorersIdsJson = [];
 
         for (const ev of events) {
+          // ⛔ تجاهل أحداث ركلات الترجيح تماماً — مش أهداف ولا ضربة جزاء داخل اللعب.
+          if (isShootoutEvent(ev)) continue;
+
           if (ev.type === 'Card' && ev.detail === 'Red Card') {
             redCard = true;
           }
