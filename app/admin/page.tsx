@@ -611,7 +611,7 @@ const loadLeaderboard = useCallback(async () => {
     if ((rptLoaded && !force) || rptLoading) return;
     setRptLoading(true);
     try {
-      const [ov, ref, sus, inact, rc, pd, la, tpr, gr, ba, pen, integ, soc, fo, pl, ds] = await Promise.all([
+      const [ov, ref, sus, inact, rc, pd, la, tpr, gr, ba, pen, integ, soc, fo, pl] = await Promise.all([
         supabase.from('admin_report_overview_stats_v1').select('*').single(),
         supabase.from('admin_report_top_referrers_v1').select('*').order('referral_count',{ascending:false}).limit(500),
         supabase.from('admin_report_suspicious_late_points_v1').select('*').order('total_late_points',{ascending:false}).limit(500),
@@ -627,8 +627,11 @@ const loadLeaderboard = useCallback(async () => {
         supabase.from('admin_report_social_activity_v1').select('*').order('total_activities',{ascending:false}).limit(500),
         supabase.from('admin_report_finished_but_open_v1').select('*').order('match_date',{ascending:false}),
         supabase.from('admin_report_prize_lifecycle_v1').select('*').order('start_date',{ascending:true}),
-        supabase.from('admin_report_dream_survey_v1').select('*').order('updated_at',{ascending:false}).limit(2000),
       ]);
+      // الاستفتاء: نجلب كل الصفوف عبر التقسيم (PostgREST بيسقّف عند 1000 حتى مع limit أكبر)
+      const dsRows = await fetchAll(() =>
+        supabase.from('admin_report_dream_survey_v1').select('*').order('updated_at',{ascending:false})
+      );
       if (ov.data) setRptOverview(ov.data);
       if (ref.data) setRptReferrers(ref.data);
       if (sus.data) setRptSuspicious(sus.data);
@@ -644,14 +647,14 @@ const loadLeaderboard = useCallback(async () => {
       if (soc.data) setRptSocial(soc.data);
       if (fo.data) setRptFinishedOpen(fo.data);
       if (pl.data) setRptPrizeLifecycle(pl.data);
-      if (ds.data) setRptDreamSurvey(ds.data);
+      setRptDreamSurvey(dsRows);
       setRptLoaded(true);
     } catch {
       showMsg('⚠️ تعذّر تحميل التقارير', 'error');
     } finally {
       setRptLoading(false);
     }
-  }, [rptLoaded, rptLoading, showMsg]);
+  }, [rptLoaded, rptLoading, showMsg, fetchAll]);
 
   // تصدير عام لأي تقرير (CSV متوافق مع Excel — BOM + UTF-8)
   const exportReportCSV = (headers: string[], rows: (string|number|null)[][], name: string) => {
