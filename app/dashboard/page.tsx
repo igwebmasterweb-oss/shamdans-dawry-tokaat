@@ -448,7 +448,8 @@ function MatchStatsLines({
   homeLogo,
   awayLogo,
   compact = false,
-  loading = false,
+  h2hLoading = false,
+  communityLoading = false,
   onPickScore,
   onPickScorer,
 }: {
@@ -459,7 +460,8 @@ function MatchStatsLines({
   homeLogo?: string | null;
   awayLogo?: string | null;
   compact?: boolean;
-  loading?: boolean;
+  h2hLoading?: boolean;
+  communityLoading?: boolean;
   // لو ممرّرة (الماتش مفتوح) → الضغط على نتيجة يملا خانات التوقع. لو غير ممرّرة → عرض فقط.
   onPickScore?: (home: number, away: number) => void;
   // لو ممرّرة (الماتش مفتوح) → الضغط على هداف يختاره في التوقع.
@@ -478,39 +480,19 @@ function MatchStatsLines({
   const fs = compact ? 10.5 : 11.5;
   const labelFs = compact ? 9.5 : 10.5;
 
-  // ✨ أثناء التحميل: نعرض هيكل تحميل (skeleton) جمالي يفهّم العضو إن فيه حاجة هتظهر
-  if (loading && !hasH2hData && !hasCommunity) {
-    const SkelBar = () => (
-      <div style={{ height: 7, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }} className="stats-skel" />
-    );
-    const SkelChip = ({ w }: { w: number }) => (
-      <div style={{ width: w, height: compact ? 24 : 28, borderRadius: 9, background: 'var(--surface-3)' }} className="stats-skel" />
-    );
-    const skelBox: React.CSSProperties = { padding: compact ? '7px 9px' : '8px 11px', borderRadius: 11, border: '1px solid var(--line)', display: 'grid', gap: 6 };
-    return (
-      <div style={{ display: 'grid', gap: 7, marginTop: 8 }} aria-busy="true" aria-label="جارٍ تحميل الإحصائيات">
-        <div style={{ ...skelBox, background: 'rgba(34,197,94,.06)', borderColor: 'rgba(34,197,94,.18)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ fontSize: labelFs, fontWeight: 800, color: '#86efac', whiteSpace: 'nowrap' }}>⚔️ آخر المواجهات</span>
-            <span style={{ fontSize: labelFs, color: 'var(--muted)' }}>… جارٍ التحميل</span>
-          </div>
-          <SkelBar />
-        </div>
-        <div style={{ ...skelBox, background: 'rgba(59,130,246,.06)', borderColor: 'rgba(59,130,246,.18)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>👥 توقع الأعضاء</span>
-            <span style={{ fontSize: labelFs, color: 'var(--muted)' }}>… جارٍ التحميل</span>
-          </div>
-          <SkelBar />
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
-            <SkelChip w={56} /><SkelChip w={56} /><SkelChip w={56} /><SkelChip w={56} />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // ✨ كل قسم يظهر لو عنده بيانات أو لسه بيحمّل (skeleton) — عشان العضو يعرف إن فيه حاجة جاية
+  const showH2h = hasH2hData || h2hLoading;
+  const showCommunity = hasCommunity || communityLoading;
+  if (!showH2h && !showCommunity) return null;
 
-  if (!hasH2hData && !hasCommunity) return null;
+  // عناصر هيكل التحميل (skeleton) الجمالية
+  const skelBox: React.CSSProperties = { padding: compact ? '7px 9px' : '8px 11px', borderRadius: 11, display: 'grid', gap: 6 };
+  const SkelBar = () => (
+    <div style={{ height: 7, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }} className="stats-skel" />
+  );
+  const SkelChip = ({ w }: { w: number }) => (
+    <div style={{ width: w, height: compact ? 24 : 28, borderRadius: 9, background: 'var(--surface-3)' }} className="stats-skel" />
+  );
 
   // شريط نسب ثلاثي (مضيف / تعادل / ضيف) بألوان وأيقونات
   const Bar = ({ h, d, a }: { h: number; d: number; a: number }) => (
@@ -523,9 +505,17 @@ function MatchStatsLines({
 
   return (
     <div style={{ display: 'grid', gap: 7, marginTop: 8 }}>
-      {hasH2hData && (
+      {showH2h && (
         <div style={{ padding: compact ? '7px 9px' : '8px 11px', borderRadius: 11, background: 'rgba(34,197,94,.06)', border: '1px solid rgba(34,197,94,.18)', display: 'grid', gap: 5 }}>
-          {h2hHasHistory ? (
+          {!hasH2hData && h2hLoading ? (
+            <div style={{ display: 'grid', gap: 6 }} aria-busy="true">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ fontSize: labelFs, fontWeight: 800, color: '#86efac', whiteSpace: 'nowrap' }}>⚔️ آخر المواجهات</span>
+                <span style={{ fontSize: labelFs, color: 'var(--muted)' }}>… جارٍ التحميل</span>
+              </div>
+              <SkelBar />
+            </div>
+          ) : h2hHasHistory ? (
             <>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: labelFs, fontWeight: 800, color: '#86efac', whiteSpace: 'nowrap' }}>⚔️ آخر {h2h!.total} مواجهات</span>
@@ -545,7 +535,18 @@ function MatchStatsLines({
           )}
         </div>
       )}
-      {hasCommunity && (
+      {showCommunity && (!hasCommunity && communityLoading ? (
+        <div style={{ padding: compact ? '7px 9px' : '8px 11px', borderRadius: 11, background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.18)', display: 'grid', gap: 6 }} aria-busy="true">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>👥 توقع الأعضاء</span>
+            <span style={{ fontSize: labelFs, color: 'var(--muted)' }}>… جارٍ التحميل</span>
+          </div>
+          <SkelBar />
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+            <SkelChip w={56} /><SkelChip w={56} /><SkelChip w={56} /><SkelChip w={56} />
+          </div>
+        </div>
+      ) : (
         <div style={{ padding: compact ? '7px 9px' : '8px 11px', borderRadius: 11, background: 'rgba(59,130,246,.06)', border: '1px solid rgba(59,130,246,.18)', display: 'grid', gap: 5 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>👥 توقع الأعضاء</span>
@@ -637,7 +638,7 @@ function MatchStatsLines({
             </div>
           )}
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -2828,7 +2829,8 @@ const myFilteredPredictionsSorted = [...predictions]
                           homeLogo={currentMatch?.teams?.home?.logo}
                           awayLogo={currentMatch?.teams?.away?.logo}
                           compact
-                          loading={statsLoading && !communityStats[currentFixtureId] && !h2hStats[currentFixtureId]}
+                          h2hLoading={statsLoading && !h2hStats[currentFixtureId]}
+                          communityLoading={statsLoading && !communityStats[currentFixtureId]}
                         />
                       </div>
 
@@ -3743,7 +3745,8 @@ const myFilteredPredictionsSorted = [...predictions]
                             awayName={match?.teams?.away?.name}
                             homeLogo={match?.teams?.home?.logo}
                             awayLogo={match?.teams?.away?.logo}
-                            loading={statsLoading && !communityStats[match.fixture.id] && !h2hStats[match.fixture.id]}
+                            h2hLoading={statsLoading && !h2hStats[match.fixture.id]}
+                            communityLoading={statsLoading && !communityStats[match.fixture.id]}
                           />
                         </div>
                       )}
@@ -3769,7 +3772,8 @@ const myFilteredPredictionsSorted = [...predictions]
                             awayName={match?.teams?.away?.name}
                             homeLogo={match?.teams?.home?.logo}
                             awayLogo={match?.teams?.away?.logo}
-                            loading={statsLoading && !communityStats[match.fixture.id] && !h2hStats[match.fixture.id]}
+                            h2hLoading={statsLoading && !h2hStats[match.fixture.id]}
+                            communityLoading={statsLoading && !communityStats[match.fixture.id]}
                             onPickScore={(h, a) => setScore(match.fixture.id, { homeScore: h, awayScore: a })}
                             onPickScorer={(name, pid) => setForm(match.fixture.id, { firstScorer: name, firstScorerId: pid })}
                           />
