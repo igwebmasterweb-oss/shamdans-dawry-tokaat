@@ -127,13 +127,35 @@ function LoginContent() {
     }
   };
 
+  // ✉️ التحقق من صيغة الإيميل قبل الإرسال — بيقلل رسائل الارتداد (bounce)
+  //    الناتجة عن أخطاء إملائية (زي gamil بدل gmail) أو الإيميل التجريبي.
+  const isValidEmail = (value: string): boolean => {
+    const v = value.trim().toLowerCase();
+    // صيغة إيميل أساسية
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRe.test(v)) return false;
+    // منع الإيميل التجريبي (placeholder) اللي بيتبعت بالغلط
+    if (v === 'example@gmail.com' || v.startsWith('example@')) return false;
+    // منع الأخطاء الإملائية الشائعة لـ gmail
+    const domain = v.split('@')[1] || '';
+    const typoDomains = ['gamil.com', 'gmial.com', 'gmai.com', 'gmail.co', 'gmail.con', 'gmaill.com', 'gnail.com', 'hotmial.com'];
+    if (typoDomains.includes(domain)) return false;
+    return true;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
-    setLoading(true);
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return;
     setErrorMsg('');
+    // ⚑️ تحقق من صحة الإيميل قبل إرسال رابط الدخول
+    if (!isValidEmail(cleanEmail)) {
+      setErrorMsg('الإيميل غير صحيح — اتأكد من كتابته صح (مثال: name@gmail.com)');
+      return;
+    }
+    setLoading(true);
     const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
+      email: cleanEmail,
       options: { emailRedirectTo: buildRedirectUrl() },
     });
     if (error) { setErrorMsg('خطأ: ' + error.message); } else { setSent(true); }
