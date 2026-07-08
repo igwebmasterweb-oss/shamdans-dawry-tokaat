@@ -1449,6 +1449,9 @@ const loadLeaderboard = useCallback(async () => {
                     {label:'جاءوا بدعوة',       value:fmt(rptOverview.members_from_referral),c:'#ffd27f'},
                     {label:'أعضاء نشطون',       value:fmt(rptOverview.active_predictors),   c:'#5effa8'},
                     {label:'غير نشطين',         value:fmt(rptOverview.inactive_members),    c:'#ff9c91'},
+                    {label:'بروفايل غير مكتمل', value:fmt(rptOverview.incomplete_profiles), c:'#fbbf24'},
+                    {label:'إيميل غير مؤكَّد',   value:fmt(rptOverview.unconfirmed_email),   c:'#ff9c91'},
+                    {label:'لم يدخل أبداً',      value:fmt(rptOverview.never_signed_in),     c:'#f87171'},
                   ]},
                   { title:'📋 التوقعات والماتشات', cards:[
                     {label:'إجمالي التوقعات',   value:fmt(rptOverview.total_predictions),   c:'var(--gold)'},
