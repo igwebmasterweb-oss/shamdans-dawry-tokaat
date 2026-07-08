@@ -93,6 +93,16 @@ export default function AdminPage() {
   const [roundLeaderboard, setRoundLeaderboard] = useState<any[]>([]);
   const [loadingRoundLb, setLoadingRoundLb] = useState(false);
 const [participantsCount, setParticipantsCount] = useState(0);
+  // ── إدارة النقاط (بونص/خصم) ──
+  const [adjBusy, setAdjBusy] = useState(false);
+  const [adjKind, setAdjKind] = useState<'bonus'|'penalty'>('bonus');
+  const [adjEmail, setAdjEmail] = useState('');
+  const [adjPoints, setAdjPoints] = useState('');
+  const [adjReason, setAdjReason] = useState('');
+  // مودال المنح الفردية لعضو معيّن (من تقرير تدقيق البونص)
+  const [grantsModalUser, setGrantsModalUser] = useState<any>(null);
+  const [grantsRows, setGrantsRows] = useState<any[]>([]);
+  const [grantsLoading, setGrantsLoading] = useState(false);
   const autoIntervalRef = useRef<ReturnType<typeof setInterval>|null>(null);
   const [totalPredictionsCount, setTotalPredictionsCount] = useState(0);
 const [gradedPredictionsCount, setGradedPredictionsCount] = useState(0);
@@ -597,8 +607,8 @@ const loadLeaderboard = useCallback(async () => {
   };
 
   // ⑫ تحميل التقارير من الـ views (مرة واحدة عند فتح التاب)
-  const loadReports = useCallback(async () => {
-    if (rptLoaded || rptLoading) return;
+  const loadReports = useCallback(async (force = false) => {
+    if ((rptLoaded && !force) || rptLoading) return;
     setRptLoading(true);
     try {
       const [ov, ref, sus, inact, rc, pd, la, tpr, gr, ba, pen, integ, soc, fo, pl, ds] = await Promise.all([
@@ -874,6 +884,70 @@ const loadLeaderboard = useCallback(async () => {
       showMsg('❌ ' + (err?.message || 'خطأ في إعادة الحساب'), 'error');
     }
     setRecalcingUser(false);
+  };
+
+  // ── نداء موحّد لـ API إدارة النقاط ──
+  const callAdjustment = async (payload: Record<string, any>, okMsg: string) => {
+    setAdjBusy(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('انتهت الجلسة، سجّل الدخول من جديد');
+      const res = await fetch('/api/admin-adjustments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+        },
+        body: JSON.stringify(payload),
+      });
+      const j = await res.json();
+      if (!res.ok || !j?.success) throw new Error(j?.error || 'فشل الطلب');
+      showMsg(okMsg);
+      await loadLeaderboard();
+      await loadReports(true); // إعادة تحميل التقارير (بونص/خصومات) بعد التعديل
+      return j;
+    } catch (err: any) {
+      showMsg('❌ ' + (err?.message || 'خطأ في الطلب'), 'error');
+      return null;
+    } finally {
+      setAdjBusy(false);
+    }
+  };
+
+  // إضافة بونص أو خصم من الفورم الموحّد (بالإيميل)
+  const submitAdjustment = async () => {
+    const email = adjEmail.trim().toLowerCase();
+    const pts = Number(adjPoints);
+    const reason = adjReason.trim();
+    if (!email) { showMsg('❌ الإيميل مطلوب', 'error'); return; }
+    if (!Number.isFinite(pts) || pts <= 0) { showMsg('❌ عدد النقاط لازم يكون رقم موجب', 'error'); return; }
+    if (!reason) { showMsg('❌ السبب مطلوب', 'error'); return; }
+    const payload = adjKind === 'bonus'
+      ? { action:'bonus_add', email, bonus_points: pts, source: reason }
+      : { action:'penalty_add', email, penalty_points: pts, message: reason };
+    const ok = await callAdjustment(payload, adjKind==='bonus' ? `✅ تمت إضافة بونص ${pts} لـ ${email}` : `✅ تم خصم ${pts} من ${email}`);
+    if (ok) { setAdjEmail(''); setAdjPoints(''); setAdjReason(''); }
+  };
+
+  // فتح مودال المنح الفردية لعضو (يجيب صفوف bonus_grants الخاصة به)
+  const openGrantsModal = async (row: any) => {
+    setGrantsModalUser(row);
+    setGrantsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('bonus_grants').select('*').eq('user_id', row.user_id).order('granted_at', { ascending: false });
+      if (error) throw error;
+      setGrantsRows(data || []);
+    } catch (err: any) {
+      showMsg('❌ خطأ في جلب المنح', 'error');
+      setGrantsRows([]);
+    }
+    setGrantsLoading(false);
+  };
+
+  const reloadGrantsModal = async () => {
+    if (grantsModalUser) await openGrantsModal(grantsModalUser);
   };
 
   // ① تحميل صدارة جولة معينة من الـ view الجاهز (نفس مصدر صفحة الصدارة)
@@ -1489,6 +1563,27 @@ const loadLeaderboard = useCallback(async () => {
                 );
               })()}
 
+              {/* ── 🛠️ إدارة النقاط: إضافة بونص/خصم بالإيميل ── */}
+              <div style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:14,padding:16,marginBottom:16}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+                  <span style={{fontSize:14,fontWeight:900,color:'var(--gold)'}}>🛠️ إدارة النقاط</span>
+                  <span style={{fontSize:11,color:'var(--muted)'}}>إضافة بونص أو خصم لعضو بالإيميل · بيتعاد حساب النقاط تلقائياً</span>
+                </div>
+                <div style={{display:'flex',gap:8,marginBottom:10}}>
+                  {([{k:'bonus',l:'🎁 بونص (+)',c:'#5effa8'},{k:'penalty',l:'⛔ خصم (−)',c:'#ff6b6b'}] as const).map(({k,l,c})=>(
+                    <button key={k} onClick={()=>setAdjKind(k)} style={{padding:'7px 16px',borderRadius:10,border:'1px solid '+(adjKind===k?c:'var(--line)'),background:adjKind===k?(k==='bonus'?'rgba(94,255,168,.12)':'rgba(255,107,107,.12)'):'var(--surface-2)',color:adjKind===k?c:'var(--muted)',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif"}}>{l}</button>
+                  ))}
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8,marginBottom:8}}>
+                  <input value={adjEmail} onChange={e=>setAdjEmail(e.target.value)} placeholder="إيميل العضو" dir="ltr" style={{padding:'10px 12px',borderRadius:10,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--fg,#fff)',fontSize:13,textAlign:'left'}} />
+                  <input value={adjPoints} onChange={e=>setAdjPoints(e.target.value.replace(/[^0-9]/g,''))} inputMode="numeric" placeholder="عدد النقاط" style={{padding:'10px 12px',borderRadius:10,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--fg,#fff)',fontSize:13,textAlign:'center',fontVariantNumeric:'tabular-nums'}} />
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:8}}>
+                  <input value={adjReason} onChange={e=>setAdjReason(e.target.value)} placeholder={adjKind==='bonus'?'سبب البونص (مثال: مسابقة)':'سبب الخصم (مثال: مخالفة)'} style={{padding:'10px 12px',borderRadius:10,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--fg,#fff)',fontSize:13}} />
+                  <button disabled={adjBusy} onClick={submitAdjustment} style={{padding:'10px 12px',borderRadius:10,border:'none',background:adjBusy?'var(--surface-2)':(adjKind==='bonus'?'linear-gradient(90deg,#2fae6a,#5effa8)':'linear-gradient(90deg,#c0392b,#ff6b6b)'),color:adjBusy?'var(--muted)':'#0b0b0b',fontSize:13,fontWeight:900,cursor:adjBusy?'default':'pointer',fontFamily:"'Cairo',sans-serif"}}>{adjBusy?'⏳ ...':(adjKind==='bonus'?'➕ إضافة بونص':'➖ تطبيق خصم')}</button>
+                </div>
+              </div>
+
               {/* ── مبدّل التقارير ── */}
               <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
                 {([
@@ -1780,10 +1875,10 @@ const loadLeaderboard = useCallback(async () => {
                   </div>
                   <div style={{overflowX:'auto'}}>
                     <table>
-                      <thead><tr><th>الاسم</th><th>الإيميل</th><th>عدد المنح</th><th>أصناف</th><th>إجمالي النقاط</th><th>منح مكررة</th><th>المصادر</th></tr></thead>
+                      <thead><tr><th>الاسم</th><th>الإيميل</th><th>عدد المنح</th><th>أصناف</th><th>إجمالي النقاط</th><th>منح مكررة</th><th>المصادر</th><th>إجراءات</th></tr></thead>
                       <tbody>
                         {rptBonusAudit.length===0 ? (
-                          <tr><td colSpan={7} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                          <tr><td colSpan={8} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
                         ) : rptBonusAudit.map((r)=>(
                           <tr key={r.user_id} style={r.has_duplicate?{background:'rgba(255,107,107,.06)'}:undefined}>
                             <td style={{fontWeight:700}}>{r.has_duplicate?'⚠️ ':''}{r.full_name||'—'}</td>
@@ -1793,6 +1888,7 @@ const loadLeaderboard = useCallback(async () => {
                             <td style={{color:'#5effa8',fontWeight:900,fontVariantNumeric:'tabular-nums'}}>{r.total_bonus_points}</td>
                             <td style={{fontWeight:900,color:r.duplicate_grants>0?'#ff6b6b':'var(--muted)',fontVariantNumeric:'tabular-nums'}}>{r.duplicate_grants}</td>
                             <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right',maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.sources||'—'}</td>
+                            <td><button onClick={()=>openGrantsModal(r)} style={{padding:'5px 10px',borderRadius:8,border:'1px solid var(--gold)',background:'rgba(217,178,95,.12)',color:'var(--gold)',fontSize:11,fontWeight:800,cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Cairo',sans-serif"}}>📝 المنح</button></td>
                           </tr>
                         ))}
                       </tbody>
@@ -1810,10 +1906,10 @@ const loadLeaderboard = useCallback(async () => {
                   </div>
                   <div style={{overflowX:'auto'}}>
                     <table>
-                      <thead><tr><th>الاسم</th><th>الإيميل</th><th>النقاط</th><th>الحالة</th><th>نشط</th><th>المصدر</th><th>الرسالة</th><th>التاريخ</th></tr></thead>
+                      <thead><tr><th>الاسم</th><th>الإيميل</th><th>النقاط</th><th>الحالة</th><th>نشط</th><th>المصدر</th><th>الرسالة</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
                       <tbody>
                         {rptPenalties.length===0 ? (
-                          <tr><td colSpan={8} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
+                          <tr><td colSpan={9} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد بيانات</td></tr>
                         ) : rptPenalties.map((r)=>(
                           <tr key={r.id}>
                             <td style={{fontWeight:700}}>{r.display_name||'—'}</td>
@@ -1824,6 +1920,24 @@ const loadLeaderboard = useCallback(async () => {
                             <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right'}}>{r.source||'—'}</td>
                             <td style={{color:'var(--muted)',fontSize:11,maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.message||'—'}</td>
                             <td style={{color:'var(--muted)',fontSize:11,direction:'ltr',textAlign:'right'}}>{r.created_at?String(r.created_at).slice(0,10):'—'}</td>
+                            <td>
+                              <div style={{display:'flex',gap:6,flexWrap:'nowrap'}}>
+                                <button disabled={adjBusy} onClick={async()=>{
+                                  const np = prompt('عدد نقاط الخصم الجديد:', String(r.penalty_points));
+                                  if (np===null) return;
+                                  const n = Number(np);
+                                  if (!Number.isFinite(n)||n<0) { showMsg('❌ رقم غير صالح','error'); return; }
+                                  await callAdjustment({action:'penalty_edit',id:r.id,penalty_points:n}, '✅ تم تعديل الخصم');
+                                }} style={{padding:'5px 9px',borderRadius:8,border:'1px solid #7fd1ff',background:'rgba(127,209,255,.1)',color:'#7fd1ff',fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif"}}>✏️</button>
+                                <button disabled={adjBusy} onClick={async()=>{
+                                  await callAdjustment({action:'penalty_edit',id:r.id,is_active:!r.is_active}, r.is_active?'✅ تم إلغاء تفعيل الخصم':'✅ تم تفعيل الخصم');
+                                }} style={{padding:'5px 9px',borderRadius:8,border:'1px solid var(--gold)',background:'rgba(217,178,95,.1)',color:'var(--gold)',fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif"}}>{r.is_active?'🚫 إيقاف':'✅ تفعيل'}</button>
+                                <button disabled={adjBusy} onClick={async()=>{
+                                  if (!confirm(`حذف خصم ${r.penalty_points} نقطة نهائياً؟`)) return;
+                                  await callAdjustment({action:'penalty_delete',id:r.id}, '✅ تم حذف الخصم');
+                                }} style={{padding:'5px 9px',borderRadius:8,border:'1px solid #ff6b6b',background:'rgba(255,107,107,.1)',color:'#ff6b6b',fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif"}}>🗑️</button>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -2333,6 +2447,49 @@ const loadLeaderboard = useCallback(async () => {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── مودال المنح الفردية لعضو (تعديل/حذف bonus_grants) ── */}
+      {grantsModalUser && (
+        <div onClick={()=>setGrantsModalUser(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:16,padding:20,maxWidth:640,width:'100%',maxHeight:'85vh',overflowY:'auto'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <span style={{fontSize:15,fontWeight:900,color:'var(--gold)'}}>🎁 منح البونص</span>
+              <button onClick={()=>setGrantsModalUser(null)} style={{background:'none',border:'none',color:'var(--muted)',fontSize:22,cursor:'pointer',lineHeight:1}}>×</button>
+            </div>
+            <div style={{fontSize:12,color:'var(--muted)',marginBottom:14,direction:'ltr',textAlign:'right'}}>{grantsModalUser.full_name||'—'} · {grantsModalUser.email||'—'}</div>
+            {grantsLoading ? (
+              <div style={{textAlign:'center',color:'var(--muted)',padding:30}}>⏳ جارٍ التحميل...</div>
+            ) : grantsRows.length===0 ? (
+              <div style={{textAlign:'center',color:'var(--muted)',padding:30}}>مفيش منح للعضو ده</div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {grantsRows.map((g)=>(
+                  <div key={g.id} style={{display:'flex',alignItems:'center',gap:10,background:'var(--surface-2)',border:'1px solid var(--line)',borderRadius:10,padding:'10px 12px'}}>
+                    <div style={{fontSize:20,fontWeight:900,color:'#5effa8',fontVariantNumeric:'tabular-nums',minWidth:44,textAlign:'center'}}>{g.bonus_points}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:'var(--fg,#fff)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.source||'—'}</div>
+                      <div style={{fontSize:10,color:'var(--muted)',direction:'ltr',textAlign:'right'}}>{g.granted_at?String(g.granted_at).slice(0,10):''}{g.notes?(' · '+g.notes):''}</div>
+                    </div>
+                    <button disabled={adjBusy} onClick={async()=>{
+                      const np = prompt('عدد نقاط البونص الجديد:', String(g.bonus_points));
+                      if (np===null) return;
+                      const n = Number(np);
+                      if (!Number.isFinite(n)) { showMsg('❌ رقم غير صالح','error'); return; }
+                      const r = await callAdjustment({action:'bonus_edit',id:g.id,bonus_points:n}, '✅ تم تعديل المنحة');
+                      if (r) await reloadGrantsModal();
+                    }} style={{padding:'5px 9px',borderRadius:8,border:'1px solid #7fd1ff',background:'rgba(127,209,255,.1)',color:'#7fd1ff',fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif"}}>✏️</button>
+                    <button disabled={adjBusy} onClick={async()=>{
+                      if (!confirm(`حذف منحة ${g.bonus_points} نقطة نهائياً؟`)) return;
+                      const r = await callAdjustment({action:'bonus_delete',id:g.id}, '✅ تم حذف المنحة');
+                      if (r) await reloadGrantsModal();
+                    }} style={{padding:'5px 9px',borderRadius:8,border:'1px solid #ff6b6b',background:'rgba(255,107,107,.1)',color:'#ff6b6b',fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif"}}>🗑️</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
