@@ -448,6 +448,7 @@ function MatchStatsLines({
   homeLogo,
   awayLogo,
   compact = false,
+  loading = false,
   onPickScore,
   onPickScorer,
 }: {
@@ -458,6 +459,7 @@ function MatchStatsLines({
   homeLogo?: string | null;
   awayLogo?: string | null;
   compact?: boolean;
+  loading?: boolean;
   // لو ممرّرة (الماتش مفتوح) → الضغط على نتيجة يملا خانات التوقع. لو غير ممرّرة → عرض فقط.
   onPickScore?: (home: number, away: number) => void;
   // لو ممرّرة (الماتش مفتوح) → الضغط على هداف يختاره في التوقع.
@@ -472,10 +474,43 @@ function MatchStatsLines({
   const hasH2hData = !!h2h;
   const h2hHasHistory = !!h2h && (h2h.total || 0) > 0;
   const hasCommunity = !!community && (community.total || 0) > 0;
-  if (!hasH2hData && !hasCommunity) return null;
 
   const fs = compact ? 10.5 : 11.5;
   const labelFs = compact ? 9.5 : 10.5;
+
+  // ✨ أثناء التحميل: نعرض هيكل تحميل (skeleton) جمالي يفهّم العضو إن فيه حاجة هتظهر
+  if (loading && !hasH2hData && !hasCommunity) {
+    const SkelBar = () => (
+      <div style={{ height: 7, borderRadius: 999, background: 'var(--surface-3)', overflow: 'hidden' }} className="stats-skel" />
+    );
+    const SkelChip = ({ w }: { w: number }) => (
+      <div style={{ width: w, height: compact ? 24 : 28, borderRadius: 9, background: 'var(--surface-3)' }} className="stats-skel" />
+    );
+    const skelBox: React.CSSProperties = { padding: compact ? '7px 9px' : '8px 11px', borderRadius: 11, border: '1px solid var(--line)', display: 'grid', gap: 6 };
+    return (
+      <div style={{ display: 'grid', gap: 7, marginTop: 8 }} aria-busy="true" aria-label="جارٍ تحميل الإحصائيات">
+        <div style={{ ...skelBox, background: 'rgba(34,197,94,.06)', borderColor: 'rgba(34,197,94,.18)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ fontSize: labelFs, fontWeight: 800, color: '#86efac', whiteSpace: 'nowrap' }}>⚔️ آخر المواجهات</span>
+            <span style={{ fontSize: labelFs, color: 'var(--muted)' }}>… جارٍ التحميل</span>
+          </div>
+          <SkelBar />
+        </div>
+        <div style={{ ...skelBox, background: 'rgba(59,130,246,.06)', borderColor: 'rgba(59,130,246,.18)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ fontSize: labelFs, fontWeight: 800, color: '#93c5fd', whiteSpace: 'nowrap' }}>👥 توقع الأعضاء</span>
+            <span style={{ fontSize: labelFs, color: 'var(--muted)' }}>… جارٍ التحميل</span>
+          </div>
+          <SkelBar />
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+            <SkelChip w={56} /><SkelChip w={56} /><SkelChip w={56} /><SkelChip w={56} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasH2hData && !hasCommunity) return null;
 
   // شريط نسب ثلاثي (مضيف / تعادل / ضيف) بألوان وأيقونات
   const Bar = ({ h, d, a }: { h: number; d: number; a: number }) => (
@@ -732,6 +767,8 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   // 📊 نسب H2H (آخر 10 مواجهات) ونسب توقع الأعضاء — مفهرسة بـ fixtureId
   const [h2hStats, setH2hStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number }>>({});
   const [communityStats, setCommunityStats] = useState<Record<number, { home_pct: number; draw_pct: number; away_pct: number; total: number; top_scorelines?: { home: number | null; away: number | null; count: number; pct: number; is_others?: boolean }[]; top_scorers?: { name: string; player_id?: number | null; count: number; pct: number; is_others?: boolean }[] }>>({});
+  // ✨ حالة تحميل إحصائيات الماتشات (H2H + توقع الأعضاء) — لعرض هيكل التحميل
+  const [statsLoading, setStatsLoading] = useState(true);
   // ✅ الإشعارات (جرس الداش بورد) — نفس منطق صفحة ليجاتي
   const [showNotif, setShowNotif] = useState(false);
   const { notifications, unreadCount, markRead, markNonInviteRead } = useNotifications();
@@ -784,6 +821,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
     if (fixtureIds.length === 0) return;
 
     let cancelled = false;
+    setStatsLoading(true);
 
     // نسب توقع الأعضاء — طلب واحد لكل الماتشات
     fetch(`/api/community-prediction?ids=${fixtureIds.join(',')}`)
@@ -794,7 +832,8 @@ const [profileCompleted, setProfileCompleted] = useState(false);
         for (const k of Object.keys(d.results)) mapped[Number(k)] = d.results[k];
         setCommunityStats((prev) => ({ ...prev, ...mapped }));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setStatsLoading(false); });
 
     // نسب H2H — طلب لكل ماتش (له فريقين)
     matches.forEach((m: any) => {
@@ -2429,6 +2468,9 @@ const myFilteredPredictionsSorted = [...predictions]
         }
         @keyframes slideDown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+        @keyframes statsShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+        .stats-skel { position:relative; background-image:linear-gradient(90deg, transparent 0%, rgba(255,255,255,.10) 50%, transparent 100%); background-size:200% 100%; animation:statsShimmer 1.4s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .stats-skel { animation:pulse 1.6s ease-in-out infinite; } }
         .tab-btn { padding:10px 22px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); cursor:pointer; font-family:'Cairo',sans-serif; font-size:14px; font-weight:700; transition:all .2s; }
         .tab-btn.active { background:linear-gradient(90deg,rgba(217,178,95,.18),rgba(217,178,95,.06)); border-color:rgba(217,178,95,.3); color:#fff1ce; }
         .round-btn { padding:8px 16px; border-radius:999px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); cursor:pointer; font-family:'Cairo',sans-serif; font-size:13px; font-weight:700; transition:all .2s; }
@@ -2786,6 +2828,7 @@ const myFilteredPredictionsSorted = [...predictions]
                           homeLogo={currentMatch?.teams?.home?.logo}
                           awayLogo={currentMatch?.teams?.away?.logo}
                           compact
+                          loading={statsLoading && !communityStats[currentFixtureId] && !h2hStats[currentFixtureId]}
                         />
                       </div>
 
@@ -3700,6 +3743,7 @@ const myFilteredPredictionsSorted = [...predictions]
                             awayName={match?.teams?.away?.name}
                             homeLogo={match?.teams?.home?.logo}
                             awayLogo={match?.teams?.away?.logo}
+                            loading={statsLoading && !communityStats[match.fixture.id] && !h2hStats[match.fixture.id]}
                           />
                         </div>
                       )}
@@ -3725,6 +3769,7 @@ const myFilteredPredictionsSorted = [...predictions]
                             awayName={match?.teams?.away?.name}
                             homeLogo={match?.teams?.home?.logo}
                             awayLogo={match?.teams?.away?.logo}
+                            loading={statsLoading && !communityStats[match.fixture.id] && !h2hStats[match.fixture.id]}
                             onPickScore={(h, a) => setScore(match.fixture.id, { homeScore: h, awayScore: a })}
                             onPickScorer={(name, pid) => setForm(match.fixture.id, { firstScorer: name, firstScorerId: pid })}
                           />
