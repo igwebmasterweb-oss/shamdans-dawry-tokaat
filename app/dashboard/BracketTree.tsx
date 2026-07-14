@@ -1,5 +1,5 @@
 'use client';
-import { R32_SKELETON, R16_PAIRS, QF_PAIRS, SF_PAIRS, type SkelR32 } from './bracketSkeleton';
+import { R16_SKELETON, QF_PAIRS, SF_PAIRS, type SkelR16 } from './bracketSkeleton';
 
 // ===== أنواع البيانات القادمة من /api/bracket =====
 type ApiTeam = { id: number | null; name: string | null; logo: string | null };
@@ -142,17 +142,16 @@ const AR_NAMES: Record<string, string> = {
 };
 function teamNameAr(en: string): string { return AR_NAMES[en] || en; }
 
-// ===== بناء الشجرة كاملة من بيانات API + الهيكل الثابت =====
+// ===== بناء الشجرة كاملة من بيانات API + الهيكل الفعلي (يبدأ من دور الـ16) =====
 function buildBracket(rounds: Rounds | null) {
-  const R32 = rounds?.['Round of 32'] || [];
   const R16 = rounds?.['Round of 16'] || [];
   const QF = rounds?.['Quarter-finals'] || [];
   const SF = rounds?.['Semi-finals'] || [];
   const FN = rounds?.['Final'] || [];
 
-  // R32: 16 خانة من الهيكل، نملّيها من API
-  const r32: Slot[] = R32_SKELETON.map((sk: SkelR32) => {
-    const m = findApiMatch(R32, sk.home.id, sk.home.name, sk.away.id, sk.away.name);
+  // R16: 8 خانات من الهيكل الفعلي (القرعة الحقيقية)، نملّيها من API
+  const r16: Slot[] = R16_SKELETON.map((sk: SkelR16) => {
+    const m = findApiMatch(R16, sk.home.id, sk.home.name, sk.away.id, sk.away.name);
     if (m) return apiToSlot(m);
     // معروف الفريقين من الهيكل لكن لسه ملعبش
     return {
@@ -162,22 +161,7 @@ function buildBracket(rounds: Rounds | null) {
     };
   });
 
-  // R16: 8 خانات — كل واحدة فايز زوج R32. نطابق مع API لو موجودة.
-  const r16: Slot[] = R16_PAIRS.map(([iA, iB]) => {
-    const wa = winnerTeam(r32[iA]);
-    const wb = winnerTeam(r32[iB]);
-    // لو عندنا الفريقين المتوقعين، نبحث في API عن المباراة الفعلية
-    if (wa && wb) {
-      const m = findApiMatch(R16, wa.id, wa.name || '', wb.id, wb.name || '');
-      if (m) return apiToSlot(m);
-      // الفريقين متأهلين بس API لسه ما أنشأش الماتش — نعرضهم متقدمين بدون نتيجة
-      return pendingSlot(wa, wb);
-    }
-    // لسه الفريقين مش معروفين (الدور السابق ماخلصش) → TBD
-    return emptySlot();
-  });
-
-  // QF: 4 خانات — فايز زوج R16
+  // QF: 4 خانات — فايز زوج R16 (متجاور رأسيًا)
   const qf: Slot[] = QF_PAIRS.map(([iA, iB]) => {
     const wa = winnerTeam(r16[iA]);
     const wb = winnerTeam(r16[iB]);
@@ -215,7 +199,7 @@ function buildBracket(rounds: Rounds | null) {
   // البطل
   const champion = winnerTeam(final);
 
-  return { r32, r16, qf, sf, final, champion };
+  return { r16, qf, sf, final, champion };
 }
 
 // عمود من مباريات موزّعة بالتساوي عموديًا
@@ -230,13 +214,12 @@ function Column({ slots, keyPrefix }: { slots: Slot[]; keyPrefix: string }) {
 export default function BracketTree({ rounds }: { rounds: Rounds | null }) {
   const b = buildBracket(rounds);
 
-  // الجهة اليمنى (RTL): R32 يمين → R16 → QF (indices 4-7 لـR16, 2-3 لـQF, 1 لـSF)
-  const rightR32 = b.r32.slice(8, 16);       // النصف اليمين (idx 8..15)
+  // الجهة اليمنى (RTL): R16 يمين → QF → SF (النصف اليمين idx 4..7)
   const rightR16 = b.r16.slice(4, 8);
   const rightQF = b.qf.slice(2, 4);
   const rightSF = b.sf[1];
 
-  const leftR32 = b.r32.slice(0, 8);          // النصف الشمال (idx 0..7)
+  // الجهة الشمال (النصف الشمال idx 0..3)
   const leftR16 = b.r16.slice(0, 4);
   const leftQF = b.qf.slice(0, 2);
   const leftSF = b.sf[0];
@@ -247,7 +230,7 @@ export default function BracketTree({ rounds }: { rounds: Rounds | null }) {
     <div>
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>🌳 شجرة البطولة</h2>
-        <p style={{ fontSize: 13, color: 'var(--muted)' }}>من دور الـ32 حتى النهائي — تتحدّث تلقائيًا مع تأهّل الفرق</p>
+        <p style={{ fontSize: 13, color: 'var(--muted)' }}>من دور الـ16 حتى النهائي — تتحدّث تلقائيًا مع تأهّل الفرق</p>
       </div>
 
       <div className="bracket-hint" style={{ display: 'none', textAlign: 'center', fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
@@ -258,11 +241,10 @@ export default function BracketTree({ rounds }: { rounds: Rounds | null }) {
         <div className="bracket-cols" style={{
           display: 'grid',
           gridTemplateColumns: '1fr 0.9fr 1fr',
-          gap: 10, alignItems: 'stretch', minWidth: 820,
+          gap: 10, alignItems: 'stretch', minWidth: 680,
         }}>
           {/* الجهة اليمنى */}
-          <div style={{ display: 'grid', gridTemplateColumns: `${cardW}px 1fr 1fr`, gap: 8, direction: 'rtl' }}>
-            <Column slots={rightR32} keyPrefix="rr32" />
+          <div style={{ display: 'grid', gridTemplateColumns: `${cardW}px 1fr`, gap: 8, direction: 'rtl' }}>
             <Column slots={rightR16} keyPrefix="rr16" />
             <Column slots={rightQF} keyPrefix="rqf" />
           </div>
@@ -311,10 +293,9 @@ export default function BracketTree({ rounds }: { rounds: Rounds | null }) {
           </div>
 
           {/* الجهة اليسرى */}
-          <div style={{ display: 'grid', gridTemplateColumns: `1fr 1fr ${cardW}px`, gap: 8, direction: 'rtl' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `1fr ${cardW}px`, gap: 8, direction: 'rtl' }}>
             <Column slots={leftQF} keyPrefix="lqf" />
             <Column slots={leftR16} keyPrefix="lr16" />
-            <Column slots={leftR32} keyPrefix="lr32" />
           </div>
         </div>
       </div>

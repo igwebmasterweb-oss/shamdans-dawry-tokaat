@@ -753,6 +753,9 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const [penaltyMap, setPenaltyMap]         = useState<Record<string, number>>({});
   const [myPenaltyPoints, setMyPenaltyPoints] = useState(0);
   const [reviewNotice, setReviewNotice]     = useState<any | null>(null);
+  // 🔒 حالة التسجيل (مقفول/مفتوح) + الرسالة — تظهر مكان رسالة البونص
+  const [regClosed, setRegClosed]           = useState(false);
+  const [regMsg, setRegMsg]                 = useState('');
   const [pushLoading, setPushLoading]       = useState(false);
   const [collapsedMatches, setCollapsedMatches] = useState<Record<number, boolean>>({});
   // 🏆 شجرة البطولة (knockout bracket) — تُجلب لحظيًا من /api/bracket
@@ -784,6 +787,14 @@ const [profileCompleted, setProfileCompleted] = useState(false);
         if (sub) setPushEnabled(true);
       });
     });
+  }, []);
+
+  // 🔒 جلب حالة التسجيل (مقفول/مفتوح) + رسالة البونص البديلة
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.rpc('get_registration_status');
+      if (data) { setRegClosed(data.open === false); setRegMsg(data.message || ''); }
+    })();
   }, []);
 
   // 🏆 جلب أدوار الإقصاء لحظيًا أول ما يُفتح تاب الشجرة (مرة واحدة)
@@ -2613,6 +2624,14 @@ const myFilteredPredictionsSorted = [...predictions]
       {leagueJoinMsg && (
         <div style={{ background: 'rgba(39,176,110,.1)', borderBottom: '1px solid rgba(39,176,110,.2)', padding: '10px 20px', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#5effa8' }}>
           {leagueJoinMsg} <Link href="/my-leagues" style={{ color: '#5effa8', marginRight: 8 }}>اضغط هنا لرؤية الليج ←</Link>
+        </div>
+      )}
+
+      {/* 🔒 بانر إيقاف التسجيل — مكان رسالة البونص */}
+      {regClosed && regMsg && (
+        <div className="alert-banner" style={{ background: 'linear-gradient(90deg,rgba(217,178,95,.12),rgba(201,58,47,.06))', borderBottom: '1px solid rgba(217,178,95,.28)', padding: '12px 20px', textAlign: 'center', fontFamily: 'Cairo, sans-serif', fontSize: 13, color: '#f2d79e', lineHeight: 1.9, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>🔒</span>
+          <span style={{ fontWeight: 700 }}>{regMsg}</span>
         </div>
       )}
 

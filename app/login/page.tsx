@@ -21,6 +21,9 @@ function LoginContent() {
   const [sent, setSent] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [profileSynced, setProfileSynced] = useState(false);
+  // 🔒 حالة التسجيل (مفتوح/مقفول) + الرسالة
+  const [regOpen, setRegOpen] = useState(true);
+  const [regMsg, setRegMsg] = useState('');
   const searchParams = useSearchParams();
   const refParam = searchParams.get('ref') || '';
   const leagueParam = searchParams.get('league') || '';
@@ -153,6 +156,18 @@ function LoginContent() {
       setErrorMsg('الإيميل غير صحيح — اتأكد من كتابته صح (مثال: name@gmail.com)');
       return;
     }
+    // 🔒 لو التسجيل مقفول: الأعضاء الحاليين بس يقدروا يدخلوا
+    if (!regOpen) {
+      setLoading(true);
+      const { data: isMember, error: mErr } = await supabase.rpc('email_is_existing_member', { p_email: cleanEmail });
+      if (mErr) { setErrorMsg('حصل خطأ مؤقت، جرّب تاني'); setLoading(false); return; }
+      if (!isMember) {
+        setErrorMsg(regMsg || '🔒 التسجيل قفل خلاص.');
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+    }
     setLoading(true);
     const { error } = await supabase.auth.signInWithOtp({
       email: cleanEmail,
@@ -164,6 +179,11 @@ function LoginContent() {
   };
 
   const handleSocial = async (provider: SocialProvider) => {
+    // 🔒 الدخول الاجتماعي موقوف وقت إيقاف التسجيل (ما نقدرش نتأكد من الإيميل قبل الدخول)
+    if (!regOpen) {
+      setErrorMsg(regMsg || '🔒 التسجيل قفل خلاص. لو عندك حساب، ادخل برابط الإيميل.');
+      return;
+    }
     setSocialLoading(provider);
     setErrorMsg('');
     persistPendingParams();
@@ -176,6 +196,14 @@ function LoginContent() {
     });
     if (error) { setErrorMsg('خطأ: ' + error.message); setSocialLoading(null); }
   };
+
+  // 🔒 جلب حالة التسجيل عند فتح الصفحة
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.rpc('get_registration_status');
+      if (data) { setRegOpen(data.open !== false); setRegMsg(data.message || ''); }
+    })();
+  }, []);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -292,6 +320,14 @@ function LoginContent() {
             <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--gold)' }}>تم دعوتك للانضمام لليج</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 700 }}>بعد تسجيل الدخول ستنضم تلقائياً</div>
           </div>
+        </div>
+      )}
+
+      {/* 🔒 بانر إيقاف التسجيل */}
+      {!regOpen && regMsg && (
+        <div style={{ width: '100%', maxWidth: 420, background: 'rgba(201,58,47,.10)', border: '1px solid rgba(201,58,47,.3)', borderRadius: 16, padding: '14px 18px', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 10, animation: 'slideDown .4s ease both' }}>
+          <span style={{ fontSize: 20, lineHeight: 1.2 }}>🔒</span>
+          <div style={{ fontSize: 13, color: '#f4d7d3', fontWeight: 700, lineHeight: 1.7 }}>{regMsg}</div>
         </div>
       )}
 

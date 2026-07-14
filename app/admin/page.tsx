@@ -19,6 +19,24 @@ export default function AdminPage() {
   const [loading, setLoading]         = useState(true);
   // ① loadError ✅
   const [loadError, setLoadError]     = useState(false);
+  // 🔐 بوابة يوزرنيم + باسورد (طبقة ثانية فوق دخول الإيميل)
+  const [gateOk, setGateOk]           = useState(false);
+  const [gateUser, setGateUser]       = useState('');
+  const [gatePass, setGatePass]       = useState('');
+  const [gateErr, setGateErr]         = useState('');
+  const [gateBusy, setGateBusy]       = useState(false);
+  // موديل تغيير كلمة المرور
+  const [showPwModal, setShowPwModal] = useState(false);
+  const [pwOld, setPwOld]             = useState('');
+  const [pwNew, setPwNew]             = useState('');
+  const [pwNew2, setPwNew2]           = useState('');
+  const [pwMsg, setPwMsg]             = useState('');
+  const [pwBusy, setPwBusy]           = useState(false);
+  // 🔒 تحكم إيقاف/تشغيل التسجيل
+  const [regOpen, setRegOpen]         = useState(true);
+  const [regMsgText, setRegMsgText]   = useState('');
+  const [regBusy, setRegBusy]         = useState(false);
+  const [regSaveMsg, setRegSaveMsg]   = useState('');
   const [activeTab, setActiveTab]     = useState<'matches'|'predictions'|'leaderboard'|'leagues'|'prizes'|'reports'>('matches');
   // ⑫ التقارير — أكثر الداعين / نقاط مشبوهة / غير نشطين / إحصائيات عامة
   const [rptOverview, setRptOverview]     = useState<any>(null);
@@ -360,13 +378,93 @@ const loadLeaderboard = useCallback(async () => {
   setAutoUpdating(false);
 }, [updating, showMsg, loadMatches, loadPredictions, loadLeaderboard]);
 
+  // تحقق من دخول الإيميل أولًا (الطبقة الأولى)
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user || !ADMIN_EMAILS.includes(data.user.email||'')) { router.push('/dashboard'); return; }
       setUser(data.user);
-      loadMatches(); loadPredictions(); loadLeaderboard(); loadLeagues(); loadPrizes();
+      // البوابة الثانية: لو الجلسة اتأكدت قبل كده في نفس التبويبة
+      if (typeof window !== 'undefined' && sessionStorage.getItem('wc_admin_gate') === '1') {
+        setGateOk(true);
+      }
     });
-  }, [router, loadMatches, loadPredictions, loadLeaderboard, loadLeagues, loadPrizes]);
+  }, [router]);
+
+  // تحميل البيانات بعد اجتياز البوابة الثانية
+  useEffect(() => {
+    if (!user || !gateOk) return;
+    loadMatches(); loadPredictions(); loadLeaderboard(); loadLeagues(); loadPrizes();
+    // 🔒 جلب حالة التسجيل الحالية
+    (async () => {
+      const { data } = await supabase.rpc('get_registration_status');
+      if (data) { setRegOpen(data.open !== false); setRegMsgText(data.message || ''); }
+    })();
+  }, [user, gateOk, loadMatches, loadPredictions, loadLeaderboard, loadLeagues, loadPrizes]);
+
+  // 🔒 حفظ حالة التسجيل (إيقاف/تشغيل + نص الرسالة)
+  const saveRegStatus = async (nextOpen: boolean) => {
+    setRegBusy(true); setRegSaveMsg('');
+    try {
+      const { data, error } = await supabase.rpc('set_registration_status', {
+        p_username: 'wcup-admin', p_open: nextOpen, p_message: regMsgText,
+      });
+      if (error) throw error;
+      if (data) {
+        setRegOpen((data as any).open !== false);
+        setRegMsgText((data as any).message || '');
+        setRegSaveMsg(nextOpen ? '✅ التسجيل مفتوح دلوقتي' : '✅ التسجيل مقفول والرسالة اتحفظت');
+        setTimeout(() => setRegSaveMsg(''), 2500);
+      }
+    } catch (err: any) {
+      setRegSaveMsg('❌ ' + (err?.message || 'حصل خطأ'));
+    } finally {
+      setRegBusy(false);
+    }
+  };
+
+  // تحقق من يوزرنيم/باسورد عبر دالة DB الآمنة
+  const submitGate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGateErr(''); setGateBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('verify_admin_login', { p_username: gateUser.trim(), p_password: gatePass });
+      if (error) throw error;
+      if (data === true) {
+        if (typeof window !== 'undefined') sessionStorage.setItem('wc_admin_gate', '1');
+        setGateOk(true); setGatePass('');
+      } else {
+        setGateErr('اليوزرنيم أو كلمة المرور غلط');
+      }
+    } catch (err: any) {
+      setGateErr(err?.message || 'حصل خطأ، حاول تاني');
+    } finally {
+      setGateBusy(false);
+    }
+  };
+
+  // تغيير كلمة المرور
+  const submitPwChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwMsg(''); 
+    if (pwNew !== pwNew2) { setPwMsg('❌ كلمتا المرور الجديدتان غير متطابقتين'); return; }
+    if (pwNew.length < 8) { setPwMsg('❌ كلمة المرور الجديدة لازم 8 أحرف على الأقل'); return; }
+    setPwBusy(true);
+    try {
+      const { data, error } = await supabase.rpc('change_admin_password', { p_username: 'wcup-admin', p_old_password: pwOld, p_new_password: pwNew });
+      if (error) throw error;
+      if (data === true) {
+        setPwMsg('✅ تم تغيير كلمة المرور بنجاح');
+        setPwOld(''); setPwNew(''); setPwNew2('');
+        setTimeout(() => { setShowPwModal(false); setPwMsg(''); }, 1400);
+      } else {
+        setPwMsg('❌ كلمة المرور الحالية غلط');
+      }
+    } catch (err: any) {
+      setPwMsg('❌ ' + (err?.message || 'حصل خطأ'));
+    } finally {
+      setPwBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -604,6 +702,28 @@ const loadLeaderboard = useCallback(async () => {
     const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = `leaderboard-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  };
+
+  // 📦 تصدير شامل لكل الأعضاء ببياناتهم الكاملة
+  const exportAllMembersCSV = () => {
+    const esc = (v: any) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+    };
+    const headers = ['#','الاسم','الإيميل','التليفون','رابط فيسبوك','Facebook ID','الفريق المفضل','تاريخ الميلاد','كود الإحالة','إجمالي النقاط','عدد التوقعات','عدد الإحالات','البروفايل مكتمل','تاريخ التسجيل'];
+    const rows = leaderboard.map((p,i) => {
+      const prof = profilesMap[p.user_id] || {};
+      const created = prof.created_at ? new Date(prof.created_at).toLocaleString('ar-EG') : '';
+      return [
+        i+1, p.full_name||'—', p.user_email||'', p.phone||'', p.facebook_url||'', p.facebook_id||'',
+        p.football_team||'', p.date_of_birth||'', p.referral_code||'', p.total||0, p.count||0,
+        p.referral_count||0, p.profile_completed ? 'نعم':'لا', created,
+      ].map(esc);
+    });
+    const csv = [headers.map(esc), ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `all-members-${new Date().toISOString().slice(0,10)}.csv`; a.click();
   };
 
   // ⑫ تحميل التقارير من الـ views (مرة واحدة عند فتح التاب)
@@ -989,6 +1109,24 @@ const loadLeaderboard = useCallback(async () => {
     if (scope !== 'general') loadRoundLeaderboard(scope);
   };
   // ─── Render states ─────────────────────────────────────
+  // 🔐 البوابة الثانية: يوزرنيم + باسورد (بعد تأكيد الإيميل وقبل فتح اللوحة)
+  if (user && !gateOk) return (
+    <div style={{display:'grid',placeItems:'center',minHeight:'100vh',background:'#070809',fontFamily:"'Cairo',sans-serif",padding:24}}>
+      <form onSubmit={submitGate} style={{width:'100%',maxWidth:360,background:'linear-gradient(180deg,#141a26,#0f141e)',border:'1px solid #1e2836',borderRadius:16,padding:'28px 22px',display:'flex',flexDirection:'column',gap:14,boxShadow:'0 8px 40px rgba(0,0,0,.5)'}}>
+        <div style={{textAlign:'center',marginBottom:4}}>
+          <div style={{fontSize:38}}>🔐</div>
+          <div style={{fontSize:19,fontWeight:900,color:'#d9b25f',marginTop:6}}>دخول لوحة التحكم</div>
+          <div style={{fontSize:12,color:'#a8a39a',marginTop:4}}>ادخل يوزرنيم وكلمة مرور الأدمن</div>
+        </div>
+        <input value={gateUser} onChange={e=>setGateUser(e.target.value)} placeholder="اليوزرنيم" autoComplete="username" style={{padding:'11px 13px',borderRadius:10,border:'1px solid #263041',background:'#0b0f16',color:'#f4f1e8',fontSize:14,fontFamily:"'Cairo',sans-serif",direction:'ltr',textAlign:'left'}} />
+        <input value={gatePass} onChange={e=>setGatePass(e.target.value)} placeholder="كلمة المرور" type="password" autoComplete="current-password" style={{padding:'11px 13px',borderRadius:10,border:'1px solid #263041',background:'#0b0f16',color:'#f4f1e8',fontSize:14,fontFamily:"'Cairo',sans-serif",direction:'ltr',textAlign:'left'}} />
+        {gateErr && <div style={{color:'#f87171',fontSize:12,fontWeight:700,textAlign:'center'}}>{gateErr}</div>}
+        <button type="submit" disabled={gateBusy||!gateUser||!gatePass} style={{padding:'12px',borderRadius:10,border:'none',background:gateBusy?'#5a4d2a':'#d9b25f',color:'#0b0f16',fontSize:15,fontWeight:900,fontFamily:"'Cairo',sans-serif",cursor:gateBusy?'default':'pointer',opacity:(!gateUser||!gatePass)?.6:1}}>{gateBusy?'…جارٍ التحقق':'دخول'}</button>
+        <button type="button" onClick={async()=>{ await supabase.auth.signOut(); router.push('/login'); }} style={{background:'none',border:'none',color:'#a8a39a',fontSize:12,fontFamily:"'Cairo',sans-serif",cursor:'pointer',marginTop:2}}>تسجيل خروج</button>
+      </form>
+    </div>
+  );
+
   if (loading) return (
     <div style={{display:'grid',placeItems:'center',height:'100vh',background:'#070809',color:'#d9b25f',fontFamily:"'Cairo',sans-serif",gap:16,fontSize:18}}>
       <div style={{fontSize:40}}>⚙️</div>
@@ -1105,12 +1243,51 @@ const loadLeaderboard = useCallback(async () => {
         <button onClick={updateAllPoints} disabled={updating} className="action-btn" style={{background:'linear-gradient(135deg,var(--gold),#a8761a)',fontSize:12}}>
           {updating?'⏳ جاري...':'⚡ تحديث النقاط'}
         </button>
+        <button onClick={()=>{setShowPwModal(true);setPwMsg('');setPwOld('');setPwNew('');setPwNew2('');}} className="action-btn" style={{background:'rgba(217,178,95,.12)',border:'1px solid rgba(217,178,95,.25)',color:'#d9b25f',fontSize:12}}>🔑 تغيير كلمة المرور</button>
         <button onClick={handleLogout} className="action-btn" style={{background:'rgba(201,58,47,.2)',border:'1px solid rgba(201,58,47,.3)',color:'#ff9c91',fontSize:12}}>خروج</button>
+      </div>
+
+      {/* 🔒 لوحة تحكم إيقاف/تشغيل التسجيل */}
+      <div style={{margin:'0 24px 4px',padding:'14px 16px',borderRadius:14,border:'1px solid rgba(217,178,95,.22)',background:'rgba(217,178,95,.05)',display:'flex',flexDirection:'column',gap:10}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:16}}>{regOpen?'🟢':'🔒'}</span>
+            <div>
+              <div style={{fontSize:14,fontWeight:900,color:'#f4f1e8'}}>حالة التسجيل: {regOpen?'مفتوح':'مقفول'}</div>
+              <div style={{fontSize:11,color:'#a8a39a'}}>لمّا يقفل، الأعضاء الحاليين بس يقدروا يدخلوا (برابط الإيميل)، والرسالة تظهر في الداشبورد وصفحة الدخول</div>
+            </div>
+          </div>
+          <button onClick={()=>saveRegStatus(!regOpen)} disabled={regBusy} className="action-btn" style={{background:regOpen?'rgba(201,58,47,.2)':'rgba(39,176,110,.2)',border:`1px solid ${regOpen?'rgba(201,58,47,.35)':'rgba(39,176,110,.35)'}`,color:regOpen?'#ff9c91':'#5effa8',fontSize:12,fontWeight:800}}>
+            {regBusy?'…جارٍ':(regOpen?'🔒 قفل التسجيل':'🟢 فتح التسجيل')}
+          </button>
+        </div>
+        <textarea value={regMsgText} onChange={e=>setRegMsgText(e.target.value)} rows={2} placeholder="نص الرسالة اللي تظهر للأعضاء وقت إيقاف التسجيل…" style={{width:'100%',resize:'vertical',padding:'10px 12px',borderRadius:10,border:'1px solid rgba(255,255,255,.12)',background:'#0b0f16',color:'#f4f1e8',fontSize:13,fontFamily:"'Cairo',sans-serif",lineHeight:1.7}} />
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <button onClick={()=>saveRegStatus(regOpen)} disabled={regBusy} className="action-btn" style={{background:'rgba(217,178,95,.15)',border:'1px solid rgba(217,178,95,.3)',color:'#d9b25f',fontSize:12,fontWeight:800}}>💾 حفظ نص الرسالة</button>
+          {regSaveMsg && <span style={{fontSize:12,fontWeight:700,color:regSaveMsg.startsWith('✅')?'#5effa8':'#ff9c91'}}>{regSaveMsg}</span>}
+        </div>
       </div>
 
       {message && (
         <div style={{padding:'12px 24px',background:msgType==='success'?'rgba(39,176,110,.15)':'rgba(201,58,47,.15)',borderBottom:`1px solid ${msgType==='success'?'rgba(39,176,110,.25)':'rgba(201,58,47,.25)'}`,color:msgType==='success'?'var(--green)':'#ff9c91',fontWeight:700,fontSize:14,textAlign:'center'}}>
           {message}
+        </div>
+      )}
+
+      {/* 🔑 موديل تغيير كلمة المرور */}
+      {showPwModal && (
+        <div onClick={()=>!pwBusy&&setShowPwModal(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.6)',display:'grid',placeItems:'center',zIndex:1000,padding:20}}>
+          <form onClick={e=>e.stopPropagation()} onSubmit={submitPwChange} style={{width:'100%',maxWidth:360,background:'linear-gradient(180deg,#141a26,#0f141e)',border:'1px solid #1e2836',borderRadius:16,padding:'24px 22px',display:'flex',flexDirection:'column',gap:12}}>
+            <div style={{textAlign:'center',fontSize:17,fontWeight:900,color:'#d9b25f'}}>🔑 تغيير كلمة المرور</div>
+            <input value={pwOld} onChange={e=>setPwOld(e.target.value)} placeholder="كلمة المرور الحالية" type="password" autoComplete="current-password" style={{padding:'11px 13px',borderRadius:10,border:'1px solid #263041',background:'#0b0f16',color:'#f4f1e8',fontSize:14,fontFamily:"'Cairo',sans-serif",direction:'ltr',textAlign:'left'}} />
+            <input value={pwNew} onChange={e=>setPwNew(e.target.value)} placeholder="كلمة المرور الجديدة (8 أحرف فأكثر)" type="password" autoComplete="new-password" style={{padding:'11px 13px',borderRadius:10,border:'1px solid #263041',background:'#0b0f16',color:'#f4f1e8',fontSize:14,fontFamily:"'Cairo',sans-serif",direction:'ltr',textAlign:'left'}} />
+            <input value={pwNew2} onChange={e=>setPwNew2(e.target.value)} placeholder="تأكيد كلمة المرور الجديدة" type="password" autoComplete="new-password" style={{padding:'11px 13px',borderRadius:10,border:'1px solid #263041',background:'#0b0f16',color:'#f4f1e8',fontSize:14,fontFamily:"'Cairo',sans-serif",direction:'ltr',textAlign:'left'}} />
+            {pwMsg && <div style={{fontSize:12,fontWeight:700,textAlign:'center',color:pwMsg.startsWith('✅')?'#5fd39a':'#f87171'}}>{pwMsg}</div>}
+            <div style={{display:'flex',gap:8,marginTop:4}}>
+              <button type="submit" disabled={pwBusy||!pwOld||!pwNew||!pwNew2} style={{flex:1,padding:'11px',borderRadius:10,border:'none',background:'#d9b25f',color:'#0b0f16',fontSize:14,fontWeight:900,fontFamily:"'Cairo',sans-serif",cursor:'pointer',opacity:(pwBusy||!pwOld||!pwNew||!pwNew2)?.6:1}}>{pwBusy?'…جارٍ':'حفظ'}</button>
+              <button type="button" onClick={()=>setShowPwModal(false)} disabled={pwBusy} style={{padding:'11px 16px',borderRadius:10,border:'1px solid #263041',background:'transparent',color:'#a8a39a',fontSize:14,fontFamily:"'Cairo',sans-serif",cursor:'pointer'}}>إلغاء</button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -1299,6 +1476,7 @@ const loadLeaderboard = useCallback(async () => {
                 ? <span style={{fontSize:12,color:'var(--muted)'}}>يعرض {visibleLeaderboard.length} من {lbSource.length}</span>
                 : lbScope!=='general' && <span style={{fontSize:12,color:'var(--muted)'}}>{loadingRoundLb?'⏳ جاري التحميل...':`صدارة ${roundLabels[lbScope]||lbScope} · ${lbSource.length} لاعب`}</span>}
               <button onClick={exportLeaderboardCSV} className="export-btn" style={{marginRight:'auto'}}>⬇️ تصدير CSV</button>
+              <button onClick={exportAllMembersCSV} className="export-btn">📦 تصدير كل الأعضاء (بيانات كاملة)</button>
             </div>
             <div style={{overflowX:'auto'}}>
               <table>
