@@ -1527,8 +1527,15 @@ const loadLeaderboard = useCallback(async () => {
               {lbSearchQ
                 ? <span style={{fontSize:12,color:'var(--muted)'}}>يعرض {visibleLeaderboard.length} من {lbSource.length}</span>
                 : lbScope!=='general' && <span style={{fontSize:12,color:'var(--muted)'}}>{loadingRoundLb?'⏳ جاري التحميل...':`صدارة ${roundLabels[lbScope]||lbScope} · ${lbSource.length} لاعب`}</span>}
-              <button onClick={exportLeaderboardCSV} className="export-btn" style={{marginRight:'auto'}}>⬇️ تصدير CSV</button>
-              <button onClick={exportAllMembersCSV} className="export-btn">📦 تصدير كل الأعضاء (بيانات كاملة)</button>
+              <button onClick={exportLeaderboardCSV} className="export-btn" style={{marginRight:'auto'}}>⬇️ تصدير الصدارة المعروضة</button>
+            </div>
+            {/* 📦 تصدير شامل — زر بارز وواضح */}
+            <div style={{background:'rgba(94,255,168,.06)',border:'1px solid rgba(94,255,168,.25)',borderRadius:14,padding:'14px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+              <div style={{minWidth:200}}>
+                <div style={{fontSize:14,fontWeight:900,color:'#5effa8'}}>📦 تصدير كل الأعضاء — ملف Excel كامل</div>
+                <div style={{fontSize:11,color:'var(--muted)',marginTop:3,lineHeight:1.5}}>بينزّل ملف فيه <strong>كل الأعضاء المسجّلين</strong> بكل بياناتهم (الاسم · الإيميل · التليفون · الفيسبوك · المنتخب · تاريخ الميلاد · الدعوة · النقاط) — مش المعروض بس، كلهم</div>
+              </div>
+              <button onClick={exportAllMembersCSV} className="export-btn" style={{background:'rgba(94,255,168,.15)',border:'1px solid rgba(94,255,168,.4)',color:'#5effa8',fontWeight:900,whiteSpace:'nowrap'}}>📥 تحميل كل الأعضاء</button>
             </div>
             <div style={{overflowX:'auto'}}>
               <table>
@@ -1750,31 +1757,30 @@ const loadLeaderboard = useCallback(async () => {
                 const fmt = (v:any) => Number(v).toLocaleString('en-US');
                 const groups = [
                   { title:'👥 الأعضاء', cards:[
-                    {label:'إجمالي الأعضاء',   value:fmt(rptOverview.total_members),       c:'var(--gold)'},
-                    {label:'بروفايلات مكتملة', value:fmt(rptOverview.completed_profiles),  c:'#5effa8'},
-                    {label:'لديهم تليفون',      value:fmt(rptOverview.members_with_phone),  c:'#7fd1ff'},
-                    {label:'جاءوا بدعوة',       value:fmt(rptOverview.members_from_referral),c:'#ffd27f'},
-                    {label:'أعضاء نشطون',       value:fmt(rptOverview.active_predictors),   c:'#5effa8'},
-                    {label:'غير نشطين',         value:fmt(rptOverview.inactive_members),    c:'#ff9c91'},
-                    {label:'بروفايل غير مكتمل', value:fmt(rptOverview.incomplete_profiles), c:'#fbbf24'},
-                    {label:'إيميل غير مؤكَّد',   value:fmt(rptOverview.unconfirmed_email),   c:'#ff9c91'},
-                    {label:'لم يدخل أبداً',      value:fmt(rptOverview.never_signed_in),     c:'#f87171'},
+                    {label:'إجمالي الأعضاء',   value:fmt(rptOverview.total_members),       c:'var(--gold)', hint:'كل الحسابات المسجّلة فعليًا'},
+                    {label:'بروفايلات مكتملة', value:fmt(rptOverview.completed_profiles),  c:'#5effa8',    hint:'كمّلوا بيانات الحساب'},
+                    {label:'لديهم تليفون',      value:fmt(rptOverview.members_with_phone),  c:'#7fd1ff',    hint:'ضافوا رقم موبايل'},
+                    {label:'جاءوا بدعوة',       value:fmt(rptOverview.members_from_referral),c:'#ffd27f',   hint:'سجّلوا عن طريق دعوة صديق'},
+                    {label:'أعضاء نشطون',       value:fmt(rptOverview.active_predictors),   c:'#5effa8',    hint:'وضعوا توقّع واحد على الأقل'},
+                    {label:'غير نشطين',         value:fmt(rptOverview.inactive_members),    c:'#ff9c91',    hint:'سجّلوا ومحطّوش أي توقّع'},
+                    {label:'بروفايل غير مكتمل', value:fmt(rptOverview.incomplete_profiles), c:'#fbbf24',    hint:'لسه مكمّلوش بيانات الحساب'},
+                    {label:'لم يدخل أبداً',      value:fmt(rptOverview.never_signed_in),     c:'#f87171',    hint:'اتعملهم حساب ومدخلوش ولا مرة'},
                   ]},
                   { title:'📋 التوقعات والماتشات', cards:[
-                    {label:'إجمالي التوقعات',   value:fmt(rptOverview.total_predictions),   c:'var(--gold)'},
-                    {label:'مُقيَّمة',           value:fmt(rptOverview.graded_predictions),  c:'#5effa8'},
-                    {label:'غير مُقيَّمة',        value:fmt(rptOverview.ungraded_predictions),c:rptOverview.ungraded_predictions>0?'#ff9c91':'var(--muted)'},
-                    {label:'إجمالي الماتشات',   value:fmt(rptOverview.total_fixtures),      c:'#a78bfa'},
-                    {label:'ماتشات مفتوحة',     value:fmt(rptOverview.open_fixtures),       c:'#facc15'},
-                    {label:'بدون نتيجة',        value:fmt(rptOverview.no_result_fixtures),  c:'#f87171'},
+                    {label:'إجمالي التوقعات',   value:fmt(rptOverview.total_predictions),   c:'var(--gold)', hint:'كل التوقّعات المسجّلة'},
+                    {label:'مُقيَّمة',           value:fmt(rptOverview.graded_predictions),  c:'#5effa8',    hint:'اتحسبت نقاطها بعد النتيجة'},
+                    {label:'غير مُقيَّمة',        value:fmt(rptOverview.ungraded_predictions),c:rptOverview.ungraded_predictions>0?'#ff9c91':'var(--muted)', hint:'لسه مستنية نتيجة الماتش'},
+                    {label:'إجمالي الماتشات',   value:fmt(rptOverview.total_fixtures),      c:'#a78bfa',    hint:'كل ماتشات البطولة'},
+                    {label:'ماتشات مفتوحة',     value:fmt(rptOverview.open_fixtures),       c:'#facc15',    hint:'لسه بتستقبل توقّعات'},
+                    {label:'بدون نتيجة',        value:fmt(rptOverview.no_result_fixtures),  c:'#f87171',    hint:'متسجّلّهاش نتيجة لحد دلوقتي'},
                   ]},
                   { title:'🏆 الليجات والنقاط', cards:[
-                    {label:'ميني ليجات',        value:fmt(rptOverview.total_leagues),       c:'#a78bfa'},
-                    {label:'أعضاء الليجات',     value:fmt(rptOverview.total_league_members),c:'#7fd1ff'},
-                    {label:'دعوات معلّقة',       value:fmt(rptOverview.pending_invites),     c:'#fb923c'},
-                    {label:'أعلى نقاط',         value:fmt(rptOverview.top_score),           c:'#4ade80'},
-                    {label:'متوسط النشطين',     value:rptOverview.avg_points_active,        c:'#38bdf8'},
-                    {label:'صفر أو أقل',        value:fmt(rptOverview.zero_or_less_members),c:'#f87171'},
+                    {label:'ميني ليجات',        value:fmt(rptOverview.total_leagues),       c:'#a78bfa',    hint:'عدد الليجات الخاصة'},
+                    {label:'أعضاء الليجات',     value:fmt(rptOverview.total_league_members),c:'#7fd1ff',    hint:'مشتركين في ليجات خاصة'},
+                    {label:'دعوات معلّقة',       value:fmt(rptOverview.pending_invites),     c:'#fb923c',    hint:'دعوات ليجة لسه مترّدش عليها'},
+                    {label:'أعلى نقاط',         value:fmt(rptOverview.top_score),           c:'#4ade80',    hint:'أعلى رصيد نقاط في الصدارة'},
+                    {label:'متوسط النشطين',     value:rptOverview.avg_points_active,        c:'#38bdf8',    hint:'متوسّط نقاط اللي بيتوقّعوا'},
+                    {label:'صفر أو أقل',        value:fmt(rptOverview.zero_or_less_members),c:'#f87171',    hint:'رصيدهم صفر أو بالسالب'},
                   ]},
                 ];
                 return (
@@ -1787,6 +1793,7 @@ const loadLeaderboard = useCallback(async () => {
                             <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:14,padding:'12px 14px',textAlign:'center'}}>
                               <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,fontWeight:700}}>{s.label}</div>
                               <div style={{fontSize:22,fontWeight:900,color:s.c,fontVariantNumeric:'tabular-nums'}}>{s.value}</div>
+                              <div style={{fontSize:9,color:'var(--muted)',marginTop:5,lineHeight:1.4,opacity:.85}}>{s.hint}</div>
                             </div>
                           ))}
                         </div>
