@@ -210,7 +210,7 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
     ] = await Promise.all([
       fetchAll(() =>
         supabase
-          .from('predictions')
+          .from('admin_all_predictions_v1')
           .select('*')
           .not('fixture_id', 'is', null)
           .order('submitted_at', { ascending: false })
@@ -223,18 +223,18 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
       ),
 
       supabase
-        .from('predictions')
+        .from('admin_all_predictions_v1')
         .select('*', { count: 'exact', head: true })
         .not('fixture_id', 'is', null),
 
       supabase
-        .from('predictions')
+        .from('admin_all_predictions_v1')
         .select('*', { count: 'exact', head: true })
         .not('fixture_id', 'is', null)
         .not('points', 'is', null),
 
       supabase
-        .from('predictions')
+        .from('admin_all_predictions_v1')
         .select('*', { count: 'exact', head: true })
         .not('fixture_id', 'is', null)
         .is('points', null),
