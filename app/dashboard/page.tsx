@@ -1007,7 +1007,8 @@ const [profileCompleted, setProfileCompleted] = useState(false);
         supabase.from('social_feed').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('historical_rankings').select('*').order('week_start', { ascending: false }).order('total_points', { ascending: false }),
         supabase.from('user_points').select('*').order('total_points', { ascending: false }),
-        supabase.from('user_points').select('*', { count: 'exact', head: true }),
+        // 🔢 العدد المعروض للجمهور (قابل للضبط من لوحة الأدمن — متسق مع الرئيسية)
+        supabase.rpc('get_public_members_count'),
       ]);
 
       const [penaltyRowsResult, reviewNoticeResult, dreamSurveyResult] = await Promise.allSettled([
@@ -1032,7 +1033,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
       const feedData       = feedDataRes.data;
       const histData       = histDataRes.data;
       const userPointsData    = userPointsDataRes.data;
-      const participantsCount  = participantsCountRes.count ?? 0;
+      const participantsCount  = Number((participantsCountRes as any).data ?? 0);
 
       const penaltyRows =
         penaltyRowsResult.status === 'fulfilled' && !(penaltyRowsResult.value as any)?.error
