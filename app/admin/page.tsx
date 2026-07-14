@@ -37,6 +37,12 @@ export default function AdminPage() {
   const [regMsgText, setRegMsgText]   = useState('');
   const [regBusy, setRegBusy]         = useState(false);
   const [regSaveMsg, setRegSaveMsg]   = useState('');
+  // 🔢 ضبط عدد الأعضاء المعروض
+  const [mdReal, setMdReal]           = useState<number|null>(null);
+  const [mdDisplayed, setMdDisplayed] = useState<number|null>(null);
+  const [mdInput, setMdInput]         = useState('');
+  const [mdBusy, setMdBusy]           = useState(false);
+  const [mdSaveMsg, setMdSaveMsg]     = useState('');
   const [activeTab, setActiveTab]     = useState<'matches'|'predictions'|'leaderboard'|'leagues'|'prizes'|'reports'>('matches');
   // ⑫ التقارير — أكثر الداعين / نقاط مشبوهة / غير نشطين / إحصائيات عامة
   const [rptOverview, setRptOverview]     = useState<any>(null);
@@ -394,12 +400,39 @@ const loadLeaderboard = useCallback(async () => {
   useEffect(() => {
     if (!user || !gateOk) return;
     loadMatches(); loadPredictions(); loadLeaderboard(); loadLeagues(); loadPrizes();
-    // 🔒 جلب حالة التسجيل الحالية
+    // 🔒 جلب حالة التسجيل + ضبط عدد الأعضاء المعروض
     (async () => {
       const { data } = await supabase.rpc('get_registration_status');
       if (data) { setRegOpen(data.open !== false); setRegMsgText(data.message || ''); }
+      const { data: md } = await supabase.rpc('get_members_display_admin', { p_username: 'wcup-admin' });
+      if (md) {
+        setMdReal(md.real ?? null);
+        setMdDisplayed(md.displayed ?? null);
+        setMdInput(String(md.override ?? md.displayed ?? ''));
+      }
     })();
   }, [user, gateOk, loadMatches, loadPredictions, loadLeaderboard, loadLeagues, loadPrizes]);
+
+  // 🔢 حفظ الرقم المعروض (override) أو الرجوع للحقيقي (reset)
+  const saveMembersDisplay = async (mode: 'override'|'reset') => {
+    setMdBusy(true); setMdSaveMsg('');
+    try {
+      const val = mode === 'override' ? parseInt(mdInput, 10) : 0;
+      if (mode === 'override' && (isNaN(val) || val < 0)) { setMdSaveMsg('❌ اكتب رقم صحيح'); setMdBusy(false); return; }
+      const { data, error } = await supabase.rpc('set_members_display', { p_username: 'wcup-admin', p_mode: mode, p_value: val });
+      if (error) throw error;
+      // جلب القيم المحدّثة
+      const { data: md } = await supabase.rpc('get_members_display_admin', { p_username: 'wcup-admin' });
+      if (md) { setMdReal(md.real ?? null); setMdDisplayed(md.displayed ?? null); setMdInput(String(md.override ?? md.displayed ?? '')); }
+      setMdSaveMsg(mode === 'reset' ? '✅ رجع للعدد الحقيقي' : '✅ اتحفظ الرقم المعروض');
+      setTimeout(() => setMdSaveMsg(''), 2500);
+      void data;
+    } catch (err: any) {
+      setMdSaveMsg('❌ ' + (err?.message || 'حصل خطأ'));
+    } finally {
+      setMdBusy(false);
+    }
+  };
 
   // 🔒 حفظ حالة التسجيل (إيقاف/تشغيل + نص الرسالة)
   const saveRegStatus = async (nextOpen: boolean) => {
@@ -1265,6 +1298,25 @@ const loadLeaderboard = useCallback(async () => {
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <button onClick={()=>saveRegStatus(regOpen)} disabled={regBusy} className="action-btn" style={{background:'rgba(217,178,95,.15)',border:'1px solid rgba(217,178,95,.3)',color:'#d9b25f',fontSize:12,fontWeight:800}}>💾 حفظ نص الرسالة</button>
           {regSaveMsg && <span style={{fontSize:12,fontWeight:700,color:regSaveMsg.startsWith('✅')?'#5effa8':'#ff9c91'}}>{regSaveMsg}</span>}
+        </div>
+      </div>
+
+      {/* 🔢 ضبط عدد الأعضاء المعروض للجمهور */}
+      <div style={{margin:'0 24px 4px',padding:'14px 16px',borderRadius:14,border:'1px solid rgba(127,209,255,.22)',background:'rgba(127,209,255,.05)',display:'flex',flexDirection:'column',gap:10}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+          <span style={{fontSize:16}}>🔢</span>
+          <div>
+            <div style={{fontSize:14,fontWeight:900,color:'#f4f1e8'}}>عدد الأعضاء المعروض (الرئيسية)</div>
+            <div style={{fontSize:11,color:'#a8a39a'}}>
+              الحقيقي: <strong style={{color:'#f4f1e8'}}>{mdReal ?? '…'}</strong> · المعروض حاليًا: <strong style={{color:'#7fd1ff'}}>{mdDisplayed ?? '…'}</strong> — بيغيّر العرض بس، ما بيمسش أي عضو
+            </div>
+          </div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+          <input value={mdInput} onChange={e=>setMdInput(e.target.value.replace(/[^0-9]/g,''))} inputMode="numeric" placeholder="الرقم اللي يظهر" style={{width:140,padding:'10px 12px',borderRadius:10,border:'1px solid rgba(255,255,255,.12)',background:'#0b0f16',color:'#f4f1e8',fontSize:14,fontFamily:"'Cairo',sans-serif",textAlign:'center',fontVariantNumeric:'tabular-nums'}} />
+          <button onClick={()=>saveMembersDisplay('override')} disabled={mdBusy} className="action-btn" style={{background:'rgba(127,209,255,.15)',border:'1px solid rgba(127,209,255,.3)',color:'#7fd1ff',fontSize:12,fontWeight:800}}>💾 تثبيت الرقم</button>
+          <button onClick={()=>saveMembersDisplay('reset')} disabled={mdBusy} className="action-btn" style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.14)',color:'#a8a39a',fontSize:12,fontWeight:700}}>↺ الرجوع للحقيقي</button>
+          {mdSaveMsg && <span style={{fontSize:12,fontWeight:700,color:mdSaveMsg.startsWith('✅')?'#5effa8':'#ff9c91'}}>{mdSaveMsg}</span>}
         </div>
       </div>
 

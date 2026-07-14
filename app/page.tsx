@@ -18,16 +18,17 @@ export default function HomePage() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [usersRes, predictionsRpcRes] = await Promise.all([
-          supabase.from('user_points').select('*', { count: 'exact', head: true }),
+        const [membersRpcRes, predictionsRpcRes] = await Promise.all([
+          // 🔢 العدد المعروض للجمهور (قابل للضبط من لوحة الأدمن — البيانات الفعلية زي ما هي)
+          supabase.rpc('get_public_members_count'),
           supabase.rpc('get_home_predictions_count'),
         ]);
 
-        if (usersRes.error) console.error('home users count error:', usersRes.error);
+        if (membersRpcRes.error) console.error('home members count rpc error:', membersRpcRes.error);
         if (predictionsRpcRes.error) console.error('home predictions count rpc error:', predictionsRpcRes.error);
 
         setStats({
-          users: usersRes.count || 0,
+          users: Number(membersRpcRes.data || 0),
           predictions: Number(predictionsRpcRes.data || 0),
         });
       } catch (error) {
