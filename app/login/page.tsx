@@ -65,6 +65,19 @@ function LoginContent() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { profileSyncStartedRef.current = false; return; }
+
+      // 🔒 فحص السماح بالدخول: التسجيل لو مقفول، الأعضاء القدامى بس يقدروا يدخلوا
+      // (بأي طريقة — إيميل أو فيسبوك أو جوجل). الجداد بس اللي يتمنعوا.
+      try {
+        const { data: mayLogin } = await supabase.rpc('email_may_login', { p_email: user.email || '' });
+        if (mayLogin === false) {
+          await supabase.auth.signOut();
+          profileSyncStartedRef.current = false;
+          setErrorMsg(regMsg || '🔒 التسجيل قفل خلاص. لو عندك حساب قديم ادخل بيه عادي.');
+          return;
+        }
+      } catch { /* لو فشل الفحص لأي سبب، ما نوقفش حد (fail-open للأمان) */ }
+
       const meta = user.user_metadata || {};
       const provider = (user.app_metadata?.provider || 'email') as 'email' | SocialProvider;
       const metaName = (typeof meta.full_name === 'string' && meta.full_name.trim()) || (typeof meta.name === 'string' && meta.name.trim()) || '';
@@ -156,12 +169,12 @@ function LoginContent() {
       setErrorMsg('الإيميل غير صحيح — اتأكد من كتابته صح (مثال: name@gmail.com)');
       return;
     }
-    // 🔒 لو التسجيل مقفول: الأعضاء الحاليين بس يقدروا يدخلوا
+    // 🔒 لو التسجيل مقفول: الأعضاء القدامى بس يقدروا يدخلوا (حساب اتعمل قبل القفل)
     if (!regOpen) {
       setLoading(true);
-      const { data: isMember, error: mErr } = await supabase.rpc('email_is_existing_member', { p_email: cleanEmail });
+      const { data: mayLogin, error: mErr } = await supabase.rpc('email_may_login', { p_email: cleanEmail });
       if (mErr) { setErrorMsg('حصل خطأ مؤقت، جرّب تاني'); setLoading(false); return; }
-      if (!isMember) {
+      if (mayLogin === false) {
         setErrorMsg(regMsg || '🔒 التسجيل قفل خلاص.');
         setLoading(false);
         return;
@@ -179,11 +192,8 @@ function LoginContent() {
   };
 
   const handleSocial = async (provider: SocialProvider) => {
-    // 🔒 الدخول الاجتماعي موقوف وقت إيقاف التسجيل (ما نقدرش نتأكد من الإيميل قبل الدخول)
-    if (!regOpen) {
-      setErrorMsg(regMsg || '🔒 التسجيل قفل خلاص. لو عندك حساب، ادخل برابط الإيميل.');
-      return;
-    }
+    // 🔒 ملاحظة: لو التسجيل مقفول، الدخول الاجتماعي يكمّل عادي والفحص يتم بعد الرجوع
+    // في syncExistingProfile (القدامى يعدوا، الجداد يتعملهم logout فورًا).
     setSocialLoading(provider);
     setErrorMsg('');
     persistPendingParams();
