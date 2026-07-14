@@ -881,6 +881,7 @@ const [profileCompleted, setProfileCompleted] = useState(false);
     'Semi-finals':     'نصف النهائي',
     '3rd Place Final': 'مباراة الثالث',
     'Final':           'النهائي',
+    'Knockout-QF-to-Final': 'الجولة الأخيرة (ربع النهائي → النهائي)',
   };
 
   // الترتيب الرسمي لكل الأدوار (لترتيب التابات وتحديد القادمة)
@@ -898,6 +899,17 @@ const [profileCompleted, setProfileCompleted] = useState(false);
   const displayRounds = [
     ...ROUND_ORDER.filter((r) => rounds.includes(r)),
     ...rounds.filter((r) => !ROUND_ORDER.includes(r)),
+  ];
+
+  // ⚖️ خاص بقوائم الصدارة: الأدوار الإقصائية (ربع/نصف/الثالث/النهائي) تتجمّع في خيار واحد
+  const KNOCKOUT_PHASE_ROUNDS = ['Quarter-finals', 'Semi-finals', '3rd Place Final', 'Final'];
+  const KNOCKOUT_PHASE_KEY = 'Knockout-QF-to-Final';
+  // هل بدأت المرحلة الإقصائية المجمّعة (فيها ماتش واحد على الأقل)؟
+  const knockoutPhaseAvailable = rounds.some(r => KNOCKOUT_PHASE_ROUNDS.includes(r));
+  // قائمة خيارات الصدارة: دور الـ٨ فما فوق مجمّع في بند واحد
+  const leaderboardRoundOptions = [
+    ...displayRounds.filter(r => !KNOCKOUT_PHASE_ROUNDS.includes(r)),
+    ...(knockoutPhaseAvailable ? [KNOCKOUT_PHASE_KEY] : []),
   ];
 
   useEffect(() => {
@@ -4099,7 +4111,9 @@ const myFilteredPredictionsSorted = [...predictions]
             const roundMatches = matches.filter((m: any) => m.league?.round === r);
             return roundMatches.length > 0 && roundMatches.every((m: any) => m.actual_home_score !== null && m.actual_home_score !== undefined);
           });
-          const selectableRounds = displayRounds;
+          const selectableRounds = leaderboardRoundOptions;
+          // الأدوار القادمة في الصدارة: بدون الأدوار الإقصائية الفردية (مدمجة في بند واحد)
+          const leaderboardUpcomingRounds = upcomingRounds.filter(r => !KNOCKOUT_PHASE_ROUNDS.includes(r));
           const effectiveRound = leaderRoundFilter;
 
           return (
@@ -4125,12 +4139,15 @@ const myFilteredPredictionsSorted = [...predictions]
                     }}
                   >
                     <option value="">🏆 الصدارة العامة</option>
-                    {selectableRounds.map(r => (
-                      <option key={r} value={r}>
-                        {roundLabels[r] || r}{r === activeRound ? ' (الحالية)' : ''}
-                      </option>
-                    ))}
-                    {upcomingRounds.map(r => (
+                    {selectableRounds.map(r => {
+                      const isCurrent = r === activeRound || (r === KNOCKOUT_PHASE_KEY && KNOCKOUT_PHASE_ROUNDS.includes(activeRound));
+                      return (
+                        <option key={r} value={r}>
+                          {roundLabels[r] || r}{isCurrent ? ' (الحالية)' : ''}
+                        </option>
+                      );
+                    })}
+                    {leaderboardUpcomingRounds.map(r => (
                       <option key={r} value={r} disabled>
                         {roundLabels[r] || r} — قريبًا 🔒
                       </option>

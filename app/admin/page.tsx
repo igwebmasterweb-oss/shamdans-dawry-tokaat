@@ -154,7 +154,10 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
     'Group Stage - 3':'الجولة الثالثة','Round of 16':'دور الـ 16',
     'Quarter-finals':'ربع النهائي','Semi-finals':'نصف النهائي',
     '3rd Place Final':'مباراة الثالث','Final':'النهائي',
+    'Round of 32':'دور الـ 32',
+    'Knockout-QF-to-Final':'الجولة الأخيرة (ربع النهائي → النهائي)',
   };
+  const KNOCKOUT_PHASE_ROUNDS = ['Quarter-finals','Semi-finals','3rd Place Final','Final'];
 
   const showMsg = useCallback((msg: string, type: 'success'|'error' = 'success') => {
     setMessage(msg); setMsgType(type);
@@ -1189,6 +1192,12 @@ const loadLeaderboard = useCallback(async () => {
   const totalPending       = leagues.reduce((s,lg)=>s+lg.pending_invites,0);
   const biggestLeague      = leagues.reduce((best,lg)=>lg.member_count>(best?.member_count||0)?lg:best,null as any);
   const rounds             = [...new Set(matches.map((m:any)=>m.league?.round).filter(Boolean))] as string[];
+  // أزرار صدارة الجولة: الأدوار الإقصائية (ربع → النهائي) مجمّعة في زر واحد
+  const hasKnockoutPhase   = rounds.some(r => KNOCKOUT_PHASE_ROUNDS.includes(r));
+  const lbRoundButtons     = [
+    ...rounds.filter(r => !KNOCKOUT_PHASE_ROUNDS.includes(r)),
+    ...(hasKnockoutPhase ? ['Knockout-QF-to-Final'] : []),
+  ];
 
   // ③ ماتشات خلصت (ليها نتيجة) بس لسة مفتوحة للتوقع — حماية من نسيان الغلق
   const finishedButOpen = matches.filter(m => m.actual_home_score !== null && m.actual_home_score !== undefined && m.is_open);
@@ -1507,7 +1516,7 @@ const loadLeaderboard = useCallback(async () => {
                 onClick={()=>selectLbScope('general')}
                 style={{padding:'8px 16px',borderRadius:10,border:'1px solid '+(lbScope==='general'?'var(--gold)':'var(--line)'),background:lbScope==='general'?'rgba(217,178,95,.15)':'var(--surface-2)',color:lbScope==='general'?'var(--gold)':'var(--muted)',fontSize:13,fontWeight:800,cursor:'pointer',fontFamily:"'Cairo',sans-serif"}}
               >🏆 الصدارة العامة</button>
-              {rounds.map(r=>(
+              {lbRoundButtons.map(r=>(
                 <button
                   key={r}
                   onClick={()=>selectLbScope(r)}

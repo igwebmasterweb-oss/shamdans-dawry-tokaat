@@ -178,7 +178,14 @@ export default function LeaderboardPage() {
         .order('match_date', { ascending: true });
 
       const uniqueRounds = Array.from(new Set((data || []).map((row: any) => row?.round).filter(Boolean))) as string[];
-      setRounds(uniqueRounds);
+      // الأدوار الإقصائية (ربع/نصف/الثالث/النهائي) تتجمّع في خيار واحد
+      const knockoutPhaseRounds = ['Quarter-finals', 'Semi-finals', '3rd Place Final', 'Final'];
+      const hasKnockoutPhase = uniqueRounds.some((r) => knockoutPhaseRounds.includes(r));
+      const collapsedRounds = [
+        ...uniqueRounds.filter((r) => !knockoutPhaseRounds.includes(r)),
+        ...(hasKnockoutPhase ? ['Knockout-QF-to-Final'] : []),
+      ];
+      setRounds(collapsedRounds);
     } catch (err) {
       console.error('loadRounds:', err);
     }
@@ -280,6 +287,21 @@ const loadRoundPlayers = async (round: string) => {
     loadPage(page);
     listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  // أسماء الأدوار بالعربي للعرض
+  const ROUND_LABELS_AR: Record<string, string> = {
+    'Group Stage - 1': 'الجولة الأولى',
+    'Group Stage - 2': 'الجولة الثانية',
+    'Group Stage - 3': 'الجولة الثالثة',
+    'Round of 32': 'دور الـ 32',
+    'Round of 16': 'دور الـ 16',
+    'Quarter-finals': 'ربع النهائي',
+    'Semi-finals': 'نصف النهائي',
+    '3rd Place Final': 'مباراة الثالث',
+    'Final': 'النهائي',
+    'Knockout-QF-to-Final': 'الجولة الأخيرة (ربع النهائي → النهائي)',
+  };
+  const roundLabelAr = (r: string) => ROUND_LABELS_AR[r] || r;
 
   const getName = (p: Player) => p.display_name || p.user_email?.split('@')[0] || 'مجهول';
   const getInitials = (p: Player) => getName(p).slice(0, 2);
@@ -674,7 +696,7 @@ const loadRoundPlayers = async (round: string) => {
           <div style={{animation:'slideDown 0.5s cubic-bezier(0.16,1,0.3,1) forwards',background:'linear-gradient(135deg,rgba(217,178,95,.12),rgba(217,178,95,.04))',border:'1px solid rgba(217,178,95,.25)',borderRadius:18,padding:'14px 20px',marginBottom:20,display:'flex',alignItems:'center',gap:16}}>
             <div style={{fontSize:28,flexShrink:0}}>{displayedMyRank<=3?medals[displayedMyRank-1]:`#${displayedMyRank}`}</div>
             <div style={{flex:1}}>
-              <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>{isRoundMode ? `ترتيبك في ${selectedRound}` : 'ترتيبك الحالي'}</div>
+              <div style={{fontSize:12,color:'var(--muted)',fontWeight:700}}>{isRoundMode ? `ترتيبك في ${roundLabelAr(selectedRound)}` : 'ترتيبك الحالي'}</div>
               <div style={{fontWeight:900,fontSize:15}}>المركز #{displayedMyRank}</div>
             </div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
@@ -716,7 +738,7 @@ const loadRoundPlayers = async (round: string) => {
                 }}
                 style={selectedRound === round ? {background:'rgba(217,178,95,.12)',border:'1px solid rgba(217,178,95,.28)',color:'var(--gold)'} : {}}
               >
-                🏁 {round}
+                🏁 {roundLabelAr(round)}
               </button>
             ))}
           </div>
