@@ -3,11 +3,9 @@ import { supabase } from '../../lib/supabase';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
-const ADMIN_EMAILS = ['i.g.webmaster.web@gmail.com'];
 const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000;
 
 export default function AdminPage() {
-  const [user, setUser]               = useState<any>(null);
   const [matches, setMatches]         = useState<any[]>([]);
   const [predictions, setPredictions] = useState<any[]>([]);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
@@ -387,21 +385,24 @@ const loadLeaderboard = useCallback(async () => {
   setAutoUpdating(false);
 }, [updating, showMsg, loadMatches, loadPredictions, loadLeaderboard]);
 
-  // تحقق من دخول الإيميل أولًا (الطبقة الأولى)
+  // بوابة الأدمن: التحقق عبر توكن جلسة مخزّن (لو موجود وصالح)
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user || !ADMIN_EMAILS.includes(data.user.email||'')) { router.push('/dashboard'); return; }
-      setUser(data.user);
-      // البوابة الثانية: لو الجلسة اتأكدت قبل كده في نفس التبويبة
-      if (typeof window !== 'undefined' && sessionStorage.getItem('wc_admin_gate') === '1') {
+    (async () => {
+      if (typeof window === 'undefined') return;
+      const tok = sessionStorage.getItem('wc_admin_token');
+      if (!tok) return;
+      const { data, error } = await supabase.rpc('verify_admin_token', { p_token: tok });
+      if (!error && data) {
         setGateOk(true);
+      } else {
+        sessionStorage.removeItem('wc_admin_token');
       }
-    });
-  }, [router]);
+    })();
+  }, []);
 
-  // تحميل البيانات بعد اجتياز البوابة الثانية
+  // تحميل البيانات بعد اجتياز البوابة
   useEffect(() => {
-    if (!user || !gateOk) return;
+    if (!gateOk) return;
     loadMatches(); loadPredictions(); loadLeaderboard(); loadLeagues(); loadPrizes();
     // 🔒 جلب حالة التسجيل + ضبط عدد الأعضاء المعروض
     (async () => {
@@ -414,7 +415,7 @@ const loadLeaderboard = useCallback(async () => {
         setMdInput(String(md.override ?? md.displayed ?? ''));
       }
     })();
-  }, [user, gateOk, loadMatches, loadPredictions, loadLeaderboard, loadLeagues, loadPrizes]);
+  }, [gateOk, loadMatches, loadPredictions, loadLeaderboard, loadLeagues, loadPrizes]);
 
   // 🔢 حفظ الرقم المعروض (override) أو الرجوع للحقيقي (reset)
   const saveMembersDisplay = async (mode: 'override'|'reset') => {
@@ -463,10 +464,10 @@ const loadLeaderboard = useCallback(async () => {
     e.preventDefault();
     setGateErr(''); setGateBusy(true);
     try {
-      const { data, error } = await supabase.rpc('verify_admin_login', { p_username: gateUser.trim(), p_password: gatePass });
+      const { data, error } = await supabase.rpc('admin_login', { p_username: gateUser.trim(), p_password: gatePass });
       if (error) throw error;
-      if (data === true) {
-        if (typeof window !== 'undefined') sessionStorage.setItem('wc_admin_gate', '1');
+      if (data) {
+        if (typeof window !== 'undefined') sessionStorage.setItem('wc_admin_token', data as string);
         setGateOk(true); setGatePass('');
       } else {
         setGateErr('اليوزرنيم أو كلمة المرور غلط');
@@ -503,11 +504,11 @@ const loadLeaderboard = useCallback(async () => {
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!gateOk) return;
     const firstRun = setTimeout(() => silentUpdateResults(), 30 * 1000);
     autoIntervalRef.current = setInterval(() => silentUpdateResults(), AUTO_REFRESH_INTERVAL);
     return () => { clearTimeout(firstRun); if (autoIntervalRef.current) clearInterval(autoIntervalRef.current); };
-  }, [user, silentUpdateResults]);
+  }, [gateOk, silentUpdateResults]);
 
   const toggleMatchOpen = async (match: any) => {
     const newStatus = !match.is_open; const fid = match.fixture.id;
@@ -712,7 +713,11 @@ const loadLeaderboard = useCallback(async () => {
     } catch (err:any) { showMsg('❌ '+(err?.message||'خطأ'),'error'); }
   };
 
-  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
+  const handleLogout = async () => {
+    const tok = typeof window !== 'undefined' ? sessionStorage.getItem('wc_admin_token') : null;
+    if (tok) { try { await supabase.rpc('admin_logout', { p_token: tok }); } catch {} sessionStorage.removeItem('wc_admin_token'); }
+    setGateOk(false);
+  };
 
   // ⑧ Export CSV helpers
   const exportPredictionsCSV = () => {
@@ -1049,8 +1054,7 @@ const loadLeaderboard = useCallback(async () => {
   const callAdjustment = async (payload: Record<string, any>, okMsg: string) => {
     setAdjBusy(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const token = typeof window !== 'undefined' ? sessionStorage.getItem('wc_admin_token') : null;
       if (!token) throw new Error('انتهت الجلسة، سجّل الدخول من جديد');
       const res = await fetch('/api/admin-adjustments', {
         method: 'POST',
@@ -1146,7 +1150,7 @@ const loadLeaderboard = useCallback(async () => {
   };
   // ─── Render states ─────────────────────────────────────
   // 🔐 البوابة الثانية: يوزرنيم + باسورد (بعد تأكيد الإيميل وقبل فتح اللوحة)
-  if (user && !gateOk) return (
+  if (!gateOk) return (
     <div style={{display:'grid',placeItems:'center',minHeight:'100vh',background:'#070809',fontFamily:"'Cairo',sans-serif",padding:24}}>
       <form onSubmit={submitGate} style={{width:'100%',maxWidth:360,background:'linear-gradient(180deg,#141a26,#0f141e)',border:'1px solid #1e2836',borderRadius:16,padding:'28px 22px',display:'flex',flexDirection:'column',gap:14,boxShadow:'0 8px 40px rgba(0,0,0,.5)'}}>
         <div style={{textAlign:'center',marginBottom:4}}>
@@ -1158,7 +1162,7 @@ const loadLeaderboard = useCallback(async () => {
         <input value={gatePass} onChange={e=>setGatePass(e.target.value)} placeholder="كلمة المرور" type="password" autoComplete="current-password" style={{padding:'11px 13px',borderRadius:10,border:'1px solid #263041',background:'#0b0f16',color:'#f4f1e8',fontSize:14,fontFamily:"'Cairo',sans-serif",direction:'ltr',textAlign:'left'}} />
         {gateErr && <div style={{color:'#f87171',fontSize:12,fontWeight:700,textAlign:'center'}}>{gateErr}</div>}
         <button type="submit" disabled={gateBusy||!gateUser||!gatePass} style={{padding:'12px',borderRadius:10,border:'none',background:gateBusy?'#5a4d2a':'#d9b25f',color:'#0b0f16',fontSize:15,fontWeight:900,fontFamily:"'Cairo',sans-serif",cursor:gateBusy?'default':'pointer',opacity:(!gateUser||!gatePass)?.6:1}}>{gateBusy?'…جارٍ التحقق':'دخول'}</button>
-        <button type="button" onClick={async()=>{ await supabase.auth.signOut(); router.push('/login'); }} style={{background:'none',border:'none',color:'#a8a39a',fontSize:12,fontFamily:"'Cairo',sans-serif",cursor:'pointer',marginTop:2}}>تسجيل خروج</button>
+        <button type="button" onClick={()=>router.push('/')} style={{background:'none',border:'none',color:'#a8a39a',fontSize:12,fontFamily:"'Cairo',sans-serif",cursor:'pointer',marginTop:2}}>الرجوع للرئيسية</button>
       </form>
     </div>
   );

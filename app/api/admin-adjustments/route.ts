@@ -9,17 +9,13 @@ const supabaseAdmin = createClient(
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-// قائمة إيميلات الأدمن (نفس الموجودة في صفحة /admin)
-const ADMIN_EMAILS = ['i.g.webmaster.web@gmail.com'];
-
-// تحقق من أن المستدعي أدمن فعلاً (server-side) — عبر Bearer token
+// تحقق من أن المستدعي أدمن فعلاً (server-side) — عبر توكن جلسة الأدمن
 async function assertAdmin(req: NextRequest) {
   const authHeader = req.headers.get('authorization') || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (!token) throw new Error('غير مصرح: token مفقود');
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  const email = data?.user?.email || '';
-  if (error || !email || !ADMIN_EMAILS.includes(email)) throw new Error('غير مصرح: لست أدمن');
+  const { data, error } = await supabaseAdmin.rpc('verify_admin_token', { p_token: token });
+  if (error || !data) throw new Error('غير مصرح: جلسة الأدمن غير صالحة');
 }
 
 // ── إدارة البونص والخصومات من لوحة الادمن ──
