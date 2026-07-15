@@ -129,6 +129,14 @@ const [participantsCount, setParticipantsCount] = useState(0);
   const [totalPredictionsCount, setTotalPredictionsCount] = useState(0);
 const [gradedPredictionsCount, setGradedPredictionsCount] = useState(0);
 const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
+  // ⑦ server-side pagination للتوقعات
+  const [predsPage, setPredsPage] = useState(0); // 0-based
+  const [predsTotalFiltered, setPredsTotalFiltered] = useState(0);
+  const [predsLoading, setPredsLoading] = useState(false);
+  const [predsCountByFixture, setPredsCountByFixture] = useState<Record<number, number>>({});
+  const [predNameMap, setPredNameMap] = useState<Record<string, string>>({});
+  const [predsExporting, setPredsExporting] = useState(false);
+  const PREDS_PAGE_SIZE = 100;
   const router = useRouter();
 
   // ── جلب كل الصفوف بتجاوز حد PostgREST (1000 صف) عبر التقسيم ──
@@ -197,27 +205,88 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
     setLoading(false);
   }, []);
 
- const loadPredictions = useCallback(async () => {
+ // ⑦ helper: يبني استعلام على admin_all_predictions_v1 حسب الفلاتر الحالية (الجولة/الحالة/البحث)
+ // ملاحظة: fixtureIdsForRound تُحسب في الاستدعاء (تعتمد على matches state) وتُمرَّر هنا لتجنّب تبعية دائرية
+ const buildPredsQuery = useCallback((base: any, fixtureIdsForRound: number[] | null) => {
+  let q = base;
+  if (fixtureIdsForRound !== null) {
+    q = q.in('fixture_id', fixtureIdsForRound.length > 0 ? fixtureIdsForRound : [-1]);
+  } else {
+    q = q.not('fixture_id', 'is', null);
+  }
+  if (predStatusFilter === 'ungraded') {
+    q = q.is('points', null);
+  }
+  if (predSearch.trim()) {
+    q = q.ilike('user_email', `%${predSearch.trim()}%`);
+  }
+  return q;
+ }, [predStatusFilter, predSearch]);
+
+ // ⑦ تحميل خريطة الأسماء مرة واحدة من user_points (تُستخدم في loadPredictions والتصدير)
+ const loadPredNameMap = useCallback(async () => {
   try {
+    const pts = await fetchAll(() =>
+      supabase.from('user_points').select('user_id,full_name,user_email')
+    );
+    const map: Record<string, string> = {};
+    (pts || []).forEach((p: any) => {
+      map[p.user_id] = p.full_name || p.user_email?.split('@')[0] || '';
+    });
+    setPredNameMap(map);
+    return map;
+  } catch (err) {
+    console.error('loadPredNameMap:', err);
+    return {} as Record<string, string>;
+  }
+ }, [fetchAll]);
+
+ // ⑦ عدّاد التوقعات لكل ماتش — 102 استعلام count خفيف (head:true) مرة واحدة بعد تحميل الماتشات
+ // القرار: لا يوجد predictions_count على مستوى الماتش في matches/fixtures (الحقل الموجود بنفس الاسم
+ // في user_points/leaderboard هو عدّاد لكل مستخدم، مش لكل ماتش) — لذلك اتّبعنا بديل المواصفات.
+ const loadPredsCountByFixture = useCallback(async (matchList: any[]) => {
+  try {
+    const counts = await Promise.all(
+      matchList.map(async (m: any) => {
+        const { count } = await supabase
+          .from('admin_all_predictions_v1')
+          .select('*', { count: 'exact', head: true })
+          .eq('fixture_id', m.fixture.id);
+        return [m.fixture.id, count ?? 0] as const;
+      })
+    );
+    const map: Record<number, number> = {};
+    counts.forEach(([id, c]) => { map[id] = c; });
+    setPredsCountByFixture(map);
+  } catch (err) {
+    console.error('loadPredsCountByFixture:', err);
+  }
+ }, []);
+
+ const loadPredictions = useCallback(async () => {
+  setPredsLoading(true);
+  try {
+    const fixtureIdsForRound = predRoundFilter !== 'all'
+      ? matches.filter((m: any) => m.league?.round === predRoundFilter).map((m: any) => m.fixture.id)
+      : null;
+
     const [
-      preds,
-      pts,
+      { data: preds },
+      { count: filteredCount },
       { count: totalCount },
       { count: gradedCount },
       { count: ungradedCount },
     ] = await Promise.all([
-      fetchAll(() =>
-        supabase
-          .from('admin_all_predictions_v1')
-          .select('*')
-          .not('fixture_id', 'is', null)
-          .order('submitted_at', { ascending: false })
-      ),
+      buildPredsQuery(
+        supabase.from('admin_all_predictions_v1').select('*'),
+        fixtureIdsForRound
+      )
+        .order('submitted_at', { ascending: false })
+        .range(predsPage * PREDS_PAGE_SIZE, predsPage * PREDS_PAGE_SIZE + PREDS_PAGE_SIZE - 1),
 
-      fetchAll(() =>
-        supabase
-          .from('user_points')
-          .select('user_id,full_name,user_email')
+      buildPredsQuery(
+        supabase.from('admin_all_predictions_v1').select('*', { count: 'exact', head: true }),
+        fixtureIdsForRound
       ),
 
       supabase
@@ -241,21 +310,20 @@ const [ungradedPredictionsCount, setUngradedPredictionsCount] = useState(0);
     setTotalPredictionsCount(totalCount ?? 0);
     setGradedPredictionsCount(gradedCount ?? 0);
     setUngradedPredictionsCount(ungradedCount ?? 0);
-
-    const nameMap = new Map(
-      pts?.map((p: any) => [p.user_id, p.full_name || p.user_email?.split('@')[0]]) || []
-    );
+    setPredsTotalFiltered(filteredCount ?? 0);
 
     setPredictions(
       (preds || []).map((p: any) => ({
         ...p,
-        user_name: nameMap.get(p.user_id) || p.user_email?.split('@')[0],
+        user_name: predNameMap[p.user_id] || p.user_email?.split('@')[0],
       }))
     );
   } catch (err) {
     console.error('loadPredictions:', err);
+  } finally {
+    setPredsLoading(false);
   }
-}, [fetchAll]);
+}, [buildPredsQuery, predRoundFilter, predsPage, matches, predNameMap]);
 
 const loadLeaderboard = useCallback(async () => {
   try {
@@ -401,9 +469,10 @@ const loadLeaderboard = useCallback(async () => {
   }, []);
 
   // تحميل البيانات بعد اجتياز البوابة
+  // ⑦ ملاحظة: loadPredictions اتشالت من هنا — بقى ليها useEffect مخصوص (بند 6) يعتمد على الفلاتر/الصفحة
   useEffect(() => {
     if (!gateOk) return;
-    loadMatches(); loadPredictions(); loadLeaderboard(); loadLeagues(); loadPrizes();
+    loadMatches(); loadPredNameMap(); loadLeaderboard(); loadLeagues(); loadPrizes();
     // 🔒 جلب حالة التسجيل + ضبط عدد الأعضاء المعروض
     (async () => {
       const { data } = await supabase.rpc('get_registration_status');
@@ -415,7 +484,27 @@ const loadLeaderboard = useCallback(async () => {
         setMdInput(String(md.override ?? md.displayed ?? ''));
       }
     })();
-  }, [gateOk, loadMatches, loadPredictions, loadLeaderboard, loadLeagues, loadPrizes]);
+  }, [gateOk, loadMatches, loadPredNameMap, loadLeaderboard, loadLeagues, loadPrizes]);
+
+  // ⑦ عدّاد التوقعات لكل ماتش: يُحسب مرة واحدة بعد تحميل الماتشات (102 استعلام count خفيف head:true)
+  useEffect(() => {
+    if (!gateOk || matches.length === 0) return;
+    loadPredsCountByFixture(matches);
+  }, [gateOk, matches, loadPredsCountByFixture]);
+
+  // ⑥ إعادة تحميل التوقعات عند تغيّر الفلاتر أو الصفحة (server-side pagination)
+  useEffect(() => {
+    if (!gateOk) return;
+    const t = setTimeout(() => { loadPredictions(); }, predSearch ? 400 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gateOk, predRoundFilter, predStatusFilter, predSearch, predsPage]);
+
+  // ⑥ عند تغيّر أي فلتر (غير الصفحة) رجّع الصفحة لأول صفحة
+  useEffect(() => {
+    setPredsPage(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [predRoundFilter, predStatusFilter, predSearch]);
 
   // 🔢 حفظ الرقم المعروض (override) أو الرجوع للحقيقي (reset)
   const saveMembersDisplay = async (mode: 'override'|'reset') => {
@@ -716,20 +805,45 @@ const loadLeaderboard = useCallback(async () => {
   };
 
   // ⑧ Export CSV helpers
-  const exportPredictionsCSV = () => {
-    const headers = ['اللاعب','المباراة','توقع','نتيجة فعلية','نقاط','وقت التسجيل'];
-    const rows = predictions.map(p => [
-      p.user_name||p.user_email?.split('@')[0]||'—',
-      `${p.home_team} × ${p.away_team}`,
-      `${p.predicted_home_score}-${p.predicted_away_score}`,
-      p.actual_home_score!==null ? `${p.actual_home_score}-${p.actual_away_score}` : '—',
-      p.actual_home_score!==null ? (p.points||0) : '—',
-      p.submitted_at ? new Date(p.submitted_at).toLocaleString('ar-EG') : '—',
-    ]);
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = `predictions-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  // ⑨ التصدير بقى async: يجيب كل الصفوف المطابقة للفلاتر الحالية (الجولة/الحالة/البحث) من الview عبر fetchAll
+  const exportPredictionsCSV = async () => {
+    setPredsExporting(true);
+    try {
+      const fixtureIdsForRound = predRoundFilter !== 'all'
+        ? matches.filter((m: any) => m.league?.round === predRoundFilter).map((m: any) => m.fixture.id)
+        : null;
+
+      const allRows = await fetchAll(() =>
+        buildPredsQuery(
+          supabase.from('admin_all_predictions_v1').select('*'),
+          fixtureIdsForRound
+        ).order('submitted_at', { ascending: false })
+      );
+
+      const withNames = allRows.map((p: any) => ({
+        ...p,
+        user_name: predNameMap[p.user_id] || p.user_email?.split('@')[0],
+      }));
+
+      const headers = ['اللاعب','المباراة','توقع','نتيجة فعلية','نقاط','وقت التسجيل'];
+      const rows = withNames.map(p => [
+        p.user_name||p.user_email?.split('@')[0]||'—',
+        `${p.home_team} × ${p.away_team}`,
+        `${p.predicted_home_score}-${p.predicted_away_score}`,
+        p.actual_home_score!==null ? `${p.actual_home_score}-${p.actual_away_score}` : '—',
+        p.actual_home_score!==null ? (p.points||0) : '—',
+        p.submitted_at ? new Date(p.submitted_at).toLocaleString('ar-EG') : '—',
+      ]);
+      const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+      const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = `predictions-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+    } catch (err) {
+      console.error('exportPredictionsCSV:', err);
+      showMsg('❌ فشل تصدير التوقعات', 'error');
+    } finally {
+      setPredsExporting(false);
+    }
   };
 
   const exportLeaderboardCSV = () => {
@@ -909,9 +1023,21 @@ const loadLeaderboard = useCallback(async () => {
       .toLowerCase()
       .trim();
 
-  const openBreakdown = (p: any) => {
-  const userPreds = predictions
-    .filter(pr => pr.user_id === p.user_id && pr.points !== null)
+  const openBreakdown = async (p: any) => {
+  // ⑧ جلب توقعات المستخدم مباشرة من الview (مش من predictions state المقسّمة)
+  let userRows: any[] = [];
+  try {
+    const { data, error } = await supabase
+      .from('admin_all_predictions_v1')
+      .select('*')
+      .eq('user_id', p.user_id)
+      .not('points', 'is', null);
+    if (error) throw error;
+    userRows = data || [];
+  } catch (err) {
+    console.error('openBreakdown:', err);
+  }
+  const userPreds = userRows
     .map(pr => {
       const items: { icon: string; label: string; pts: number }[] = [];
 
@@ -1204,19 +1330,9 @@ const loadLeaderboard = useCallback(async () => {
 
   // ⑦ filtered predictions ✅
   // ⑧ بحث التوقعات (اسم/إيميل)، مُطبَّع
-  const predSearchQ = normalizeScorerName(predSearch);
-  const visiblePredictions = predictions.filter(p => {
-    if (predRoundFilter !== 'all') {
-      const m = matches.find(m => m.fixture.id === p.fixture_id);
-      if (!m || m.league?.round !== predRoundFilter) return false;
-    }
-   if (predStatusFilter === 'ungraded' && p.points !== null) return false;
-    if (predSearchQ) {
-      const hay = normalizeScorerName(`${p.user_name || ''} ${p.user_email || ''}`);
-      if (!hay.includes(predSearchQ)) return false;
-    }
-    return true;
-  });
+  // ⑦ الفلترة والبحث بقوا server-side (داخل loadPredictions) — predictions بالفعل هي بيانات الصفحة الحالية بعد الفلترة
+  const visiblePredictions = predictions;
+  const predsTotalPages = Math.max(1, Math.ceil(predsTotalFiltered / PREDS_PAGE_SIZE));
 
   // ⑧ بحث الصدارة (اسم/إيميل)، مُطبَّع — مع الحفاظ على الترتيب الأصلي
   const lbSearchQ = normalizeScorerName(lbSearch);
@@ -1407,10 +1523,11 @@ const loadLeaderboard = useCallback(async () => {
             )}
             {filteredMatches.map(match=>{
               const hasResult  = match.actual_home_score !== null && match.actual_home_score !== undefined;
-              const matchPreds = predictions.filter(p=>p.fixture_id===match.fixture.id);
+              // ⑦ عدد التوقعات لهذا الماتش من predsCountByFixture (محمّل مرة واحدة بدل predictions.filter)
+              const matchPredsCount = predsCountByFixture[match.fixture.id] ?? 0;
               // ⑨ % مشاركة ✅
               const participationPct = participantsCount > 0
-  ? Math.round((matchPreds.length / participantsCount) * 100)
+  ? Math.round((matchPredsCount / participantsCount) * 100)
   : 0;
               return (
                 <div key={match.fixture.id} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:18,padding:'16px 20px',marginBottom:10,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
@@ -1419,9 +1536,9 @@ const loadLeaderboard = useCallback(async () => {
                     <div style={{fontSize:12,color:'var(--muted)',display:'flex',gap:10,flexWrap:'wrap',alignItems:'center'}}>
                       <span>{new Date(match.fixture.date).toLocaleDateString('ar-EG',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
                       <span style={{color:match.is_open?'var(--green)':'var(--red)',fontWeight:700}}>{match.is_open?'مفتوح':'مغلق'}</span>
-                      {matchPreds.length > 0 && (
+                      {matchPredsCount > 0 && (
                         <span style={{color:'#38bdf8'}}>
-                          👥 {matchPreds.length}
+                          👥 {matchPredsCount}
                           {leaderboard.length > 0 && (
                             <span style={{
                               marginRight:4, fontSize:10,
@@ -1478,11 +1595,11 @@ const loadLeaderboard = useCallback(async () => {
                 style={{padding:'8px 14px',borderRadius:10,border:'1px solid var(--line)',background:'var(--surface-2)',color:'var(--text)',fontFamily:"'Cairo',sans-serif",fontSize:13,outline:'none',minWidth:200}}
               />
               <span style={{fontSize:12,color:'var(--muted)',marginRight:4}}>
-                يعرض {visiblePredictions.length} من {predictions.length}
+                {predsLoading ? '⏳ جاري التحميل...' : `يعرض ${predictions.length} من ${predsTotalFiltered}`}
               </span>
               {/* ⑧ Export CSV ✅ */}
-              <button onClick={exportPredictionsCSV} className="export-btn" style={{marginRight:'auto'}}>
-                ⬇️ تصدير CSV
+              <button onClick={exportPredictionsCSV} disabled={predsExporting} className="export-btn" style={{marginRight:'auto'}}>
+                {predsExporting ? '⏳ جاري التصدير...' : '⬇️ تصدير CSV'}
               </button>
             </div>
             <div style={{overflowX:'auto'}}>
@@ -1490,7 +1607,7 @@ const loadLeaderboard = useCallback(async () => {
                 <thead><tr><th>اللاعب</th><th>المباراة</th><th>توقع</th><th>نتيجة فعلية</th><th>نقاط</th><th>وقت التسجيل</th></tr></thead>
                 <tbody>
                   {visiblePredictions.length===0 ? (
-                    <tr><td colSpan={6} style={{textAlign:'center',color:'var(--muted)',padding:40}}>لا توجد توقعات</td></tr>
+                    <tr><td colSpan={6} style={{textAlign:'center',color:'var(--muted)',padding:40}}>{predsLoading ? '⏳ جاري التحميل...' : 'لا توجد توقعات'}</td></tr>
                   ) : visiblePredictions.map((p,i)=>(
                     <tr key={i}>
                       <td style={{fontWeight:700}}>{p.user_name||p.user_email?.split('@')[0]||'—'}</td>
@@ -1503,6 +1620,28 @@ const loadLeaderboard = useCallback(async () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+            {/* ⑥ Pagination — السابق/التالي + رقم الصفحة */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:12,marginTop:16}}>
+              <button
+                onClick={()=>setPredsPage(p=>Math.max(0,p-1))}
+                disabled={predsPage===0||predsLoading}
+                className="action-btn"
+                style={{background:'var(--surface-2)',border:'1px solid var(--line)',color:'var(--text)',fontSize:12,padding:'8px 16px'}}
+              >
+                ◀ السابق
+              </button>
+              <span style={{fontSize:13,color:'var(--muted)',fontWeight:700,fontVariantNumeric:'tabular-nums'}}>
+                صفحة {predsPage+1} من {predsTotalPages}
+              </span>
+              <button
+                onClick={()=>setPredsPage(p=>Math.min(predsTotalPages-1,p+1))}
+                disabled={predsPage>=predsTotalPages-1||predsLoading}
+                className="action-btn"
+                style={{background:'var(--surface-2)',border:'1px solid var(--line)',color:'var(--text)',fontSize:12,padding:'8px 16px'}}
+              >
+                التالي ▶
+              </button>
             </div>
           </>
         )}
