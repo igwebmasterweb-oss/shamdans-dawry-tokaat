@@ -173,6 +173,26 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
+      // ─────────── الليجات ───────────
+      case 'league_delete': {
+        const leagueId = String(body?.league_id || '');
+        if (!leagueId) throw new Error('id الليج مطلوب');
+        await supabaseAdmin.from('mini_league_invitations').delete().eq('league_id', leagueId);
+        await supabaseAdmin.from('mini_league_members').delete().eq('league_id', leagueId);
+        const { error } = await supabaseAdmin.from('mini_leagues').delete().eq('id', leagueId);
+        if (error) throw new Error('حذف الليج فشل: ' + error.message);
+        return NextResponse.json({ success: true });
+      }
+
+      case 'league_member_remove': {
+        const leagueId = String(body?.league_id || '');
+        const userId = String(body?.user_id || '');
+        if (!leagueId || !userId) throw new Error('id الليج والعضو مطلوبين');
+        const { error } = await supabaseAdmin.from('mini_league_members').delete().eq('league_id', leagueId).eq('user_id', userId);
+        if (error) throw new Error('إزالة العضو فشلت: ' + error.message);
+        return NextResponse.json({ success: true });
+      }
+
       default:
         return NextResponse.json({ success: false, error: 'action غير معروف: ' + action }, { status: 400 });
     }

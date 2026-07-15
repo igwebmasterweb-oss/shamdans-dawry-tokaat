@@ -303,9 +303,9 @@ const loadLeaderboard = useCallback(async () => {
 
   const loadLeagues = useCallback(async () => {
     try {
-      const lgs     = await fetchAll(() => supabase.from('mini_leagues').select('*').order('created_at',{ascending:false}));
-      const members = await fetchAll(() => supabase.from('mini_league_members').select('*'));
-      const invites = await fetchAll(() => supabase.from('mini_league_invitations').select('league_id,status'));
+      const lgs     = await fetchAll(() => supabase.from('admin_mini_leagues_v1').select('*').order('created_at',{ascending:false}));
+      const members = await fetchAll(() => supabase.from('admin_mini_league_members_v1').select('*'));
+      const invites = await fetchAll(() => supabase.from('admin_mini_league_invitations_v1').select('league_id,status'));
       const userPts = await fetchAll(() => supabase.from('user_points').select('user_id,full_name,user_email,total_points'));
       const userPtsMap = new Map((userPts||[]).map((u:any)=>[u.user_id,u]));
       const enrichedMembers = (members||[]).map((m:any)=>({...m,_profile:userPtsMap.get(m.user_id)||null}));
@@ -696,20 +696,16 @@ const loadLeaderboard = useCallback(async () => {
   const adminDeleteLeague = async (lg: any) => {
     if (!confirm(`حذف ليج \"${lg.name}\" نهائياً؟`)) return;
     try {
-      await supabase.from('mini_league_invitations').delete().eq('league_id',lg.id);
-      await supabase.from('mini_league_members').delete().eq('league_id',lg.id);
-      const { error } = await supabase.from('mini_leagues').delete().eq('id',lg.id);
-      if (error) throw error;
-      showMsg(`🗑️ تم حذف ليج \"${lg.name}\"`); await loadLeagues();
+      await callAdjustment({ action: 'league_delete', league_id: lg.id }, `🗑️ تم حذف ليج \"${lg.name}\"`);
+      await loadLeagues();
     } catch (err:any) { showMsg('❌ '+(err?.message||'خطأ'),'error'); }
   };
 
   const adminRemoveMember = async (leagueId: string, userId: string, memberName: string) => {
     if (!confirm(`إزالة \"${memberName}\" من الليج؟`)) return;
     try {
-      const { error } = await supabase.from('mini_league_members').delete().eq('league_id',leagueId).eq('user_id',userId);
-      if (error) throw error;
-      showMsg(`✅ تم إزالة \"${memberName}\"`); await loadLeagues();
+      await callAdjustment({ action: 'league_member_remove', league_id: leagueId, user_id: userId }, `✅ تم إزالة \"${memberName}\"`);
+      await loadLeagues();
     } catch (err:any) { showMsg('❌ '+(err?.message||'خطأ'),'error'); }
   };
 
@@ -1099,7 +1095,7 @@ const loadLeaderboard = useCallback(async () => {
     setGrantsLoading(true);
     try {
       const { data, error } = await supabase
-        .from('bonus_grants').select('*').eq('user_id', row.user_id).order('granted_at', { ascending: false });
+        .from('admin_bonus_grants_v1').select('*').eq('user_id', row.user_id).order('granted_at', { ascending: false });
       if (error) throw error;
       setGrantsRows(data || []);
     } catch (err: any) {
