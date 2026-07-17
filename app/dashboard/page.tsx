@@ -3507,7 +3507,7 @@ const myFilteredPredictionsSorted = [...predictions]
         }}>
           <div style={{ fontSize: 26, flexShrink: 0 }}>🌟</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff1ce', lineHeight: 1.7 }}>
-            شارك في مسابقة حلمك وزود نقاطك — كل مشاركة وتوقع بيقرّبك من الذهب في نهاية البطولة!
+نقاط البونص هتتقفل مع بداية ماتش تحديد المركز الثالث — سارِع وزوّد نقاطك قبل ما يقفل الباب!
           </div>
         </div>
 
