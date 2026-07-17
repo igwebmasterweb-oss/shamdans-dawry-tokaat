@@ -1137,9 +1137,19 @@ const userNameMap: Record<string, string> = {};
         const openRound = availableRounds.find(round =>
           merged.some((m: any) => m.league?.round === round && m.is_open === true && m.actual_home_score === null)
         );
+        // آخر جولة فيها نشاط زمنيًا (الأحدث) — للرجوع إليها لو مفيش جولة مفتوحة
+        const latestRoundByDate = [...availableRounds].sort((a, b) => {
+          const maxDate = (round: string) => Math.max(
+            ...merged
+              .filter((m: any) => m.league?.round === round)
+              .map((m: any) => new Date(m.fixture?.date || m.match_date || 0).getTime() || 0)
+          );
+          return maxDate(b) - maxDate(a);
+        })[0];
         setActiveRound(prev =>
-          availableRounds.includes(prev) ? prev : (openRound ?? availableRounds[0])
+          availableRounds.includes(prev) ? prev : (openRound ?? latestRoundByDate ?? availableRounds[0])
         );
+        // ملاحظة: البوكس يجمّع الأدوار الإقصائية تلقائيًا عند العرض
       }
 
       const fixtureNameMap = new Map<number, { home_team: string; away_team: string }>(merged.map((m: any) => [
@@ -1296,7 +1306,9 @@ const userNameMap: Record<string, string> = {};
   };
 
 useEffect(() => {
-  const targetRound = leaderRoundFilter || activeRound;
+  const rawTargetRound = leaderRoundFilter || activeRound;
+  // الأدوار الإقصائية تُجمّع في مفتاح واحد للصدارة
+  const targetRound = KNOCKOUT_PHASE_ROUNDS.includes(rawTargetRound) ? KNOCKOUT_PHASE_KEY : rawTargetRound;
   if (!targetRound) {
     setRoundLeaderboardRows([]);
     return;
@@ -3417,11 +3429,17 @@ const myFilteredPredictionsSorted = [...predictions]
               </div>
               <div style={{ background: 'var(--surface)', borderRadius: 14, padding: '14px', textAlign: 'center', border: '1px solid rgba(59,130,246,.2)' }}>
                 <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>
-                  {roundLabels[activeRound] || activeRound || 'الجولة الحالية'}
+                  {KNOCKOUT_PHASE_ROUNDS.includes(activeRound)
+                    ? roundLabels[KNOCKOUT_PHASE_KEY]
+                    : (roundLabels[activeRound] || activeRound || 'الجولة الحالية')}
                 </div>
                 {(() => {
+                  // لو الجولة الحالية ضمن الأدوار الإقصائية → جمّع كل ماتشات المرحلة الإقصائية (ربع → النهائي)
+                  const isKnockoutPhase = KNOCKOUT_PHASE_ROUNDS.includes(activeRound);
                   const roundFixtureIds = matches
-                    .filter((m: any) => m.league.round === activeRound)
+                    .filter((m: any) => isKnockoutPhase
+                      ? KNOCKOUT_PHASE_ROUNDS.includes(m.league.round)
+                      : m.league.round === activeRound)
                     .map((m: any) => m.fixture.id);
                   const roundPoints = predictions
                     .filter((pr: any) => roundFixtureIds.includes(pr.fixture_id))
