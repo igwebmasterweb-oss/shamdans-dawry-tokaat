@@ -44,6 +44,8 @@ export default function AdminPage() {
   const [activeTab, setActiveTab]     = useState<'matches'|'predictions'|'leaderboard'|'leagues'|'prizes'|'reports'>('matches');
   // ⑫ التقارير — أكثر الداعين / نقاط مشبوهة / غير نشطين / إحصائيات عامة
   const [rptOverview, setRptOverview]     = useState<any>(null);
+  const [rptTourStats, setRptTourStats]   = useState<any>(null);
+  const [rptStreakLeaders, setRptStreakLeaders] = useState<any[]>([]);
   const [rptReferrers, setRptReferrers]   = useState<any[]>([]);
   const [rptSuspicious, setRptSuspicious] = useState<any[]>([]);
   const [rptInactive, setRptInactive]     = useState<any[]>([]);
@@ -893,11 +895,18 @@ const loadLeaderboard = useCallback(async () => {
         supabase.from('admin_report_finished_but_open_v1').select('*').order('match_date',{ascending:false}),
         supabase.from('admin_report_prize_lifecycle_v1').select('*').order('start_date',{ascending:true}),
       ]);
+      // إحصائيات دقة البطولة + أكثر اللاعبين تصدّراً (أيام)
+      const [tourStats, streakLeaders] = await Promise.all([
+        supabase.from('admin_report_tournament_stats_v1').select('*').single(),
+        supabase.from('admin_report_top_streak_leaders_v1').select('*'),
+      ]);
       // الاستفتاء: نجلب كل الصفوف عبر التقسيم (PostgREST بيسقّف عند 1000 حتى مع limit أكبر)
       const dsRows = await fetchAll(() =>
         supabase.from('admin_report_dream_survey_v1').select('*').order('updated_at',{ascending:false})
       );
       if (ov.data) setRptOverview(ov.data);
+      if (tourStats.data) setRptTourStats(tourStats.data);
+      if (streakLeaders.data) setRptStreakLeaders(streakLeaders.data);
       if (ref.data) setRptReferrers(ref.data);
       if (sus.data) setRptSuspicious(sus.data);
       if (inact.data) setRptInactive(inact.data);
@@ -1941,6 +1950,86 @@ const loadLeaderboard = useCallback(async () => {
                         </div>
                       </div>
                     ))}
+                  </div>
+                );
+              })()}
+
+              {/* ── 🎯 إحصائيات دقة البطولة (كروت جمالية) ── */}
+              {rptTourStats && (() => {
+                const t = rptTourStats;
+                const num = (v:any) => Number(v).toLocaleString('en-US');
+                const pct = (v:any) => (v==null?'—':Number(v).toLocaleString('en-US')+'%');
+                const accGroups = [
+                  { title:'🎯 دقة التوقعات', cards:[
+                    {label:'نسبة الاتجاه الصحيح', value:pct(t.dir_correct_pct),     c:'#5effa8', hint:num(t.dir_correct)+' توقّع صابوا الفائز/التعادل'},
+                    {label:'نسبة النتيجة المضبوطة', value:pct(t.exact_correct_pct), c:'var(--gold)', hint:num(t.exact_correct)+' توقّع صابوا النتيجة بالظبط'},
+                    {label:'نسبة الهدّاف الصحيح', value:pct(t.scorer_correct_pct),  c:'#7fd1ff', hint:num(t.scorer_correct)+' من '+num(t.scorer_graded)+' توقّعوا الهدّاف'},
+                  ]},
+                  { title:'⚽ أبرز الماتشات', cards:[
+                    {label:'أكثر ماتش توقُّعاً', value:t.most_predicted_match||'—', c:'#a78bfa', hint:num(t.most_predicted_count)+' توقّع على الماتش ده', small:true},
+                    {label:'أعلى ماتش دقة توقُّع', value:t.best_accuracy_match||'—', c:'#5effa8', hint:pct(t.best_accuracy_pct)+' صابوا اتجاهه', small:true},
+                    {label:'أقل ماتش دقة توقُّع', value:t.worst_accuracy_match||'—', c:'#ff9c91', hint:pct(t.worst_accuracy_pct)+' بس صابوا اتجاهه (مفاجأة)', small:true},
+                  ]},
+                  { title:'👑 الصدارة اليومية (الترتيب الإجمالي عبر الزمن)', cards:[
+                    {label:'المتصدّر النهائي العام', value:t.overall_leader_name||'—', c:'#4ade80', hint:num(t.overall_leader_points)+' نقطة — الأول في الترتيب الإجمالي', small:true},
+                    {label:'أكثر لاعب تصدّر (أيام)', value:t.most_days_leader_name||'—', c:'#facc15', hint:'قعد '+num(t.most_days_leader_days)+' يوم في الصدارة من أصل '+num(t.total_days_tracked)+' يوم', small:true},
+                    {label:'أول متصدّر في البطولة', value:t.first_day_leader||'—', c:'#7fd1ff', hint:'أول من اعتلى القمة في بداية البطولة', small:true},
+                    {label:'عدد المتصدّرين المختلفين', value:num(t.distinct_daily_leaders), c:'var(--gold)', hint:'لاعبين مختلفين تعاقبوا على قمة الترتيب الإجمالي'},
+                    {label:'مرّات تغيّر القمة', value:num(t.lead_changes), c:'#fb923c', hint:'كام مرة اتغيّر المتصدّر العام عبر أيام البطولة'},
+                    {label:'متصدّرون مختلفون للجولات', value:num(t.distinct_round_leaders), c:'#a78bfa', hint:'لاعبين تصدّروا ترتيب جولة واحدة على الأقل'},
+                  ]},
+                ];
+                return (
+                  <div style={{marginBottom:24}}>
+                    <div style={{fontSize:14,fontWeight:900,color:'var(--gold)',marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
+                      🎯 إحصائيات دقة البطولة
+                      <span style={{fontSize:11,fontWeight:600,color:'var(--muted)'}}>محسوبة من التوقّعات المُقيَّمة ({num(t.graded_predictions)} توقّع)</span>
+                    </div>
+                    {accGroups.map(g=>(
+                      <div key={g.title} style={{marginBottom:14}}>
+                        <div style={{fontSize:13,fontWeight:800,color:'var(--muted)',marginBottom:8}}>{g.title}</div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:10}}>
+                          {g.cards.map((s:any)=>(
+                            <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:14,padding:'12px 14px',textAlign:'center'}}>
+                              <div style={{fontSize:10,color:'var(--muted)',marginBottom:6,fontWeight:700}}>{s.label}</div>
+                              <div style={{fontSize:s.small?15:22,fontWeight:900,color:s.c,fontVariantNumeric:'tabular-nums',lineHeight:1.25,wordBreak:'break-word'}}>{s.value}</div>
+                              <div style={{fontSize:9,color:'var(--muted)',marginTop:5,lineHeight:1.4,opacity:.85}}>{s.hint}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {/* جدول: أعلى اللاعبين تصدّراً (أيام) */}
+                    {rptStreakLeaders.length>0 && (
+                      <div style={{marginTop:6}}>
+                        <div style={{fontSize:13,fontWeight:800,color:'var(--muted)',marginBottom:8}}>🏆 أكثر اللاعبين تصدّراً (بعدد الأيام في قمة الترتيب الإجمالي)</div>
+                        <div style={{background:'var(--surface)',border:'1px solid var(--line)',borderRadius:14,overflow:'hidden'}}>
+                          {rptStreakLeaders.slice(0,10).map((r:any,i:number)=>{
+                            const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':String(i+1);
+                            const barPct = Math.round(100*Number(r.days_on_top)/Number(rptStreakLeaders[0].days_on_top||1));
+                            return (
+                              <div key={r.user_id||i} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderBottom:i<Math.min(10,rptStreakLeaders.length)-1?'1px solid var(--line)':'none'}}>
+                                <div style={{width:28,textAlign:'center',fontSize:i<3?16:12,fontWeight:900,color:'var(--muted)'}}>{medal}</div>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontSize:13,fontWeight:800,color:'var(--fg,#fff)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{r.leader_name}</div>
+                                  <div style={{height:5,background:'var(--surface-2)',borderRadius:3,marginTop:4,overflow:'hidden'}}>
+                                    <div style={{height:'100%',width:barPct+'%',background:i===0?'linear-gradient(90deg,#c9a227,#facc15)':'#4b5563',borderRadius:3}} />
+                                  </div>
+                                </div>
+                                <div style={{textAlign:'center',minWidth:64}}>
+                                  <div style={{fontSize:16,fontWeight:900,color:'var(--gold)',fontVariantNumeric:'tabular-nums'}}>{Number(r.days_on_top).toLocaleString('en-US')}</div>
+                                  <div style={{fontSize:8,color:'var(--muted)'}}>يوم في الصدارة</div>
+                                </div>
+                                <div style={{textAlign:'center',minWidth:60}}>
+                                  <div style={{fontSize:13,fontWeight:800,color:'#5effa8',fontVariantNumeric:'tabular-nums'}}>{Number(r.peak_points).toLocaleString('en-US')}</div>
+                                  <div style={{fontSize:8,color:'var(--muted)'}}>أعلى نقاط</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
