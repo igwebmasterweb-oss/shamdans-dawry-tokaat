@@ -1978,6 +1978,11 @@ const loadLeaderboard = useCallback(async () => {
                     {label:'مرّات تغيّر القمة', value:num(t.lead_changes), c:'#fb923c', hint:'كام مرة اتغيّر المتصدّر العام عبر أيام البطولة'},
                     {label:'متصدّرون مختلفون للجولات', value:num(t.distinct_round_leaders), c:'#a78bfa', hint:'لاعبين تصدّروا ترتيب جولة واحدة على الأقل'},
                   ]},
+                  { title:'🏅 أداء أعلى 100 لاعب (النخبة)', cards:[
+                    {label:'نسبة الاتجاه الصحيح', value:pct(t.top100_dir_pct), c:'#5effa8', hint:num(t.top100_dir_correct)+' من '+num(t.top100_graded)+' توقّع — أعلى من المتوسط العام'},
+                    {label:'أكثر ماتش توقّعوه صح', value:t.top100_best_match||'—', c:'#4ade80', hint:num(t.top100_best_count)+' منهم صابوا اتجاهه', small:true},
+                    {label:'أكثر ماتش توقّعوه غلط', value:t.top100_worst_match||'—', c:'#ff9c91', hint:num(t.top100_worst_count)+' منهم غلطوا في اتجاهه', small:true},
+                  ]},
                 ];
                 return (
                   <div style={{marginBottom:24}}>
