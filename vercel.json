@@ -1,11 +1,3 @@
 {
-  "crons": [
-    { "path": "/api/auto-close-matches", "schedule": "*/15 * * * *" },
-    { "path": "/api/auto-sync", "schedule": "*/5 * * * *" },
-    { "path": "/api/send-push", "schedule": "0 * * * *" },
-    { "path": "/api/sync-squads", "schedule": "0 9 * * *" },
-    { "path": "/api/snapshot-history", "schedule": "5 0 * * *" },
-    { "path": "/api/refresh-h2h", "schedule": "0 1 * * *" }
-
-  ]
+  "crons": []
 }
